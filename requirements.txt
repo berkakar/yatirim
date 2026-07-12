@@ -1,0 +1,8 @@
+streamlit
+pandas
+numpy
+argrelextrema
+plotly
+yfinance
+pandas_ta
+pandas
