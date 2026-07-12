@@ -1,0 +1,26 @@
+
+import google.generativeai as genai
+import yfinance as yf
+
+# 1. Gemini 1.5 Flash Yapılandırması (Ücretsiz Katman)
+genai.configure(api_key="GOOGLE_API_KEY_BURAYA")
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+# 2. Reasoning Ajanı Fonksiyonu
+def analiz_et(haber, tarih):
+    prompt = f"""
+    Tarih: {tarih}
+    Haber: {haber}
+    Görev: Bu haberin NVIDIA (NVDA) hissesine etkisini 'Neden-Sonuç' ilişkisiyle analiz et.
+    Mühendislik kısıtlarını (tedarik zinciri, üretim) göz önünde bulundur.
+    """
+    response = model.generate_content(prompt)
+    return response.text
+
+# 3. Testi Çalıştır
+haber_metni = "ABD bulut üzerinden GPU erişimine kısıtlama getirdi."
+print(analiz_et(haber_metni, "2025-03-12"))
+
+# 4. Gerçek Veriyi Çek (Görselleştirmek için)
+nvda = yf.download("NVDA", start="2025-03-10", end="2025-03-20")
+print(nvda['Close'])

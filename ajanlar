@@ -1,0 +1,137 @@
+from datetime import datetime, timedelta
+import json
+import os
+from google import genai
+from google.genai import types
+import yfinance as yf
+from AnalizSonuc import AnalizSinifi
+import HaberAjani
+from HaberSonuc import HaberSinifi
+import Promptlar
+import testData
+from ExcelUtils import ExcelUtils
+import DateTimeUtils
+
+client = genai.Client(api_key="AIzaSyDBDBUrZ47UM6GFWAGyByGotrpS8RoRRfA")
+
+
+configGazeteci = types.GenerateContentConfig(
+    system_instruction="Sen deneyimli bir ekonomi gazetecisin ve doğru haberi yanlış haberden ya da spekülatif haberden ayırırsın.",   
+    #response_mime_type='application/json',
+    response_schema=HaberSinifi, 
+    temperature=0.1
+    
+)
+
+
+configEkonomist = types.GenerateContentConfig(
+    system_instruction="Sen deneyimli bir ekonomistsin, amerikan hisse senetleri konusunda uzmansın.",  
+    #response_mime_type='application/json',
+    response_schema=AnalizSinifi, 
+    temperature=0.1
+)
+
+# 1. Haber Bulma Ajanı Fonksiyonu
+def haber_akilli_filtrele(tarih, haberGorev):
+    prompt = f"""
+    Tarih: {tarih}
+    {haberGorev}
+    """
+    response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents=prompt,
+    config=configGazeteci   
+    )
+    return response.text
+
+# 2. Reasoning Ajanı Fonksiyonu
+def analiz_et(analizGorev):
+    prompt = f"""
+    Görev: {analizGorev}
+    """
+    response = client.models.generate_content(
+    model='gemini-2.5-flash',
+    contents=prompt,
+    config=configEkonomist  
+    )
+    return response.text
+
+
+haberMiktari = 10
+hisseAdi = "NVIDIA"
+analizGun = 5
+tarih = "12 Şubat 2025"
+Promptlar.tarih = "12 Şubat 2025"
+
+globalHaberler1 = HaberAjani.haberleri_cek_hibrit("2025-03-12", "NVDA", 2,"0","monetary_policy")
+globalHaberler2 = HaberAjani.haberleri_cek_hibrit("2025-03-12", "NVDA", 2,"0","inflation")
+sektorelHaberler = HaberAjani.haberleri_cek_hibrit("2025-03-12", "NVDA", 2,"1")
+sirketBazliHaberler = HaberAjani.haberleri_cek_hibrit("2025-03-12", "NVDA", 3,"2")
+
+
+
+globalHaberler1JSON = HaberAjani.ayristir_marketaux_verisi(globalHaberler1)
+globalHaberler2JSON = HaberAjani.ayristir_marketaux_verisi(globalHaberler2)
+sektorelHaberlerJSON = HaberAjani.ayristir_marketaux_verisi(sektorelHaberler)
+sirketBazliHaberlerJSON = HaberAjani.ayristir_marketaux_verisi(sirketBazliHaberler)
+
+
+globalHaberler1Tablosu = HaberAjani.json_to_markdown_table(globalHaberler1JSON)
+globalHaberler2Tablosu = HaberAjani.json_to_markdown_table(globalHaberler2JSON)
+sektorelHaberlerTablosu = HaberAjani.json_to_markdown_table(sektorelHaberlerJSON)
+sirketBazliHaberlerTablosu = HaberAjani.json_to_markdown_table(sirketBazliHaberlerJSON)
+
+
+haberGorev = Promptlar.get_haber_gorev(hisseAdi, haberMiktari, globalHaberler1Tablosu + globalHaberler2Tablosu, sektorelHaberlerTablosu, sirketBazliHaberlerTablosu)
+#print(f"\n************** HABER GÖREVİ *******************\n{haberGorev}\n****** HABER GÖREVİ BİTTİ ******************\n")
+
+
+
+test_mode = False # Gerçek veri çekmek için False yapın, test verisi kullanmak için True yapın
+if test_mode == True:
+    haber = testData.haber_str
+else:
+    haber = haber_akilli_filtrele(Promptlar.tarih, haberGorev)
+
+#print("\n************** HABER *******************\n" + haber + "\n****** HABERLER BİTTİ ******************\n")
+
+temiz_haber = haber.replace("```json", "").replace("```", "").strip()
+
+print("\n************** TEMİZ HABER *******************\n" + temiz_haber + "\n****** HABERLER BİTTİ ******************\n")
+
+
+# 4. Çıktıyı İşleyin
+haberJson = json.loads(temiz_haber)
+
+
+Promptlar.analizGun = 5
+Promptlar.hisseAdi = "NVIDIA"
+Promptlar.tarih = "12 Şubat 2025"
+analizGorev = Promptlar.get_analiz_gorev(Promptlar.tarih, Promptlar.hisseAdi, temiz_haber, Promptlar.analizGun)
+
+# 4. Çıktıyı İşleyin
+test_mode = False # Gerçek veri çekmek için False yapın, test verisi kullanmak için True yapın
+if test_mode == True:
+    analiz = testData.analiz_str
+else:
+    analiz = analiz_et(analizGorev)
+
+temiz_analiz = analiz.replace("```json", "").replace("```", "").strip()
+analizJson = json.loads(temiz_analiz)
+analizJson = DateTimeUtils.filtrele_sadece_is_gunleri(analizJson)
+tarih_baslangic = DateTimeUtils.tr_tarihi_formatla(Promptlar.tarih)
+tarih_baslangic = DateTimeUtils.bir_onceki_is_gunu(tarih_baslangic)
+
+
+
+tarih_bitis = DateTimeUtils.is_gunu_ekle(tarih_baslangic, Promptlar.analizGun + 1) # Analiz gün sayısına 1 ekleyelim çünkü bitiş tarihi dahil değil
+nvda = yf.download("NVDA", start=tarih_baslangic, end=tarih_bitis)
+analizJson = DateTimeUtils.analiz_sonucu_zenginlestir(analizJson, nvda)
+print(nvda['Close'])
+
+
+#print("\n************** ANALİZ SONUCU *******************\n" + str(temiz_analiz) + "\n****** ANALİZ BİTTİ ******************\n")
+
+excelutils = ExcelUtils("haberlerVeAnalizler.xlsx")
+excelutils._yaz(haberJson, analizJson)
+
