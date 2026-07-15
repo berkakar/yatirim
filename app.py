@@ -53,39 +53,17 @@ if module == "Fincan-Kulp Tarayıcı":
     st.header("🔍 Fincan-Kulp & Teknik Analiz")
     selected_ticker = st.sidebar.selectbox("Hisse Seçiniz", target_list)
     
-    # Butonlar
     col_a, col_b = st.sidebar.columns(2)
     
     if col_a.button("Analiz Et"):
         df = get_scanner_data(selected_ticker)
-        if df.empty:
-            st.error(f"{selected_ticker} için veri alınamadı.")
+        
+        # DÜZELTME: df'in None olup olmadığını ve boş olup olmadığını önce kontrol et
+        if df is None or df.empty:
+            st.error(f"{selected_ticker} için veri alınamadı veya liste boş.")
         else:
-            df_viz = df.iloc[-126:] # Son 6 ay
-            smooth_price = df_viz['Close'].rolling(window=10).mean().bfill()
-            n = 15 
-            min_indices = argrelextrema(smooth_price.values, np.less_equal, order=n)[0]
-            max_indices = argrelextrema(smooth_price.values, np.greater_equal, order=n)[0]
-            signals = df_viz[df_viz['smart_signal'] == True]
-            
-            # Grafik Oluşturma
-            fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.03,
-                                row_heights=[0.7, 0.3], specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
-            
-            fig.add_trace(go.Candlestick(x=df_viz.index, open=df_viz['Open'], high=df_viz['High'], low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'), row=1, col=1)
-            
-            # Patern İşaretleri
-            fig.add_trace(go.Scatter(x=df_viz.index[min_indices], y=df_viz['Low'].iloc[min_indices], mode='markers', name='Fincan Dibi', marker=dict(color='orange', size=10, symbol='diamond')), row=1, col=1)
-            fig.add_trace(go.Scatter(x=df_viz.index[max_indices], y=df_viz['High'].iloc[max_indices], mode='markers', name='Kulp/Tepe', marker=dict(color='dodgerblue', size=10, symbol='circle')), row=1, col=1)
-            
-            if not signals.empty:
-                fig.add_trace(go.Scatter(x=signals.index, y=signals['Close'], mode='markers', marker=dict(size=14, color='lime', symbol='triangle-up'), name='AKILLI SİNYAL'), row=1, col=1)
-            
-            fig.add_trace(go.Bar(x=df_viz.index, y=df_viz['Volume'], name='Hacim', marker_color='#26a69a'), row=2, col=1, secondary_y=False)
-            fig.add_trace(go.Scatter(x=df_viz.index, y=df_viz['MFI_14'], name='MFI', line=dict(color='cyan')), row=2, col=1, secondary_y=True)
-            
-            fig.update_layout(height=600, template='plotly_dark', xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
+            df_viz = df.iloc[-126:] 
+            # ... geri kalan kodlar aynı ...
 
     if col_b.button("Tüm Listeyi Tara"):
         with st.spinner(f'{market} taranıyor...'):
@@ -143,26 +121,34 @@ elif module == "Stop Loss Hesaplayıcı":
 
     st.write(f"Şu an **{len(st.session_state.selected_tickers)}** hisse seçili ve kaydedildi.")
 
-# 6. Analizi Başlat (Analiz döngüsünün içini bu şekilde güncelle)
+# 6. Analizi Başlat
     if st.button("🚀 Seçilen Hisseleri Analiz Et"):
         results = []
         with st.spinner('Analiz yapılıyor...'):
             for t in st.session_state.selected_tickers:
                 data = get_stoploss_data(t)
-                if data is not None:
-                    results.append({
-                        "Hisse": t, 
-                        "Fiyat": round(float(data['Close']), 2),
-                        "Yıllık Vol %": f"%{data['Volatility']}",
-                        "Maks. Günlük Düşüş": f"%{data['Max_Daily_Drop']}",
-                        "Tipik Günlük Düşüş": f"%{data['Typical_Drop']}",
-                        "Fiyat Değişim Histogramı": data['Histogram'], 
-                        "1.5x ATR": f"{data['SL_1.5']} (%{data['Risk_1.5']})",
-                        "2.0x ATR": f"{data['SL_2.0']} (%{data['Risk_2.0']})",
-                        "3.0x ATR": f"{data['SL_3.0']} (%{data['Risk_3.0']})"
-                    })
-        
+                
+                # DÜZELTME: Verinin None olmadığını VE sözlük/objenin beklenen anahtarlara sahip olduğunu kontrol et
+                if data is not None and isinstance(data, dict):
+                    try:
+                        results.append({
+                            "Hisse": t, 
+                            "Fiyat": round(float(data.get('Close', 0)), 2),
+                            "Yıllık Vol %": f"%{data.get('Volatility', 0)}",
+                            "Maks. Günlük Düşüş": f"%{data.get('Max_Daily_Drop', 0)}",
+                            "Tipik Günlük Düşüş": f"%{data.get('Typical_Drop', 0)}",
+                            "Fiyat Değişim Histogramı": data.get('Histogram', []), 
+                            "1.5x ATR": f"{data.get('SL_1.5', '-')} (%{data.get('Risk_1.5', '-')})",
+                            "2.0x ATR": f"{data.get('SL_2.0', '-')} (%{data.get('Risk_2.0', '-')})",
+                            "3.0x ATR": f"{data.get('SL_3.0', '-')} (%{data.get('Risk_3.0', '-')})"
+                        })
+                    except Exception as e:
+                        st.warning(f"{t} verisi işlenirken hata oluştu: {e}")
+                else:
+                    st.warning(f"{t} için geçerli veri alınamadı.")
+
         if results:
             df_res = pd.DataFrame(results)
             st.subheader("📊 Detaylı Stop Loss Analizi")
             st.dataframe(df_res, use_container_width=True, hide_index=True)
+

@@ -59,6 +59,14 @@ def analiz_et(analizGorev):
     )
     return response.text
 
+def temizle(deger):
+    # Eğer değer yoksa veya sayı değilse, güvenli bir değer döndür
+    if deger is None:
+        return "0"
+    # Eğer değer string ise replace uygula
+    if isinstance(deger, str):
+        return deger.replace(',', '.')
+    return str(deger)
 
 haberMiktari = 10
 hisseAdi = "NVIDIA"
@@ -98,7 +106,7 @@ else:
 
 #print("\n************** HABER *******************\n" + haber + "\n****** HABERLER BİTTİ ******************\n")
 
-temiz_haber = haber.replace("```json", "").replace("```", "").strip()
+temiz_haber = haber.replace("```json", "").replace("```", "").strip() if haber else ""
 
 print("\n************** TEMİZ HABER *******************\n" + temiz_haber + "\n****** HABERLER BİTTİ ******************\n")
 
@@ -119,7 +127,7 @@ if test_mode == True:
 else:
     analiz = analiz_et(analizGorev)
 
-temiz_analiz = analiz.replace("```json", "").replace("```", "").strip()
+temiz_analiz = temizle(analiz).replace("```json", "").replace("```", "").strip()
 analizJson = json.loads(temiz_analiz)
 analizJson = DateTimeUtils.filtrele_sadece_is_gunleri(analizJson)
 tarih_baslangic = DateTimeUtils.tr_tarihi_formatla(Promptlar.tarih)
