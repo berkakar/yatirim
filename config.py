@@ -8,7 +8,7 @@ NASDAQ_100 = [
     "GILD", "ADI", "PANW", "MU", "SNPS", "PYPL", "KLAC", "CDNS", "CSX", "ORLY", 
     "MAR", "MELI", "CTAS", "LRCX", "MNST", "PAYX", "MCHP", "PCAR", "KDP", "ADSK",
     "NXPI", "IDXX", "PDD", "FTNT", "KHC", "ROP", "ROST", "ASML", "AEP", "AZN", 
-    "BIIB", "BKR", "CEG", "CHTR", "CPRT", "CRWD", "CSGP", "CTSH", "DDOG", "DLTR", 
+    "BIIB", "BKR", "NOW", "CHTR", "CPRT", "CRWD", "CSGP", "CTSH", "DDOG", "DLTR", 
     "DXCM", "EA", "CRWD", "ENPH", "EXC", "EXPE", "FAST", "GEHC", "ILMN", "JD", 
     "LULU", "MDB", "MRNA", "MRVL", "ODFL", "ON", "PAYC", "SGEN", "SIRI", "SPLK", 
     "TROW", "TTWO", "VEEV", "VRSK", "WBA", "WBD", "SPCX", "ZS", "TEM", "LCID","CRWV","EOSE","OSS"
