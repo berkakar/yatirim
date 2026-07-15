@@ -8,8 +8,11 @@ from typing import List
 import json
 
 import testData
-    
-    
+import streamlit as st
+  
+MARKETAUX_API_KEY = st.secrets["MARKETAUX_API_KEY"]
+
+
 # Makro kategorilerini ve anahtar kelimelerini tanımla
 macro_queries = {
     "monetary_policy": "('Federal Reserve' OR 'FOMC' OR 'Interest Rates')",
@@ -122,22 +125,4 @@ def json_to_markdown_table(json_input):
     except Exception as e:
         return f"Bir hata oluştu: {str(e)}"
     
-
-#globalHaberler1 = haberleri_cek_hibrit("2025-03-12", "NVDA", 5,"0","monetary_policy")
-#globalHaberler2 = haberleri_cek_hibrit("2025-03-12", "NVDA", 5,"0","inflation")
-#sektorelHaberler = haberleri_cek_hibrit("2025-03-12", "NVDA", 5,"1")
-#hisseHaberler = haberleri_cek_hibrit("2025-03-12", "NVDA", 5,"2")
-
-#globalHaberler1JSON = ayristir_marketaux_verisi(globalHaberler1)
-#globalHaberler2JSON = ayristir_marketaux_verisi(globalHaberler2)
-#sektorelHaberlerJSON = ayristir_marketaux_verisi(sektorelHaberler)
-#hisseHaberlerJSON = ayristir_marketaux_verisi(hisseHaberler)
-
-
-
-#print(globalHaberler1JSON)
-#print(globalHaberler2JSON)
-
-
-#print("------------------------------")
 

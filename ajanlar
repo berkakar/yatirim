@@ -11,8 +11,11 @@ import Promptlar
 import testData
 from ExcelUtils import ExcelUtils
 import DateTimeUtils
+import streamlit as st
 
-client = genai.Client(api_key="AIzaSyDBDBUrZ47UM6GFWAGyByGotrpS8RoRRfA")
+GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
+
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 
 configGazeteci = types.GenerateContentConfig(

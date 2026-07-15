@@ -17,6 +17,8 @@ from stoploss import get_stoploss_data
 # Seçimleri kaydetmek için dosya yolu
 SAVE_FILE = "selected_tickers.json"
 
+print("APP dosyası yüklendi!")
+
 def save_selections(tickers):
     with open(SAVE_FILE, 'w') as f:
         json.dump(list(tickers), f)
@@ -154,6 +156,7 @@ elif module == "Stop Loss Hesaplayıcı":
                         "Yıllık Vol %": f"%{data['Volatility']}",
                         "Maks. Günlük Düşüş": f"%{data['Max_Daily_Drop']}",
                         "Tipik Günlük Düşüş": f"%{data['Typical_Drop']}",
+                        "Fiyat Değişim Histogramı": data['Histogram'], 
                         "1.5x ATR": f"{data['SL_1.5']} (%{data['Risk_1.5']})",
                         "2.0x ATR": f"{data['SL_2.0']} (%{data['Risk_2.0']})",
                         "3.0x ATR": f"{data['SL_3.0']} (%{data['Risk_3.0']})"
