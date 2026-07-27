@@ -1,26 +1,76 @@
-import streamlit as st
 import yfinance as yf
-import pandas_ta as ta
 import pandas as pd
+import numpy as np
+import streamlit as st
 
-@st.cache_data
-def get_scanner_data(ticker):
-    df = yf.download(ticker, period="1y", progress=False)
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    if df.empty or 'Volume' not in df.columns:
-        return pd.DataFrame()
-    
-    df.ta.sma(length=50, append=True)
-    df.ta.mfi(length=14, append=True)
-    df.ta.macd(fast=12, slow=26, signal=9, append=True)
-    
-    if 'MFI_14' not in df.columns: df['MFI_14'] = 0.0
-    
-    vol_ma20 = df['Volume'].rolling(window=20).mean()
-    macd_cols = [c for c in df.columns if 'MACD_' in c and 'MACDs_' not in c]
-    macds_cols = [c for c in df.columns if 'MACDs_' in c]
-    
-    macd_bullish = df[macd_cols[0]] > df[macds_cols[0]] if (macd_cols and macds_cols) else False
-    df['smart_signal'] = (df['Volume'] > (vol_ma20 * 1.5)) & (df['MFI_14'] > 50) & (macd_bullish)
-    return df
+# ------------------------------------------------------------------------------
+# FORMASYON TESPİT FONKSİYONLARI (Kendi mevcut algoritmalarınızı buraya koyun)
+# ------------------------------------------------------------------------------
+def detect_cup_and_handle(df):
+    # Fincan-kulp tespit mantığınız
+    return None
+
+def detect_obo(df):
+    # OBO tespit mantığınız
+    return None
+
+def detect_tobo(df):
+    # TOBO tespit mantığınız
+    return None
+
+
+# ------------------------------------------------------------------------------
+# APP.PY'NİN BEKLEDİĞİ ANA FONKSİYON (ÖNBELLEKLİ VE GÜVENLİ)
+# ------------------------------------------------------------------------------
+@st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar, Yahoo engeline takılmaz
+def get_scanner_data(ticker_symbol):
+    """
+    app.py tarafından çağrılan ana fonksiyon.
+    Veriyi çeker, temizler ve formasyon analizlerini yapar.
+    """
+    try:
+        # BIST hisseleri için otomatik .IS kontrolü
+        formatted_ticker = ticker_symbol
+        
+        # yfinance ile veriyi çek (history kullanımı download'a göre çok daha kararlıdır)
+        ticker_obj = yf.Ticker(formatted_ticker)
+        df = ticker_obj.history(period="1y", interval="1d")
+        
+        # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
+        if df is None or df.empty or len(df) < 60:
+            if not formatted_ticker.endswith(".IS"):
+                ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
+                df = ticker_obj.history(period="1y", interval="1d")
+
+        # Veri hala boşsa veya yetersizse None dön
+        if df is None or df.empty or len(df) < 60:
+            return None, None, None, None
+
+        # Indeks olan 'Date' sütununu normal sütun yap
+        df = df.reset_index()
+        
+        # Sütun isimlerini standartlaştır (Date, Open, High, Low, Close, Volume)
+        df.columns = [str(col).capitalize() for col in df.columns]
+
+        required_cols = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+        if not all(col in df.columns for col in required_cols):
+            return None, None, None, None
+
+        # Tarih formatını düzelt ve saat dilimini temizle
+        df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
+        
+        # Kapanış fiyatı eksik olan satırları sil
+        df = df.dropna(subset=['Close'])
+
+        if len(df) < 60:
+            return None, None, None, None
+
+        # --- FORMASYON ANALİZLERİ ---
+        cup_pattern = detect_cup_and_handle(df)
+        obo_pattern = detect_obo(df)
+        tobo_pattern = detect_tobo(df)
+
+        return df, cup_pattern, obo_pattern, tobo_pattern
+
+    except Exception as e:
+        return None, None, None, None

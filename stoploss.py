@@ -7,7 +7,7 @@ import numpy as np
 @st.cache_data
 def get_stoploss_data(ticker):
 
-    print(f"DEBUG: {ticker} için veri alınıyor...") # <--- BU SATIRI EKLE
+    print(f"DEBUG: {ticker} için veri alınıyor...")
     
     # 1. Veri İndirme (1 yıllık periyot)
     df = yf.download(ticker, period="1y", progress=False)
@@ -16,49 +16,53 @@ def get_stoploss_data(ticker):
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
     
-    # Yeterli veri yoksa işlemi durdur
-    if df.empty or len(df) < 20: 
+    # Yeterli veri yoksa işlemi durdur (En az 50 bar kontrolü)
+    if df.empty or len(df) < 50: 
         return None
     
-    # 2. Yıllık Volatilite Hesaplama
-    # Günlük logaritmik getirilerin standart sapmasının yıllıklandırılması
+    close = df['Close'].iloc[-1]
+
+    # 2. EMA Hesaplamaları (EMA20, EMA50, EMA200)
+    ema20 = df.ta.ema(length=20).iloc[-1]
+    ema50 = df.ta.ema(length=50).iloc[-1]
+    
+    # Hissenin 200 günlük verisi var mı kontrolü
+    if len(df) >= 200:
+        ema200 = df.ta.ema(length=200).iloc[-1]
+    else:
+        ema200 = np.nan
+
+    # Yüzdesel Uzaklık Hesaplama: ((Fiyat - EMA) / EMA) * 100
+    ema20_dist = ((close - ema20) / ema20) * 100 if pd.notna(ema20) else 0.0
+    ema50_dist = ((close - ema50) / ema50) * 100 if pd.notna(ema50) else 0.0
+    ema200_dist = ((close - ema200) / ema200) * 100 if pd.notna(ema200) else None
+
+    # 3. Yıllık Volatilite Hesaplama
     df['Returns'] = np.log(df['Close'] / df['Close'].shift(1))
     volatility = df['Returns'].std() * np.sqrt(252) * 100 
     
-    # 3. Maksimum Günlük Düşüş (Yüzdesel)
+    # 4. Maksimum Günlük Düşüş (Yüzdesel)
     max_daily_drop = (df['Close'].pct_change() * 100).min()
     
-    # 4. Tipik Günlük Düşüş (0% ile -0.5% aralığındaki ortalama)
+    # 5. Tipik Günlük Düşüş (0% ile -0.5% aralığındaki ortalama)
     daily_pct = df['Close'].pct_change()
     typical_drops = daily_pct[(daily_pct < 0) & (daily_pct > -0.005)]
     typical_drop_avg = typical_drops.mean() * 100 if not typical_drops.empty else 0
     
-    # 5. Düşüş Histogramı (En sık görülen 5 düşüş seviyesi)
-    # Negatif günleri al, yuvarla ve grupla
+    # 6. Düşüş Histogramı (En sık görülen 5 düşüş seviyesi)
     pct_changes = df['Close'].pct_change() * 100
     drops = pct_changes[pct_changes < 0]
-    
-    # Yuvarlama: .5 ve üzeri bir üst kümeye (negatifte -1.6 -> -2 olur)
     rounded_drops = np.floor(drops + 0.5)
-    
-    # -1% ile -25% arasındaki düşüşleri filtrele
     in_range = rounded_drops[(rounded_drops <= -1) & (rounded_drops >= -25)]
-    
-    # En sık görülen 5 değeri al
     counts = in_range.value_counts().nlargest(5)
-    
-    # Sonucu okunabilir formata getir
     histogram_str = ", ".join([f"{int(idx)}% ({int(val)}g)" for idx, val in counts.items()])
     
-    # 6. ATR Hesaplama (14 günlük)
-    # ATR'yi kullanabilmek için High, Low, Close sütunlarının varlığından emin oluyoruz
+    # 7. ATR Hesaplama (14 günlük)
     atr = df.ta.atr(high=df['High'], low=df['Low'], close=df['Close'], length=14).iloc[-1]
-    close = df['Close'].iloc[-1]
     
-    # 7. Stop Loss Hesaplama (Fiyat ve Yüzde)
+    # 8. Stop Loss Hesaplama (Fiyat ve Yüzde)
     def calc_sl(multiplier):
         sl_price = close - (multiplier * atr)
-        # Eğer SL seviyesi çok aşağıda kaldıysa (negatif fiyat) basit bir kontrol
         if sl_price <= 0: return 0, 0
         sl_percent = ((close - sl_price) / close) * 100
         return round(sl_price, 2), round(sl_percent, 2)
@@ -70,6 +74,9 @@ def get_stoploss_data(ticker):
     # Sonuçları paketle ve döndür
     return {
         "Close": close,
+        "EMA20_Dist": round(ema20_dist, 2),
+        "EMA50_Dist": round(ema50_dist, 2),
+        "EMA200_Dist": round(ema200_dist, 2) if ema200_dist is not None else "-",
         "Volatility": round(volatility, 2),
         "Max_Daily_Drop": round(max_daily_drop, 2),
         "Typical_Drop": round(typical_drop_avg, 3),
