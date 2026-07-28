@@ -8,6 +8,7 @@ import os
 from config import load_ticker_lists, save_ticker_lists, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
+from valuation import get_valuation_data, style_valuation_df
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -40,13 +41,13 @@ if 'ticker_lists' not in st.session_state:
 st.sidebar.header("Ayarlar")
 market = st.sidebar.radio("Piyasa Seçimi", ["NASDAQ 100", "BIST 100", "NYSE"])
 
-# Modül Seçimi (Hisse Yönetimi Modülü Eklendi)
 module = st.sidebar.radio(
     "Modül Seçimi", 
     [
         "Fincan-Kulp Tarayıcı", 
         "OBO & TOBO Tarayıcı", 
         "Stop Loss Hesaplayıcı",
+        "💎 Değerleme & Ucuzluk Skoru",
         "📊 Bağımsız Hisse Grafiği",
         "⚙️ Hisse Listelerini Yönet"
     ]
@@ -54,7 +55,6 @@ module = st.sidebar.radio(
 
 target_list = st.session_state.ticker_lists[market]
 
-# --- OTURUM DURUMU (SESSION STATE) KONTROLLERİ ---
 if 'current_module' not in st.session_state or st.session_state.current_module != module:
     st.session_state.current_module = module
     st.session_state.show_chart = False
@@ -90,13 +90,11 @@ if module == "Fincan-Kulp Tarayıcı":
 
     if 'cup_signals' in st.session_state and st.session_state.cup_signals:
         st.subheader("🎯 Bulunan Fincan-Kulp Formasyonları")
-        st.info("Grafiğini incelemek istediğiniz hissenin butonuna tıklayın:")
         cols = st.columns(min(len(st.session_state.cup_signals), 5))
         for idx, t_sig in enumerate(st.session_state.cup_signals):
             col_idx = idx % 5
             if cols[col_idx].button(f"📊 {t_sig}", key=f"btn_cup_{idx}_{t_sig}"):
                 render_chart_for(t_sig)
-                
     elif 'cup_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
@@ -157,7 +155,6 @@ elif module == "OBO & TOBO Tarayıcı":
 
     if 'obo_signals' in st.session_state and st.session_state.obo_signals:
         st.subheader("📉 Bulunan OBO / TOBO Formasyonları")
-        st.info("Grafiğini incelemek istediğiniz hissenin butonuna tıklayın:")
         cols = st.columns(min(len(st.session_state.obo_signals), 5))
         for idx, sig_item in enumerate(st.session_state.obo_signals):
             col_idx = idx % 5
@@ -267,8 +264,6 @@ elif module == "Stop Loss Hesaplayıcı":
                         })
                     except Exception as e:
                         st.warning(f"{t} verisi işlenirken hata oluştu: {e}")
-                else:
-                    st.warning(f"{t} için geçerli veri alınamadı.")
 
         if results:
             df_res = pd.DataFrame(results)
@@ -277,20 +272,88 @@ elif module == "Stop Loss Hesaplayıcı":
 
 
 # ==============================================================================
-# 4. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
+# 4. MODÜL: DEĞERLEME & UCUZLUK SKORU (YENİ EKLENEN MODÜL)
+# ==============================================================================
+elif module == "💎 Değerleme & Ucuzluk Skoru":
+    st.header("💎 Temel Analiz: Değerleme & Ucuzluk Skor Kartı")
+    st.caption("F/K, PD/DD, FD/FAVÖK, PEG, ROE ve Borçluluk kriterlerini birleştirerek hissenin ucuzluğunu 0-100 arasında puanlar.")
+
+    if 'selected_tickers' not in st.session_state:
+        st.session_state.selected_tickers = load_selections()
+
+    col_mode, col_sec = st.columns([2, 2])
+    
+    with col_mode:
+        scan_mode = st.radio(
+            "Tarama Kapsamı:", 
+            ["Sadece Kaydedilmiş/Seçili Hisseler", f"Tüm {market} Endeksini Tara ({len(target_list)} Hisse)"],
+            horizontal=True
+        )
+
+    scan_list = list(st.session_state.selected_tickers) if "Sadece" in scan_mode else target_list
+
+    if st.button("🚀 Değerleme Analizini Başlat", type="primary"):
+        if not scan_list:
+            st.warning("⚠️ Lütfen analiz etmek için en az bir hisse seçin.")
+        else:
+            val_results = []
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            for i, ticker in enumerate(scan_list):
+                status_text.text(f"Analiz ediliyor ({i+1}/{len(scan_list)}): {ticker}")
+                res = get_valuation_data(ticker)
+                if res:
+                    val_results.append(res)
+                progress_bar.progress((i + 1) / len(scan_list))
+
+            status_text.empty()
+            progress_bar.empty()
+            st.session_state.val_results = val_results
+
+    if 'val_results' in st.session_state and st.session_state.val_results:
+        df_val = pd.DataFrame(st.session_state.val_results)
+
+        # Sektöre göre alfabetik, skora göre büyükten küçüğe sırala
+        df_val = df_val.sort_values(by=["Sektör", "Nihai Skor"], ascending=[True, False])
+
+        # Sektör Filtresi
+        all_sectors = ["Tüm Sektörler"] + list(df_val["Sektör"].unique())
+        selected_sector = st.selectbox("🎯 Sektör Filtresi:", all_sectors)
+
+        if selected_sector != "Tüm Sektörler":
+            df_val = df_val[df_val["Sektör"] == selected_sector]
+
+        st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
+
+        # Kolon Başlığı İpuçları (Hint / Tooltip Yapılandırması)
+        column_config = {
+            "Hisse": st.column_config.TextColumn("Hisse", help="Hisse Senedi Kodu"),
+            "Sektör": st.column_config.TextColumn("Sektör", help="Şirketin Faaliyet Sektörü"),
+            "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Ucuz ve Kaliteli Kalmış Potential\n💡 40 Altı Kırmızı: Pahalı/Riskli"),
+            "F/K": st.column_config.NumberColumn("F/K", help="💡 Fiyat/Kazanç: 10 altı UCUZ, 20 üzeri PAHALI (kırmızı) kabul edilir."),
+            "PD/DD": st.column_config.NumberColumn("PD/DD", help="💡 Piyasa/Defter Değeri: 1.5 altı UCUZ, 4.0 üzeri PAHALI (kırmızı) kabul edilir."),
+            "FD/FAVÖK": st.column_config.NumberColumn("FD/FAVÖK", help="💡 Firma Değeri/FAVÖK: 7 altı UCUZ, 15 üzeri PAHALI (kırmızı) kabul edilir."),
+            "PEG": st.column_config.NumberColumn("PEG", help="💡 F/K ÷ Büyüme: 1.0 altı UCUZ (Büyümesine kıyasla cazip), 1.8 üzeri PAHALI."),
+            "Özkaynak Karlılığı %": st.column_config.NumberColumn("Özkaynak Karlılığı %", help="💡 ROE: %25+ Yüksek Karlılık. %10 altı DÜŞÜK/VERİMSİZ (kırmızı)."),
+            "Net Borç / FAVÖK": st.column_config.NumberColumn("Net Borç / FAVÖK", help="💡 Borçluluk: 1.5 altı ÇOK SAĞLIKLI, 3.5 üzeri YÜKSEK BORÇ RİSKİ (kırmızı)."),
+            "FCF Verimi %": st.column_config.NumberColumn("FCF Verimi %", help="💡 Serbest Nakit Akışı Verimi: %8 üzeri güçlü nakit makinesi demektir.")
+        }
+
+        # Renklendirilmiş Tabloyu Çizdir
+        styled_df = style_valuation_df(df_val)
+        st.dataframe(styled_df, column_config=column_config, use_container_width=True, hide_index=True)
+
+
+# ==============================================================================
+# 5. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
 # ==============================================================================
 elif module == "📊 Bağımsız Hisse Grafiği":
     st.header("📊 Bağımsız Hisse Senedi Grafiği İnceleme")
-    st.caption("Aşağıdaki listeden dilediğiniz hisseyi seçip butona basarak grafiğini inceleyebilirsiniz.")
     
     col_select, col_btn = st.columns([3, 1])
-    
     with col_select:
-        chosen_ticker = st.selectbox(
-            "Grafiğini görmek istediğiniz hisseyi seçin:", 
-            target_list, 
-            key="standalone_selectbox"
-        )
+        chosen_ticker = st.selectbox("Grafiğini görmek istediğiniz hisseyi seçin:", target_list, key="standalone_selectbox")
         
     with col_btn:
         st.write("<br>", unsafe_allow_html=True)
@@ -314,35 +377,27 @@ elif module == "📊 Bağımsız Hisse Grafiği":
                     low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
                 )])
                 
-                fig.update_layout(
-                    title=f"{active_t} - Mum Grafiği", 
-                    template="plotly_dark", 
-                    height=550, 
-                    xaxis_rangeslider_visible=False
-                )
+                fig.update_layout(title=f"{active_t} - Mum Grafiği", template="plotly_dark", height=550, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
 
 
 # ==============================================================================
-# 5. MODÜL: HİSSE LİSTELERİNİ YÖNET (YENİ MODÜL)
+# 6. MODÜL: HİSSE LİSTELERİNİ YÖNET
 # ==============================================================================
 elif module == "⚙️ Hisse Listelerini Yönet":
     st.header("⚙️ Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
-    st.caption("Bu bölümden istediğiniz piyasaya yeni hisse ekleyebilir, mevcut hisseleri silebilirsiniz. Değişiklikler kalıcı olarak kaydedilir.")
 
     selected_m = st.selectbox("Düzenlenecek Piyasayı Seçin:", ["NASDAQ 100", "BIST 100", "NYSE"])
     current_market_list = st.session_state.ticker_lists[selected_m]
 
     col_add, col_del = st.columns(2)
 
-    # 1. YENİ HİSSE EKLEME
     with col_add:
         st.subheader("➕ Yeni Hisse Ekle")
         new_symbol = st.text_input("Hisse Sembolü (Örn: NVDA veya TUPRS):", "").upper().strip()
         
         if st.button("Listeye Ekle", type="primary"):
             if new_symbol:
-                # BIST hisselerinde .IS otomatik tamamlama
                 if selected_m == "BIST 100" and not new_symbol.endswith(".IS"):
                     new_symbol += ".IS"
 
@@ -351,12 +406,9 @@ elif module == "⚙️ Hisse Listelerini Yönet":
                 else:
                     st.session_state.ticker_lists[selected_m].append(new_symbol)
                     save_ticker_lists(st.session_state.ticker_lists)
-                    st.success(f"✅ **{new_symbol}**, {selected_m} listesine başarıyla eklendi ve kaydedildi!")
+                    st.success(f"✅ **{new_symbol}**, {selected_m} listesine eklendi ve kaydedildi!")
                     st.rerun()
-            else:
-                st.error("Lütfen geçerli bir hisse sembolü yazın.")
 
-    # 2. HİSSE SİLME
     with col_del:
         st.subheader("🗑️ Hisse Çıkar")
         symbol_to_remove = st.selectbox("Listeden çıkarmak istediğiniz hisse:", current_market_list)
@@ -369,8 +421,6 @@ elif module == "⚙️ Hisse Listelerini Yönet":
                 st.rerun()
 
     st.write("---")
-    
-    # MEVCUT LİSTE GÖRÜNTÜLEME VE SIFIRLAMA
     st.subheader(f"📋 Güncel {selected_m} Listesi ({len(current_market_list)} Hisse)")
     st.write(", ".join(current_market_list))
 
