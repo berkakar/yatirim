@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import json
 import os
 
-from config import NASDAQ_100, BIST_100, NYSE
+from config import load_ticker_lists, save_ticker_lists, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
 
@@ -29,28 +29,30 @@ st.set_page_config(layout="wide", page_title="Yatırım Terminali")
 st.title("📈 Profesyonel Yatırım Terminali")
 
 # ------------------------------------------------------------------------------
+# DİNAMİK LİSTE YÜKLEME VE SESSION STATE
+# ------------------------------------------------------------------------------
+if 'ticker_lists' not in st.session_state:
+    st.session_state.ticker_lists = load_ticker_lists()
+
+# ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
 # ------------------------------------------------------------------------------
 st.sidebar.header("Ayarlar")
 market = st.sidebar.radio("Piyasa Seçimi", ["NASDAQ 100", "BIST 100", "NYSE"])
 
-# Modül Seçimi (Bağımsız Grafik Modülü en altta)
+# Modül Seçimi (Hisse Yönetimi Modülü Eklendi)
 module = st.sidebar.radio(
     "Modül Seçimi", 
     [
         "Fincan-Kulp Tarayıcı", 
         "OBO & TOBO Tarayıcı", 
         "Stop Loss Hesaplayıcı",
-        "📊 Bağımsız Hisse Grafiği"
+        "📊 Bağımsız Hisse Grafiği",
+        "⚙️ Hisse Listelerini Yönet"
     ]
 )
 
-if market == "NASDAQ 100":
-    target_list = NASDAQ_100
-elif market == "BIST 100":
-    target_list = BIST_100
-else:
-    target_list = NYSE
+target_list = st.session_state.ticker_lists[market]
 
 # --- OTURUM DURUMU (SESSION STATE) KONTROLLERİ ---
 if 'current_module' not in st.session_state or st.session_state.current_module != module:
@@ -86,7 +88,6 @@ if module == "Fincan-Kulp Tarayıcı":
                             signals.append(t)
             st.session_state.cup_signals = signals
 
-    # Tarama Sonuçları Listesi
     if 'cup_signals' in st.session_state and st.session_state.cup_signals:
         st.subheader("🎯 Bulunan Fincan-Kulp Formasyonları")
         st.info("Grafiğini incelemek istediğiniz hissenin butonuna tıklayın:")
@@ -99,7 +100,6 @@ if module == "Fincan-Kulp Tarayıcı":
     elif 'cup_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
-    # Taranan hisselerden birine tıklandıysa altına grafiği çiz
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         st.write("---")
@@ -155,7 +155,6 @@ elif module == "OBO & TOBO Tarayıcı":
                         
             st.session_state.obo_signals = signals
 
-    # Tarama Sonuçları Listesi
     if 'obo_signals' in st.session_state and st.session_state.obo_signals:
         st.subheader("📉 Bulunan OBO / TOBO Formasyonları")
         st.info("Grafiğini incelemek istediğiniz hissenin butonuna tıklayın:")
@@ -171,7 +170,6 @@ elif module == "OBO & TOBO Tarayıcı":
     elif 'obo_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
-    # Taranan hisselerden birine tıklandıysa altına grafiği çiz
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         st.write("---")
@@ -204,7 +202,7 @@ elif module == "OBO & TOBO Tarayıcı":
 
 
 # ==============================================================================
-# 3. MODÜL: STOP LOSS HESAPLAYICI (EMA SÜTUNLARI EKLENDİ)
+# 3. MODÜL: STOP LOSS HESAPLAYICI
 # ==============================================================================
 elif module == "Stop Loss Hesaplayıcı":
     st.header("🛡️ Risk Yönetimi: Stop Loss & EMA Analizi")
@@ -250,7 +248,6 @@ elif module == "Stop Loss Hesaplayıcı":
                 data = get_stoploss_data(t)
                 if data is not None and isinstance(data, dict):
                     try:
-                        # EMA200 eksi/artı işareti veya yetersiz veri kontrolü
                         ema200_val = data.get('EMA200_Dist', '-')
                         ema200_str = f"%{ema200_val:+.2f}" if isinstance(ema200_val, (int, float)) else "-"
 
@@ -280,7 +277,7 @@ elif module == "Stop Loss Hesaplayıcı":
 
 
 # ==============================================================================
-# 4. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ (SOL MENÜNÜN EN ALTINDAKİ SEÇENEK)
+# 4. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
 # ==============================================================================
 elif module == "📊 Bağımsız Hisse Grafiği":
     st.header("📊 Bağımsız Hisse Senedi Grafiği İnceleme")
@@ -300,7 +297,6 @@ elif module == "📊 Bağımsız Hisse Grafiği":
         if st.button("📈 Grafiği Göster", use_container_width=True, type="primary"):
             render_chart_for(chosen_ticker)
 
-    # YALNIZCA BUTONA BASILDIĞINDA GRAFİK ÇİZİLİR
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         st.write("---")
@@ -312,7 +308,7 @@ elif module == "📊 Bağımsız Hisse Grafiği":
             if df is None or df.empty or 'Close' not in df.columns:
                 st.error(f"❌ {active_t} için geçerli piyasa verisi alınamadı.")
             else:
-                df_viz = df.iloc[-126:] # Son 6 aylık veri
+                df_viz = df.iloc[-126:]
                 fig = go.Figure(data=[go.Candlestick(
                     x=df_viz['Date'], open=df_viz['Open'], high=df_viz['High'],
                     low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
@@ -325,3 +321,66 @@ elif module == "📊 Bağımsız Hisse Grafiği":
                     xaxis_rangeslider_visible=False
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+
+# ==============================================================================
+# 5. MODÜL: HİSSE LİSTELERİNİ YÖNET (YENİ MODÜL)
+# ==============================================================================
+elif module == "⚙️ Hisse Listelerini Yönet":
+    st.header("⚙️ Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
+    st.caption("Bu bölümden istediğiniz piyasaya yeni hisse ekleyebilir, mevcut hisseleri silebilirsiniz. Değişiklikler kalıcı olarak kaydedilir.")
+
+    selected_m = st.selectbox("Düzenlenecek Piyasayı Seçin:", ["NASDAQ 100", "BIST 100", "NYSE"])
+    current_market_list = st.session_state.ticker_lists[selected_m]
+
+    col_add, col_del = st.columns(2)
+
+    # 1. YENİ HİSSE EKLEME
+    with col_add:
+        st.subheader("➕ Yeni Hisse Ekle")
+        new_symbol = st.text_input("Hisse Sembolü (Örn: NVDA veya TUPRS):", "").upper().strip()
+        
+        if st.button("Listeye Ekle", type="primary"):
+            if new_symbol:
+                # BIST hisselerinde .IS otomatik tamamlama
+                if selected_m == "BIST 100" and not new_symbol.endswith(".IS"):
+                    new_symbol += ".IS"
+
+                if new_symbol in current_market_list:
+                    st.warning(f"⚠️ **{new_symbol}** zaten {selected_m} listesinde mevcut.")
+                else:
+                    st.session_state.ticker_lists[selected_m].append(new_symbol)
+                    save_ticker_lists(st.session_state.ticker_lists)
+                    st.success(f"✅ **{new_symbol}**, {selected_m} listesine başarıyla eklendi ve kaydedildi!")
+                    st.rerun()
+            else:
+                st.error("Lütfen geçerli bir hisse sembolü yazın.")
+
+    # 2. HİSSE SİLME
+    with col_del:
+        st.subheader("🗑️ Hisse Çıkar")
+        symbol_to_remove = st.selectbox("Listeden çıkarmak istediğiniz hisse:", current_market_list)
+        
+        if st.button("Listeden Çıkar", type="secondary"):
+            if symbol_to_remove in current_market_list:
+                st.session_state.ticker_lists[selected_m].remove(symbol_to_remove)
+                save_ticker_lists(st.session_state.ticker_lists)
+                st.success(f"🗑️ **{symbol_to_remove}**, {selected_m} listesinden çıkarıldı!")
+                st.rerun()
+
+    st.write("---")
+    
+    # MEVCUT LİSTE GÖRÜNTÜLEME VE SIFIRLAMA
+    st.subheader(f"📋 Güncel {selected_m} Listesi ({len(current_market_list)} Hisse)")
+    st.write(", ".join(current_market_list))
+
+    st.write("<br>", unsafe_allow_html=True)
+    if st.button("🔄 Orijinal Varsayılan Listelere Dön (Sıfırla)"):
+        st.session_state.ticker_lists = {
+            "NASDAQ 100": list(dict.fromkeys(DEFAULT_NASDAQ_100)),
+            "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
+            "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100))
+        }
+        save_ticker_lists(st.session_state.ticker_lists)
+        st.success("Tüm listeler varsayılan ayarlara sıfırlandı!")
+        st.rerun()
