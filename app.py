@@ -8,7 +8,8 @@ import os
 from config import load_ticker_lists, save_ticker_lists, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
-from valuation import get_valuation_data, style_valuation_df
+from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
+from dtw_analysis import fetch_and_cache_5m_data, compute_dtw_similarity, compute_cross_similarity_parallel, find_local_extremes
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -48,6 +49,7 @@ module = st.sidebar.radio(
         "OBO & TOBO Tarayıcı", 
         "Stop Loss Hesaplayıcı",
         "💎 Değerleme & Ucuzluk Skoru",
+        "🔄 DTW Zaman Serisi & Benzerlik Analizi", # YENİ MODÜL
         "📊 Bağımsız Hisse Grafiği",
         "⚙️ Hisse Listelerini Yönet"
     ]
@@ -270,13 +272,12 @@ elif module == "Stop Loss Hesaplayıcı":
             st.subheader("📊 Detaylı Stop Loss & EMA Analizi")
             st.dataframe(df_res, use_container_width=True, hide_index=True)
 
-
 # ==============================================================================
-# 4. MODÜL: DEĞERLEME & UCUZLUK SKORU (YENİ EKLENEN MODÜL)
+# 4. MODÜL: DEĞERLEME & UCUZLUK SKORU (MİKRO İŞ MODELİ GRUPLAMALI)
 # ==============================================================================
 elif module == "💎 Değerleme & Ucuzluk Skoru":
-    st.header("💎 Temel Analiz: Değerleme & Ucuzluk Skor Kartı")
-    st.caption("F/K, PD/DD, FD/FAVÖK, PEG, ROE ve Borçluluk kriterlerini birleştirerek hissenin ucuzluğunu 0-100 arasında puanlar.")
+    st.header("💎 Temel Analiz: Mikro İş Modeline Göre Değerleme")
+    st.caption("Şirketler genel sektör yerine kendi özel iş modellerine (örn: GPU vs RAM vs Telekom) göre gruplanır ve iskontoları kıyaslanır.")
 
     if 'selected_tickers' not in st.session_state:
         st.session_state.selected_tickers = load_selections()
@@ -296,54 +297,60 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         if not scan_list:
             st.warning("⚠️ Lütfen analiz etmek için en az bir hisse seçin.")
         else:
-            val_results = []
+            raw_results = []
             progress_bar = st.progress(0)
             status_text = st.empty()
 
             for i, ticker in enumerate(scan_list):
-                status_text.text(f"Analiz ediliyor ({i+1}/{len(scan_list)}): {ticker}")
-                res = get_valuation_data(ticker)
+                status_text.text(f"Finansal veriler çekiliyor ({i+1}/{len(scan_list)}): {ticker}")
+                res = fetch_single_ticker_raw(ticker)
                 if res:
-                    val_results.append(res)
+                    raw_results.append(res)
                 progress_bar.progress((i + 1) / len(scan_list))
 
             status_text.empty()
             progress_bar.empty()
-            st.session_state.val_results = val_results
+
+            # İş modeli alt sektör ortalamalarına ve 100 puanlık matrise göre skorla
+            st.session_state.val_results = calculate_sector_relative_scores(raw_results)
 
     if 'val_results' in st.session_state and st.session_state.val_results:
         df_val = pd.DataFrame(st.session_state.val_results)
+        df_val = df_val.sort_values(by=["Alt Sektör (İş Modeli)", "Nihai Skor"], ascending=[True, False])
 
-        # Sektöre göre alfabetik, skora göre büyükten küçüğe sırala
-        df_val = df_val.sort_values(by=["Sektör", "Nihai Skor"], ascending=[True, False])
+        all_sub_sectors = ["Tüm Alt Sektörler / İş Modelleri"] + list(df_val["Alt Sektör (İş Modeli)"].unique())
+        selected_sub_sector = st.selectbox("🎯 İş Modeli / Alt Sektör Filtresi:", all_sub_sectors)
 
-        # Sektör Filtresi
-        all_sectors = ["Tüm Sektörler"] + list(df_val["Sektör"].unique())
-        selected_sector = st.selectbox("🎯 Sektör Filtresi:", all_sectors)
-
-        if selected_sector != "Tüm Sektörler":
-            df_val = df_val[df_val["Sektör"] == selected_sector]
+        if selected_sub_sector != "Tüm Alt Sektörler / İş Modelleri":
+            df_val = df_val[df_val["Alt Sektör (İş Modeli)"] == selected_sub_sector]
 
         st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
 
-        # Kolon Başlığı İpuçları (Hint / Tooltip Yapılandırması)
+        # Kolon İpuçları (Hint / Tooltip Yapılandırması)
         column_config = {
-            "Hisse": st.column_config.TextColumn("Hisse", help="Hisse Senedi Kodu"),
-            "Sektör": st.column_config.TextColumn("Sektör", help="Şirketin Faaliyet Sektörü"),
-            "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Ucuz ve Kaliteli Kalmış Potential\n💡 40 Altı Kırmızı: Pahalı/Riskli"),
-            "F/K": st.column_config.NumberColumn("F/K", help="💡 Fiyat/Kazanç: 10 altı UCUZ, 20 üzeri PAHALI (kırmızı) kabul edilir."),
-            "PD/DD": st.column_config.NumberColumn("PD/DD", help="💡 Piyasa/Defter Değeri: 1.5 altı UCUZ, 4.0 üzeri PAHALI (kırmızı) kabul edilir."),
-            "FD/FAVÖK": st.column_config.NumberColumn("FD/FAVÖK", help="💡 Firma Değeri/FAVÖK: 7 altı UCUZ, 15 üzeri PAHALI (kırmızı) kabul edilir."),
-            "PEG": st.column_config.NumberColumn("PEG", help="💡 F/K ÷ Büyüme: 1.0 altı UCUZ (Büyümesine kıyasla cazip), 1.8 üzeri PAHALI."),
-            "Özkaynak Karlılığı %": st.column_config.NumberColumn("Özkaynak Karlılığı %", help="💡 ROE: %25+ Yüksek Karlılık. %10 altı DÜŞÜK/VERİMSİZ (kırmızı)."),
-            "Net Borç / FAVÖK": st.column_config.NumberColumn("Net Borç / FAVÖK", help="💡 Borçluluk: 1.5 altı ÇOK SAĞLIKLI, 3.5 üzeri YÜKSEK BORÇ RİSKİ (kırmızı)."),
-            "FCF Verimi %": st.column_config.NumberColumn("FCF Verimi %", help="💡 Serbest Nakit Akışı Verimi: %8 üzeri güçlü nakit makinesi demektir.")
+            "Hisse": st.column_config.TextColumn("Hisse", help="Hisse Sembolü"),
+            "Alt Sektör (İş Modeli)": st.column_config.TextColumn("İş Modeli Grubu", help="💡 sub_sectors.json dosyasından gelen mikro grup (örn: RAM vs GPU)"),
+            "Ana Sektör": st.column_config.TextColumn("Ana Sektör", help="yfinance Makro Sektörü"),
+            "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n💡 40 Altı Kırmızı: Zayıf/Pahalı"),
+            "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı."),
+            "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="💡 Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
+            "PEG": st.column_config.NumberColumn("PEG [10p]", help="💡 Optimum: < 1.0 (F/K ÷ EPS Büyümesi)."),
+            "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="💡 Optimum: > %10."),
+            "Gelir Büyümesi %": st.column_config.NumberColumn("Gelir Büyümesi % [10p]", help="💡 Optimum: > %10."),
+            "Öz Sermaye Getirisi (ROE) %": st.column_config.NumberColumn("Öz Sermaye Getirisi % [10p]", help="💡 Optimum: > %10."),
+            "Net Kar Marjı %": st.column_config.NumberColumn("Net Kar Marjı % [8p]", help="💡 Optimum: > %15."),
+            "Brüt Kar Marjı %": st.column_config.NumberColumn("Brüt Kar Marjı % [7p]", help="💡 Optimum: %30 - %60."),
+            "Faiz Karşılama Oranı": st.column_config.NumberColumn("Faiz Karşılama [7p]", help="💡 Optimum: > 3.0."),
+            "Varlık Getirisi (ROA) %": st.column_config.NumberColumn("Varlık Getirisi (ROA) % [6p]", help="💡 Optimum: %5 - %10."),
+            "Borç / Özsermaye": st.column_config.NumberColumn("Borç / Özsermaye [5p]", help="💡 Optimum: < 0.5."),
+            "Borç / Varlık %": st.column_config.NumberColumn("Borç / Varlık % [4p]", help="💡 Optimum: < %50."),
+            "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="💡 Optimum: 1.0 - 2.0."),
+            "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="💡 Optimum: > 1.0."),
+            "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="💡 Optimum: 1.0 - 2.0.")
         }
 
-        # Renklendirilmiş Tabloyu Çizdir
         styled_df = style_valuation_df(df_val)
         st.dataframe(styled_df, column_config=column_config, use_container_width=True, hide_index=True)
-
 
 # ==============================================================================
 # 5. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
@@ -434,3 +441,153 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         save_ticker_lists(st.session_state.ticker_lists)
         st.success("Tüm listeler varsayılan ayarlara sıfırlandı!")
         st.rerun()
+
+# ==============================================================================
+# MODÜL: DTW ZAMAN SERİSİ & BENZERLİK ANALİZİ (PERFORMANS & CPU OPTİMİZE)
+# ==============================================================================
+elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
+    st.header("🔄 DTW (Dynamic Time Warping) Zaman Serisi & Benzerlik Analizi")
+    st.caption("NASDAQ 100 hisselerinin son 2 gününün 5 dakikalık pazar öncesi ve seans içi fiyat hareketlerini kıyaslar.")
+
+    col_btn, col_thresh = st.columns([2, 2])
+
+    col_btn, col_thresh, col_window = st.columns([2, 1.5, 1.5])
+    
+    with col_btn:
+        st.write("<br>", unsafe_allow_html=True)
+        run_dtw_fetch = st.button("🚀 Verileri Güncelle & DTW Analizini Başlat", type="primary")
+        
+    with col_thresh:
+        min_similarity = st.slider("🎯 Min. Benzerlik Skoru (%):", min_value=50, max_value=95, value=75, step=5)
+
+    with col_window:
+        max_warp_minutes = st.slider("⏱️ Max Zamansal Kayma (Dakika):", min_value=15, max_value=120, value=45, step=15)
+        # 5 dakikalık adımlara dönüştür (örn: 45 dk -> 9 adım)
+        max_warping_window = max_warp_minutes // 5
+    
+   
+    # BUTONA BASILDIĞINDA HESAPLA VE HAFIZAYA AL (Sadece 1 Kere Çalışır)
+    if run_dtw_fetch:
+        with st.spinner("NASDAQ 100 verileri çekiliyor ve DTW matrisi hesaplanıyor..."):
+            dtw_data = fetch_and_cache_5m_data(target_list)
+            st.session_state.dtw_data = dtw_data
+            
+            # Kendi İçinde Benzerlik Ön Hesaplaması
+            self_sim_results = []
+            stock_keys = list(dtw_data.keys())
+            for ticker in stock_keys:
+                d1 = dtw_data[ticker]["day1"]["prices"]
+                d2 = dtw_data[ticker]["day2"]["prices"]
+                sim, dist = compute_dtw_similarity(d1, d2)
+                self_sim_results.append({
+                    "Hisse": ticker,
+                    "1. Gün Tarihi": dtw_data[ticker]["day1"]["date"],
+                    "2. Gün Tarihi": dtw_data[ticker]["day2"]["date"],
+                    "DTW Benzerlik Skoru %": sim,
+                    "DTW Mesafesi": dist
+                })
+            st.session_state.self_sim_results = self_sim_results
+
+            # Çapraz Benzerlik Paralel Ön Hesaplaması
+            st.session_state.cross_sim_results = compute_cross_similarity_parallel(dtw_data, min_similarity=50)
+            st.success(f"✅ {len(dtw_data)} hissenin analizi tamamlandı ve hafızaya alındı.")
+
+    # Oturumda veri yoksa ama JSON varsa oku
+    if 'dtw_data' not in st.session_state and os.path.exists("nasdaq_5m_cache.json"):
+        with open("nasdaq_5m_cache.json", 'r', encoding='utf-8') as f:
+            st.session_state.dtw_data = json.load(f).get("stocks", {})
+
+    # GÖRSELLEŞTİRME KISMI (CPU'yu Yormaz, Hafızadan Okur)
+    if 'dtw_data' in st.session_state and st.session_state.dtw_data:
+        stocks_dict = st.session_state.dtw_data
+        stock_keys = list(stocks_dict.keys())
+
+        tab1, tab2, tab3 = st.tabs(["📌 1. Kendi İçinde Benzerlik", "🌐 2. Hisseler Arası Benzerlik", "📈 3. İnteraktif Karşılaştırmalı Grafik"])
+
+        # TAB 1: KENDİ İÇİNDE BENZERLİK
+        with tab1:
+            st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
+            if 'self_sim_results' in st.session_state:
+                df_self = pd.DataFrame(st.session_state.self_sim_results)
+                df_self = df_self[df_self["DTW Benzerlik Skoru %"] >= min_similarity].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
+                st.dataframe(df_self, use_container_width=True, hide_index=True)
+            else:
+                st.info("Hesaplama için lütfen '🚀 Verileri Güncelle & DTW Analizini Başlat' butonuna basın.")
+
+        # TAB 2: HİSSELER ARASI ÇAPRAZ BENZERLİK (Hafızadan Filtreler)
+        with tab2:
+            st.subheader("🔀 Farklı Hisselerin Son Gün Fiyat Hareketi Benzerliği")
+            if 'cross_sim_results' in st.session_state:
+                df_cross = pd.DataFrame(st.session_state.cross_sim_results)
+                if not df_cross.empty:
+                    df_cross = df_cross[df_cross["DTW Benzerlik Skoru %"] >= min_similarity].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
+                    st.dataframe(df_cross, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Benzerlik gösteren hisse çifti bulunamadı.")
+            else:
+                st.info("Hesaplama için lütfen '🚀 Verileri Güncelle & DTW Analizini Başlat' butonuna basın.")
+
+        # TAB 3: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK
+        with tab3:
+            st.subheader("📈 Karşılaştırmalı Zaman Serisi Grafiği")
+            comp_mode = st.radio("Karşılaştırma Tipi:", ["Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)", "İki Farklı Hisse (Son Gün)"], horizontal=True)
+            
+            if comp_mode == "Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)":
+                selected_t = st.selectbox("Hisseyi Seçin:", stock_keys)
+                t_data = stocks_dict[selected_t]
+                times1, prices1 = t_data["day1"]["times_short"], t_data["day1"]["prices"]
+                times2, prices2 = t_data["day2"]["times_short"], t_data["day2"]["prices"]
+                
+                sim, _ = compute_dtw_similarity(prices1, prices2)
+                st.info(f"💡 **{selected_t}** için Gün 1 ve Gün 2 DTW Benzerlik Skoru: **%{sim}**")
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=times1, y=prices1, mode='lines', name=f"{t_data['day1']['date']} (Gün 1)", line=dict(color='#00d2ff', width=2)))
+                fig.add_trace(go.Scatter(x=times2, y=prices2, mode='lines', name=f"{t_data['day2']['date']} (Gün 2)", line=dict(color='#ff9f1c', width=2), yaxis="y2"))
+
+                peaks1, troughs1 = find_local_extremes(times1, prices1)
+                for _, tm, pr in peaks1:
+                    fig.add_annotation(x=tm, y=pr, text=f"Tepe: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#00d2ff", bgcolor="#1b4332")
+                for _, tm, pr in troughs1:
+                    fig.add_annotation(x=tm, y=pr, text=f"Dip: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#00d2ff", bgcolor="#7209b7")
+
+                fig.update_layout(
+                    title=f"{selected_t} - 5 Dakikalık Fiyat Karşılaştırması (Zaman Serisi)",
+                    template="plotly_dark", height=600,
+                    xaxis=dict(title="Zaman (Saat:Dakika)"),
+                    yaxis=dict(title=dict(text=f"Fiyat {t_data['day1']['date']} ($)", font=dict(color="#00d2ff"))),
+                    yaxis2=dict(title=dict(text=f"Fiyat {t_data['day2']['date']} ($)", font=dict(color="#ff9f1c")), overlaying="y", side="right")
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+            else:
+                col_h1, col_h2 = st.columns(2)
+                with col_h1:
+                    t1_sel = st.selectbox("1. Hisse:", stock_keys, index=0)
+                with col_h2:
+                    t2_sel = st.selectbox("2. Hisse:", stock_keys, index=min(1, len(stock_keys)-1))
+
+                data1 = stocks_dict[t1_sel]["day2"]
+                data2 = stocks_dict[t2_sel]["day2"]
+
+                sim, _ = compute_dtw_similarity(data1["prices"], data2["prices"])
+                st.info(f"💡 **{t1_sel}** ile **{t2_sel}** Arasındaki DTW Benzerlik Skoru: **%{sim}**")
+
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=data1["times_short"], y=data1["prices"], mode='lines', name=f"{t1_sel} ({data1['date']})", line=dict(color='#2ec4b6', width=2)))
+                fig.add_trace(go.Scatter(x=data2["times_short"], y=data2["prices"], mode='lines', name=f"{t2_sel} ({data2['date']})", line=dict(color='#e63946', width=2), yaxis="y2"))
+
+                peaks1, troughs1 = find_local_extremes(data1["times_short"], data1["prices"])
+                for _, tm, pr in peaks1:
+                    fig.add_annotation(x=tm, y=pr, text=f"{t1_sel} Tepe: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#2ec4b6")
+                for _, tm, pr in troughs1:
+                    fig.add_annotation(x=tm, y=pr, text=f"{t1_sel} Dip: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#2ec4b6")
+
+                fig.update_layout(
+                    title=f"{t1_sel} vs {t2_sel} - Son Gün 5m Fiyat Hareketi Kıyaslaması",
+                    template="plotly_dark", height=600,
+                    xaxis=dict(title="Zaman (Saat:Dakika)"),
+                    yaxis=dict(title=dict(text=f"{t1_sel} Fiyat ($)", font=dict(color="#2ec4b6"))),
+                    yaxis2=dict(title=dict(text=f"{t2_sel} Fiyat ($)", font=dict(color="#e63946")), overlaying="y", side="right")
+                )
+                st.plotly_chart(fig, use_container_width=True)

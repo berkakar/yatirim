@@ -6,17 +6,16 @@ import os
 # VARSAYILAN LİSTELER (DEFAULT)
 # ------------------------------------------------------------------------------
 DEFAULT_NASDAQ_100 = [
-    "AAPL", "MSFT", "AMZN", "NVDA", "GOOGL", "GOOG", "META", "TSLA", "AVGO", "PEP", 
-    "COST", "ADBE", "AMD", "CSCO", "INTC", "CMCSA", "AMGN", "NFLX", "INTU", "TXN", 
-    "QCOM", "AMAT", "BKNG", "HON", "VRTX", "SBUX", "ISRG", "MDLZ", "ADP", "REGN", 
-    "GILD", "ADI", "PANW", "MU", "SNPS", "PYPL", "KLAC", "CDNS", "CSX", "ORLY", 
-    "MAR", "MELI", "CTAS", "LRCX", "MNST", "PAYX", "MCHP", "PCAR", "KDP", "ADSK",
-    "NXPI", "IDXX", "PDD", "FTNT", "KHC", "ROP", "ROST", "ASML", "AEP", "AZN", 
-    "BIIB", "BKR", "NOW", "CHTR", "CPRT", "CRWD", "CSGP", "CTSH", "DDOG", "DLTR", 
-    "DXCM", "EA", "ENPH", "EXC", "EXPE", "FAST", "GEHC", "ILMN", "JD", 
-    "LULU", "MDB", "MRNA", "MRVL", "ODFL", "ON", "PAYC", "SGEN", "SIRI", "SPLK", 
-    "TROW", "TTWO", "VEEV", "VRSK", "WBA", "WBD", "SPCX", "ZS", "TEM", "LCID", 
-    "CRWV", "EOSE", "OSS"
+    "AAPL", "ABNB", "ADBE", "ADI", "ADP", "ADSK", "AEP", "AMAT", "AMD", "AMGN",
+    "AMZN", "ANSS", "APP", "ARM", "ASML", "AVGO", "AXON", "BKR", "BIIB", "BKNG",
+    "CDNS", "CEG", "CHTR", "CMCSA", "COST", "CPRT", "CRWD", "CSGP", "CSX", "CTAS",
+    "CTSH", "DASH", "DDOG", "DLTR", "DXCM", "EA", "EXC", "FAST", "FTNT", "GEHC",
+    "GILD", "GOOG", "GOOGL", "HON", "IDXX", "ILMN", "INTC", "INTU", "ISRG", "KDP",
+    "KHC", "KLAC", "LRCX", "LULU", "MAR", "MCHP", "MDB", "MDLZ", "MELI", "META",
+    "MNST", "MRVL", "MSFT", "MU", "NFLX", "NVDA", "NXPI", "ODFL", "ON", "ORLY",
+    "PANW", "PAYX", "PCAR", "PDD", "PEP", "PLTR", "PYPL", "QCOM", "REGN", "ROP",
+    "ROST", "SBUX", "SMCI", "SNPS", "TEAM", "TMUS", "TSLA", "TTD", "TXN", "VRSK",
+    "VRTX", "WBD", "WDAY", "XEL", "ZS","SKHY"
 ]
 
 DEFAULT_NYSE = [
