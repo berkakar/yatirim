@@ -9,7 +9,14 @@ from config import load_ticker_lists, save_ticker_lists, DEFAULT_NASDAQ_100, DEF
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
 from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
-from dtw_analysis import fetch_and_cache_5m_data, compute_dtw_similarity, compute_cross_similarity_parallel, find_local_extremes
+from dtw_analysis import (
+    fetch_and_cache_5m_data, 
+    compute_dtw_similarity, 
+    compute_cross_similarity_parallel, 
+    find_local_extremes,
+    load_cached_dtw_results,
+    save_cached_dtw_results
+)
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -443,42 +450,85 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         st.rerun()
 
 # ==============================================================================
-# MODÜL: DTW ZAMAN SERİSİ & BENZERLİK ANALİZİ (PERFORMANS & CPU OPTİMİZE)
+# MODÜL: DTW ZAMAN SERİSİ & BENZERLİK ANALİZİ (GÖRÜNTÜLEME & TİP GÜVENCELİ)
 # ==============================================================================
 elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
     st.header("🔄 DTW (Dynamic Time Warping) Zaman Serisi & Benzerlik Analizi")
-    st.caption("NASDAQ 100 hisselerinin son 2 gününün 5 dakikalık pazar öncesi ve seans içi fiyat hareketlerini kıyaslar.")
-
-    col_btn, col_thresh = st.columns([2, 2])
+    st.caption("NASDAQ 100 hisselerinin son 2 gününün 5 dakikalık seans içi fiyat hareketlerini kıyaslar.")
 
     col_btn, col_thresh, col_window = st.columns([2, 1.5, 1.5])
     
     with col_btn:
         st.write("<br>", unsafe_allow_html=True)
-        run_dtw_fetch = st.button("🚀 Verileri Güncelle & DTW Analizini Başlat", type="primary")
+        run_dtw_fetch = st.button("🚀 Verileri Güncelle & Analizi Çalıştır", type="primary")
         
     with col_thresh:
         min_similarity = st.slider("🎯 Min. Benzerlik Skoru (%):", min_value=50, max_value=95, value=75, step=5)
 
     with col_window:
         max_warp_minutes = st.slider("⏱️ Max Zamansal Kayma (Dakika):", min_value=15, max_value=120, value=45, step=15)
-        # 5 dakikalık adımlara dönüştür (örn: 45 dk -> 9 adım)
-        max_warping_window = max_warp_minutes // 5
-    
-   
-    # BUTONA BASILDIĞINDA HESAPLA VE HAFIZAYA AL (Sadece 1 Kere Çalışır)
+        max_warping_window = max_warp_minutes // 5  # 5 dakikalık adımlara çevir
+
+    time_penalty = 0.10
+
+    # 1. Ham verileri JSON önbelleğinden yükle
+    if 'dtw_data' not in st.session_state and os.path.exists("nasdaq_5m_cache.json"):
+        try:
+            with open("nasdaq_5m_cache.json", 'r', encoding='utf-8') as f:
+                st.session_state.dtw_data = json.load(f).get("stocks", {})
+        except Exception:
+            st.session_state.dtw_data = {}
+
+    # 2. Butona basıldıysa ham verileri yeniden çek ve hesapla
     if run_dtw_fetch:
-        with st.spinner("NASDAQ 100 verileri çekiliyor ve DTW matrisi hesaplanıyor..."):
+        with st.spinner("NASDAQ 100 verileri Yahoo Finance'den çekiliyor ve Türkiye saatine çevriliyor..."):
             dtw_data = fetch_and_cache_5m_data(target_list)
             st.session_state.dtw_data = dtw_data
             
-            # Kendi İçinde Benzerlik Ön Hesaplaması
+            if dtw_data:
+                with st.spinner("DTW benzerlik matrisi hesaplanıyor..."):
+                    # Kendi İçinde Benzerlik Hesapla
+                    self_sim_results = []
+                    stock_keys = list(dtw_data.keys())
+                    for ticker in stock_keys:
+                        d1 = dtw_data[ticker]["day1"]["prices"]
+                        d2 = dtw_data[ticker]["day2"]["prices"]
+                        sim, dist = compute_dtw_similarity(d1, d2, max_warping_window, time_penalty)
+                        self_sim_results.append({
+                            "Hisse": ticker,
+                            "1. Gün Tarihi": dtw_data[ticker]["day1"]["date"],
+                            "2. Gün Tarihi": dtw_data[ticker]["day2"]["date"],
+                            "DTW Benzerlik Skoru %": sim,
+                            "DTW Mesafesi": dist
+                        })
+                    st.session_state.self_sim_results = self_sim_results
+
+                    # Çapraz Benzerlik Hesapla
+                    cross_sim_results = compute_cross_similarity_parallel(
+                        dtw_data, min_similarity=0, max_warping_window=max_warping_window, time_penalty=time_penalty
+                    )
+                    st.session_state.cross_sim_results = cross_sim_results
+
+                    # Sonuçları diske kaydet
+                    save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results, cross_sim_results)
+                    st.success(f"✅ {len(dtw_data)} hissenin analizi tamamlandı!")
+            else:
+                st.error("⚠️ Veri çekilemedi.")
+
+    # 3. Diskteki cache sonuçlarını her durumda (parametreler uyuşuyorsa) oturuma otomatik yükle
+    cached_self, cached_cross = load_cached_dtw_results(max_warping_window, time_penalty)
+    if cached_self is not None and cached_cross is not None:
+        st.session_state.self_sim_results = cached_self
+        st.session_state.cross_sim_results = cached_cross
+    elif 'self_sim_results' not in st.session_state or not st.session_state.self_sim_results:
+        if 'dtw_data' in st.session_state and st.session_state.dtw_data:
+            dtw_data = st.session_state.dtw_data
             self_sim_results = []
             stock_keys = list(dtw_data.keys())
             for ticker in stock_keys:
                 d1 = dtw_data[ticker]["day1"]["prices"]
                 d2 = dtw_data[ticker]["day2"]["prices"]
-                sim, dist = compute_dtw_similarity(d1, d2)
+                sim, dist = compute_dtw_similarity(d1, d2, max_warping_window, time_penalty)
                 self_sim_results.append({
                     "Hisse": ticker,
                     "1. Gün Tarihi": dtw_data[ticker]["day1"]["date"],
@@ -487,74 +537,107 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                     "DTW Mesafesi": dist
                 })
             st.session_state.self_sim_results = self_sim_results
+            st.session_state.cross_sim_results = compute_cross_similarity_parallel(
+                dtw_data, min_similarity=0, max_warping_window=max_warping_window, time_penalty=time_penalty
+            )
+            save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results, st.session_state.cross_sim_results)
 
-            # Çapraz Benzerlik Paralel Ön Hesaplaması
-            st.session_state.cross_sim_results = compute_cross_similarity_parallel(dtw_data, min_similarity=50)
-            st.success(f"✅ {len(dtw_data)} hissenin analizi tamamlandı ve hafızaya alındı.")
-
-    # Oturumda veri yoksa ama JSON varsa oku
-    if 'dtw_data' not in st.session_state and os.path.exists("nasdaq_5m_cache.json"):
-        with open("nasdaq_5m_cache.json", 'r', encoding='utf-8') as f:
-            st.session_state.dtw_data = json.load(f).get("stocks", {})
-
-    # GÖRSELLEŞTİRME KISMI (CPU'yu Yormaz, Hafızadan Okur)
+    # 4. GÖRSELLEŞTİRME KISMI (SEKMELER VE GÜVENLİ FİLTRELEME)
     if 'dtw_data' in st.session_state and st.session_state.dtw_data:
         stocks_dict = st.session_state.dtw_data
         stock_keys = list(stocks_dict.keys())
 
         tab1, tab2, tab3 = st.tabs(["📌 1. Kendi İçinde Benzerlik", "🌐 2. Hisseler Arası Benzerlik", "📈 3. İnteraktif Karşılaştırmalı Grafik"])
 
-        # TAB 1: KENDİ İÇİNDE BENZERLİK
+        # TAB 1: KENDİ İÇİNDE BENZERLİK (Tip Güvenceli Filtreleme)
         with tab1:
             st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
-            if 'self_sim_results' in st.session_state:
+            if 'self_sim_results' in st.session_state and st.session_state.self_sim_results:
                 df_self = pd.DataFrame(st.session_state.self_sim_results)
-                df_self = df_self[df_self["DTW Benzerlik Skoru %"] >= min_similarity].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
-                st.dataframe(df_self, use_container_width=True, hide_index=True)
+                
+                # JSON'dan gelen sayısal skorları kesin olarak float tipine dönüştür
+                df_self["DTW Benzerlik Skoru %"] = pd.to_numeric(df_self["DTW Benzerlik Skoru %"], errors='coerce')
+                
+                df_filtered_self = df_self[df_self["DTW Benzerlik Skoru %"] >= float(min_similarity)].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
+                
+                st.caption(f"Toplam {len(df_self)} hisse içerisinden, %{min_similarity} ve üzeri benzerliğe sahip {len(df_filtered_self)} hisse listeleniyor.")
+                
+                if not df_filtered_self.empty:
+                    st.dataframe(df_filtered_self, use_container_width=True, hide_index=True)
+                else:
+                    max_score = df_self["DTW Benzerlik Skoru %"].max() if not df_self.empty else 0
+                    st.warning(f"⚠️ Seçtiğiniz **%{min_similarity}** eşik değerinin üzerinde öz-benzerlik gösteren hisse bulunamadı. (Bu veri setindeki en yüksek öz-benzerlik: **%{max_score}**).")
             else:
-                st.info("Hesaplama için lütfen '🚀 Verileri Güncelle & DTW Analizini Başlat' butonuna basın.")
+                st.warning("Veri bulunamadı. Lütfen yukarıdaki butona tıklayın.")
 
-        # TAB 2: HİSSELER ARASI ÇAPRAZ BENZERLİK (Hafızadan Filtreler)
+        # TAB 2: HİSSELER ARASI ÇAPRAZ BENZERLİK (Tip Güvenceli Filtreleme)
         with tab2:
             st.subheader("🔀 Farklı Hisselerin Son Gün Fiyat Hareketi Benzerliği")
-            if 'cross_sim_results' in st.session_state:
+            if 'cross_sim_results' in st.session_state and st.session_state.cross_sim_results:
                 df_cross = pd.DataFrame(st.session_state.cross_sim_results)
-                if not df_cross.empty:
-                    df_cross = df_cross[df_cross["DTW Benzerlik Skoru %"] >= min_similarity].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
-                    st.dataframe(df_cross, use_container_width=True, hide_index=True)
+                
+                df_cross["DTW Benzerlik Skoru %"] = pd.to_numeric(df_cross["DTW Benzerlik Skoru %"], errors='coerce')
+                
+                df_filtered_cross = df_cross[df_cross["DTW Benzerlik Skoru %"] >= float(min_similarity)].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
+                
+                st.caption(f"Toplam {len(df_cross)} çift içerisinden, %{min_similarity} ve üzeri benzerliğe sahip {len(df_filtered_cross)} çift listeleniyor.")
+                
+                if not df_filtered_cross.empty:
+                    st.dataframe(df_filtered_cross, use_container_width=True, hide_index=True)
                 else:
-                    st.warning("Benzerlik gösteren hisse çifti bulunamadı.")
+                    st.warning(f"Seçilen %{min_similarity} eşik değerinin üzerinde eşleşen hisse çifti bulunamadı.")
             else:
-                st.info("Hesaplama için lütfen '🚀 Verileri Güncelle & DTW Analizini Başlat' butonuna basın.")
+                st.warning("Veri bulunamadı. Lütfen yukarıdaki butona tıklayın.")
 
-        # TAB 3: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK
+# TAB 3: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK (Sadece Görselde Türkiye Saati Dönüşümü)
         with tab3:
-            st.subheader("📈 Karşılaştırmalı Zaman Serisi Grafiği")
+            st.subheader("📈 Karşılaştırmalı Zaman Serisi Grafiği (Türkiye Saati)")
             comp_mode = st.radio("Karşılaştırma Tipi:", ["Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)", "İki Farklı Hisse (Son Gün)"], horizontal=True)
             
+            # New York zamanındaki saat listelerini Türkiye saatine çeviren yardımcı fonksiyon
+ # New York zamanındaki saat listelerini Türkiye saatine çeviren yardımcı fonksiyon
+            def convert_ny_to_tr(times_list):
+                if not times_list:
+                    return [], []
+                # pd.to_datetime ile zaman serisine çeviriyoruz
+                dt_series = pd.to_datetime(times_list)
+                
+                # Eğer zaman dilimi (tz) yoksa localize et, varsa New York'a çevir
+                if dt_series.tz is None:
+                    dt_series = dt_series.tz_localize('America/New_York', ambiguous='NaT', nonexistent='shift_forward')
+                else:
+                    dt_series = dt_series.tz_convert('America/New_York')
+                
+                # Türkiye saat dilimine (Europe/Istanbul) dönüştür
+                dt_tr = dt_series.tz_convert('Europe/Istanbul')
+                
+                return dt_tr.strftime('%H:%M').tolist(), dt_tr.strftime('%Y-%m-%d %H:%M').tolist()
             if comp_mode == "Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)":
                 selected_t = st.selectbox("Hisseyi Seçin:", stock_keys)
                 t_data = stocks_dict[selected_t]
-                times1, prices1 = t_data["day1"]["times_short"], t_data["day1"]["prices"]
-                times2, prices2 = t_data["day2"]["times_short"], t_data["day2"]["prices"]
                 
-                sim, _ = compute_dtw_similarity(prices1, prices2)
+                # Saatleri TRT'ye çevir
+                times1_short, times1_full = convert_ny_to_tr(t_data["day1"]["times"])
+                times2_short, times2_full = convert_ny_to_tr(t_data["day2"]["times"])
+                prices1, prices2 = t_data["day1"]["prices"], t_data["day2"]["prices"]
+                
+                sim, _ = compute_dtw_similarity(prices1, prices2, max_warping_window, time_penalty)
                 st.info(f"💡 **{selected_t}** için Gün 1 ve Gün 2 DTW Benzerlik Skoru: **%{sim}**")
 
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=times1, y=prices1, mode='lines', name=f"{t_data['day1']['date']} (Gün 1)", line=dict(color='#00d2ff', width=2)))
-                fig.add_trace(go.Scatter(x=times2, y=prices2, mode='lines', name=f"{t_data['day2']['date']} (Gün 2)", line=dict(color='#ff9f1c', width=2), yaxis="y2"))
+                fig.add_trace(go.Scatter(x=times1_short, y=prices1, mode='lines', name=f"{t_data['day1']['date']} (Gün 1)", line=dict(color='#00d2ff', width=2)))
+                fig.add_trace(go.Scatter(x=times2_short, y=prices2, mode='lines', name=f"{t_data['day2']['date']} (Gün 2)", line=dict(color='#ff9f1c', width=2), yaxis="y2"))
 
-                peaks1, troughs1 = find_local_extremes(times1, prices1)
+                peaks1, troughs1 = find_local_extremes(times1_short, prices1)
                 for _, tm, pr in peaks1:
                     fig.add_annotation(x=tm, y=pr, text=f"Tepe: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#00d2ff", bgcolor="#1b4332")
                 for _, tm, pr in troughs1:
                     fig.add_annotation(x=tm, y=pr, text=f"Dip: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#00d2ff", bgcolor="#7209b7")
 
                 fig.update_layout(
-                    title=f"{selected_t} - 5 Dakikalık Fiyat Karşılaştırması (Zaman Serisi)",
+                    title=f"{selected_t} - 5 Dakikalık Fiyat Karşılaştırması (Türkiye Saati - TRT)",
                     template="plotly_dark", height=600,
-                    xaxis=dict(title="Zaman (Saat:Dakika)"),
+                    xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"Fiyat {t_data['day1']['date']} ($)", font=dict(color="#00d2ff"))),
                     yaxis2=dict(title=dict(text=f"Fiyat {t_data['day2']['date']} ($)", font=dict(color="#ff9f1c")), overlaying="y", side="right")
                 )
@@ -570,23 +653,26 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                 data1 = stocks_dict[t1_sel]["day2"]
                 data2 = stocks_dict[t2_sel]["day2"]
 
-                sim, _ = compute_dtw_similarity(data1["prices"], data2["prices"])
+                t1_short, _ = convert_ny_to_tr(data1["times"])
+                t2_short, _ = convert_ny_to_tr(data2["times"])
+
+                sim, _ = compute_dtw_similarity(data1["prices"], data2["prices"], max_warping_window, time_penalty)
                 st.info(f"💡 **{t1_sel}** ile **{t2_sel}** Arasındaki DTW Benzerlik Skoru: **%{sim}**")
 
                 fig = go.Figure()
-                fig.add_trace(go.Scatter(x=data1["times_short"], y=data1["prices"], mode='lines', name=f"{t1_sel} ({data1['date']})", line=dict(color='#2ec4b6', width=2)))
-                fig.add_trace(go.Scatter(x=data2["times_short"], y=data2["prices"], mode='lines', name=f"{t2_sel} ({data2['date']})", line=dict(color='#e63946', width=2), yaxis="y2"))
+                fig.add_trace(go.Scatter(x=t1_short, y=data1["prices"], mode='lines', name=f"{t1_sel} ({data1['date']})", line=dict(color='#2ec4b6', width=2)))
+                fig.add_trace(go.Scatter(x=t2_short, y=data2["prices"], mode='lines', name=f"{t2_sel} ({data2['date']})", line=dict(color='#e63946', width=2), yaxis="y2"))
 
-                peaks1, troughs1 = find_local_extremes(data1["times_short"], data1["prices"])
+                peaks1, troughs1 = find_local_extremes(t1_short, data1["prices"])
                 for _, tm, pr in peaks1:
                     fig.add_annotation(x=tm, y=pr, text=f"{t1_sel} Tepe: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#2ec4b6")
                 for _, tm, pr in troughs1:
                     fig.add_annotation(x=tm, y=pr, text=f"{t1_sel} Dip: {pr}<br>({tm})", showarrow=True, arrowhead=2, arrowcolor="#2ec4b6")
 
                 fig.update_layout(
-                    title=f"{t1_sel} vs {t2_sel} - Son Gün 5m Fiyat Hareketi Kıyaslaması",
+                    title=f"{t1_sel} vs {t2_sel} - Son Gün 5m Fiyat Hareketi Kıyaslaması (TRT)",
                     template="plotly_dark", height=600,
-                    xaxis=dict(title="Zaman (Saat:Dakika)"),
+                    xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"{t1_sel} Fiyat ($)", font=dict(color="#2ec4b6"))),
                     yaxis2=dict(title=dict(text=f"{t2_sel} Fiyat ($)", font=dict(color="#e63946")), overlaying="y", side="right")
                 )

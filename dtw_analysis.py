@@ -8,16 +8,11 @@ from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 CACHE_FILE = "nasdaq_5m_cache.json"
+DTW_RESULTS_CACHE_FILE = "dtw_results_cache.json"
 
 def compute_dtw_similarity(s1, s2, max_warping_window=12, time_penalty=0.10):
     """
     Zamansal kısıtlamalı ve zamansal gecikme cezalı sıkılaştırılmış DTW hesaplaması.
-    
-    :param s1: 1. Fiyat zaman serisi (list veya array)
-    :param s2: 2. Fiyat zaman serisi (list veya array)
-    :param max_warping_window: Maksimum izin verilen zaman kayması adım sayısı (Örn: 12 adım = 60 dk).
-    :param time_penalty: Zamansal uzaklık arttıkça eklenen ceza katsayısı (0.05 - 0.20 arası idealdir).
-    :return: (similarity_score, dtw_dist)
     """
     s1 = np.array(s1, dtype=float)
     s2 = np.array(s2, dtype=float)
@@ -25,7 +20,6 @@ def compute_dtw_similarity(s1, s2, max_warping_window=12, time_penalty=0.10):
     if len(s1) == 0 or len(s2) == 0:
         return 0.0, float('inf')
         
-    # Min-Max Normalizasyonu (Fiyat ölçeğini eşitleme)
     min1, max1 = np.min(s1), np.max(s1)
     min2, max2 = np.min(s2), np.max(s2)
     
@@ -40,22 +34,17 @@ def compute_dtw_similarity(s1, s2, max_warping_window=12, time_penalty=0.10):
 
     for i in range(1, n + 1):
         for j in range(1, m + 1):
-            # Sakoe-Chiba Band Kısıtlaması: Belirlenen zaman penceresinden daha uzak eşleşmeleri engelle
             if abs(i - j) > max_warping_window:
                 continue
 
-            # 1. Fiyat Şekil Farkı
             price_cost = (s1_norm[i-1] - s2_norm[j-1]) ** 2
-            
-            # 2. Zamansal Gecikme Cezası (Eşleşen noktalar birbirinden uzaklaştıkça maliyet artar)
             lag_cost = time_penalty * (abs(i - j) / max_len)
-            
             total_cost = price_cost + lag_cost
             
             dtw_matrix[i, j] = total_cost + min(
-                dtw_matrix[i-1, j],    # İlerleme
-                dtw_matrix[i, j-1],    # Gecikme
-                dtw_matrix[i-1, j-1]  # Birebir Eşleşme
+                dtw_matrix[i-1, j],
+                dtw_matrix[i, j-1],
+                dtw_matrix[i-1, j-1]
             )
 
     dtw_dist = np.sqrt(dtw_matrix[n, m]) / max_len
@@ -66,9 +55,8 @@ def compute_dtw_similarity(s1, s2, max_warping_window=12, time_penalty=0.10):
     similarity_score = max(0.0, round((1.0 / (1.0 + dtw_dist * 10)) * 100, 2))
     return similarity_score, round(float(dtw_dist), 4)
 
-
 def _fetch_single_ticker_5m(ticker, today_str):
-    """Tek bir hissenin 5 dakikalık verisini çeken iş parçacığı (worker) fonksiyonu."""
+    """Tek bir hissenin 5 dakikalık verisini çeker, US/Eastern (New York) yerel saatinde tutar."""
     try:
         t = yf.Ticker(ticker)
         df = t.history(period="5d", interval="5m", prepost=True)
@@ -76,10 +64,17 @@ def _fetch_single_ticker_5m(ticker, today_str):
         if df.empty:
             return ticker, None
 
+        # yfinance verisini America/New_York zaman dilimine sabitleyelim
+        if df.index.tz is None:
+            df.index = df.index.tz_localize('UTC').tz_convert('America/New_York')
+        else:
+            df.index = df.index.tz_convert('America/New_York')
+
         df['Date_Str'] = df.index.strftime('%Y-%m-%d')
         df['Time_Str'] = df.index.strftime('%H:%M')
         df['Full_Time'] = df.index.strftime('%Y-%m-%d %H:%M')
 
+        # Geçmiş işlem günlerini filtrele
         unique_dates = [d for d in sorted(df['Date_Str'].unique()) if d < today_str]
         
         if len(unique_dates) < 2:
@@ -89,6 +84,9 @@ def _fetch_single_ticker_5m(ticker, today_str):
 
         d1_df = df[df['Date_Str'] == day1_date]
         d2_df = df[df['Date_Str'] == day2_date]
+
+        if d1_df.empty or d2_df.empty:
+            return ticker, None
 
         data = {
             "day1": {
@@ -107,12 +105,8 @@ def _fetch_single_ticker_5m(ticker, today_str):
         return ticker, data
     except Exception:
         return ticker, None
-
-
+    
 def fetch_and_cache_5m_data(ticker_list, max_workers=12):
-    """
-    Multithreading kullanarak tüm hisselerin verilerini eşzamanlı çeker ve önbelleğe alır.
-    """
     today_str = str(date.today())
     cache_data = {}
 
@@ -128,7 +122,6 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
         return cache_data["stocks"]
 
     updated_stocks = {}
-    
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_ticker = {
             executor.submit(_fetch_single_ticker_5m, ticker, today_str): ticker 
@@ -143,7 +136,6 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
         "_meta": {"last_update_date": today_str},
         "stocks": updated_stocks
     }
-    
     with open(CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(full_cache, f, ensure_ascii=False, indent=2)
 
@@ -151,24 +143,20 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
 
 
 def _compute_pair_similarity(args):
-    """İki hisse arasındaki DTW benzerliğini paralel hesaplayan yardımcı fonksiyon."""
     t1, t2, p1, p2, date_str, min_similarity, max_warping_window, time_penalty = args
-    sim, dist = compute_dtw_similarity(p1, p2, max_warping_window=max_warping_window, time_penalty=time_penalty)
+    sim, df_dist = compute_dtw_similarity(p1, p2, max_warping_window=max_warping_window, time_penalty=time_penalty)
     if sim >= min_similarity:
         return {
             "Hisse 1": t1,
             "Hisse 2": t2,
             "İşlem Günü": date_str,
             "DTW Benzerlik Skoru %": sim,
-            "DTW Mesafesi": dist
+            "DTW Mesafesi": df_dist
         }
     return None
 
 
 def compute_cross_similarity_parallel(stocks_dict, min_similarity=75, max_warping_window=12, time_penalty=0.10, max_workers=8):
-    """
-    Tüm hisse çiftleri arasındaki DTW matrisini paralel olarak hesaplar.
-    """
     stock_keys = list(stocks_dict.keys())
     tasks = []
     
@@ -189,8 +177,40 @@ def compute_cross_similarity_parallel(stocks_dict, min_similarity=75, max_warpin
     return results
 
 
+def load_cached_dtw_results(max_warping_window, time_penalty):
+    """Sadece zamansal parametrelere bağlı olarak önbellek sonuçlarını yükler."""
+    today_str = str(date.today())
+    if os.path.exists(DTW_RESULTS_CACHE_FILE):
+        try:
+            with open(DTW_RESULTS_CACHE_FILE, 'r', encoding='utf-8') as f:
+                cache = json.load(f)
+                meta = cache.get("_meta", {})
+                if (meta.get("last_update_date") == today_str and
+                    meta.get("max_warping_window") == max_warping_window and
+                    meta.get("time_penalty") == time_penalty):
+                    return cache.get("self_similarity"), cache.get("cross_similarity")
+        except Exception:
+            pass
+    return None, None
+
+
+def save_cached_dtw_results(max_warping_window, time_penalty, self_sim, cross_sim):
+    """Hesaplanan tüm DTW sonuçlarını skorsuz olarak diske kaydeder."""
+    today_str = str(date.today())
+    cache = {
+        "_meta": {
+            "last_update_date": today_str,
+            "max_warping_window": max_warping_window,
+            "time_penalty": time_penalty
+        },
+        "self_similarity": self_sim,
+        "cross_similarity": cross_sim
+    }
+    with open(DTW_RESULTS_CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
 def find_local_extremes(times, prices, window=3):
-    """Lokal tepe ve dip noktalarını tespit eder."""
     prices = np.array(prices)
     peaks = []
     troughs = []
