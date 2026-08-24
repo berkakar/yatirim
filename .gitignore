@@ -1,2 +1,3 @@
 # .gitignore dosyasına ekleyin
 .streamlit/
+.env

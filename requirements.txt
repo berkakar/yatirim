@@ -5,3 +5,7 @@ scipy
 plotly
 yfinance
 pandas_ta
+requests
+python-dotenv
+truststore
+tzdata

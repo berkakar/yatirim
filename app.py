@@ -10,13 +10,14 @@ from scanner import get_scanner_data
 from stoploss import get_stoploss_data
 from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
-    fetch_and_cache_5m_data, 
-    compute_dtw_similarity, 
-    compute_cross_similarity_parallel, 
+    fetch_and_cache_5m_data,
+    compute_dtw_similarity,
+    compute_cross_similarity_parallel,
     find_local_extremes,
     load_cached_dtw_results,
     save_cached_dtw_results
 )
+from alpaca_dashboard import render_alpaca_dashboard
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -58,7 +59,8 @@ module = st.sidebar.radio(
         "💎 Değerleme & Ucuzluk Skoru",
         "🔄 DTW Zaman Serisi & Benzerlik Analizi", # YENİ MODÜL
         "📊 Bağımsız Hisse Grafiği",
-        "⚙️ Hisse Listelerini Yönet"
+        "⚙️ Hisse Listelerini Yönet",
+        "🦙 Alpaca Canlı Pozisyonlar"
     ]
 )
 
@@ -677,3 +679,11 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                     yaxis2=dict(title=dict(text=f"{t2_sel} Fiyat ($)", font=dict(color="#e63946")), overlaying="y", side="right")
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+# ==============================================================================
+# 8. MODÜL: ALPACA CANLI POZİSYONLAR
+# ==============================================================================
+elif module == "🦙 Alpaca Canlı Pozisyonlar":
+    st.header("🦙 Alpaca Canlı Pozisyonlar")
+    st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar structure-based trailing-stop GitHub Action tarafından saatlik güncellenir.")
+    render_alpaca_dashboard()
