@@ -685,5 +685,5 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 # ==============================================================================
 elif module == "🦙 Alpaca Canlı Pozisyonlar":
     st.header("🦙 Alpaca Canlı Pozisyonlar")
-    st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar structure-based trailing-stop GitHub Action tarafından saatlik güncellenir.")
+    st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
     render_alpaca_dashboard()

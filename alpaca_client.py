@@ -87,6 +87,17 @@ class AlpacaClient:
     def replace_stop_price(self, order_id: str, stop_price: float) -> dict:
         return self._patch(f"/orders/{order_id}", {"stop_price": f"{stop_price:.2f}"})
 
+    def get_stop_order_history(self, symbol: str, limit: int = 50) -> list[dict]:
+        """Every stop order ever placed for this symbol (initial + each
+        trail, since replacing a stop creates a new order and marks the old
+        one 'replaced') - Alpaca already keeps this history, no separate
+        logging needed."""
+        r = self._get("/orders", params={
+            "status": "all", "symbols": symbol, "direction": "desc", "limit": limit,
+        })
+        r.raise_for_status()
+        return [o for o in r.json() if o["type"] in ("stop", "stop_limit")]
+
     def wait_for_fill(self, order_id: str, timeout: float = 30) -> dict:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:

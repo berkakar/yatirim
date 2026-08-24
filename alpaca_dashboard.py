@@ -1,7 +1,27 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 import streamlit as st
 
 from alpaca_client import AlpacaClient
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
+
+STATUS_TR = {
+    "new": "Aktif (Bekliyor)",
+    "held": "Aktif (Bekliyor)",
+    "accepted": "Aktif (Bekliyor)",
+    "replaced": "Trail Edildi",
+    "filled": "Tetiklendi",
+    "canceled": "İptal Edildi",
+    "expired": "Süresi Doldu",
+    "rejected": "Reddedildi",
+}
+
+
+def _to_tr_time(iso_ts: str) -> datetime:
+    return datetime.fromisoformat(iso_ts.replace("Z", "+00:00")).astimezone(TR_TZ)
 
 
 def render_alpaca_dashboard():
@@ -38,4 +58,33 @@ def render_alpaca_dashboard():
         })
 
     st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından saatlik olarak güncellenir.")
+    st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
+
+    st.subheader("📜 Trailing Stop İşlem Geçmişi")
+
+    history_rows = []
+    for pos in positions:
+        symbol = pos["symbol"]
+        for order in client.get_stop_order_history(symbol):
+            created = _to_tr_time(order["created_at"])
+            history_rows.append({
+                "_sort_ts": created,
+                "Tarih (TRT)": created.strftime("%d.%m.%Y %H:%M:%S"),
+                "Hisse": symbol,
+                "Yön": "Satış" if order["side"] == "sell" else "Alış",
+                "Stop Fiyatı": round(float(order["stop_price"]), 2),
+                "Adet": float(order["qty"]),
+                "Durum": STATUS_TR.get(order["status"], order["status"]),
+            })
+
+    if not history_rows:
+        st.info("Henüz trailing-stop işlem geçmişi yok.")
+        return
+
+    history_df = (
+        pd.DataFrame(history_rows)
+        .sort_values("_sort_ts", ascending=False)
+        .drop(columns=["_sort_ts"])
+    )
+    st.dataframe(history_df, use_container_width=True, hide_index=True)
+    st.caption("Sütun başlıklarına tıklayarak sıralayabilirsiniz. Varsayılan sıralama: en yeni işlem en üstte.")
