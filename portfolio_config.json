@@ -1,7 +1,7 @@
 {
   "budget": 10000.0,
   "weights": {
-    "AMZN": 50.0,
-    "NVDA": 50.0
+    "AMZN": 20.0,
+    "NVDA": 20.0
   }
 }
