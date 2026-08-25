@@ -18,6 +18,7 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_dashboard import render_alpaca_dashboard
+from premium_buy_portfolio import render_premium_buy_portfolio
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -60,7 +61,8 @@ module = st.sidebar.radio(
         "🔄 DTW Zaman Serisi & Benzerlik Analizi", # YENİ MODÜL
         "📊 Bağımsız Hisse Grafiği",
         "⚙️ Hisse Listelerini Yönet",
-        "🦙 Alpaca Canlı Pozisyonlar"
+        "🦙 Alpaca Canlı Pozisyonlar",
+        "🎯 Premium Buy Point Portföyü"
     ]
 )
 
@@ -687,3 +689,11 @@ elif module == "🦙 Alpaca Canlı Pozisyonlar":
     st.header("🦙 Alpaca Canlı Pozisyonlar")
     st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
     render_alpaca_dashboard()
+
+# ==============================================================================
+# 9. MODÜL: PREMIUM BUY POINT PORTFÖYÜ
+# ==============================================================================
+elif module == "🎯 Premium Buy Point Portföyü":
+    st.header("🎯 Premium Buy Point Portföyü")
+    st.caption("Seçtiğiniz hisseler için demand zone (premium buy point) taranır; fiyat zone'a girdiğinde otomatik alım yapılır.")
+    render_premium_buy_portfolio(target_list)

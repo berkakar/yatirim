@@ -39,6 +39,29 @@ def _order_price(order: dict) -> float | None:
     return None
 
 
+def format_order_row(order: dict) -> dict:
+    created = _to_tr_time(order["created_at"])
+    price = _order_price(order)
+
+    if order.get("qty"):
+        amount = f"{float(order['qty']):g} adet"
+    elif order.get("notional"):
+        amount = f"${float(order['notional']):.2f}"
+    else:
+        amount = f"{float(order.get('filled_qty') or 0):g} adet"
+
+    return {
+        "_sort_ts": created,
+        "Tarih (TRT)": created.strftime("%d.%m.%Y %H:%M:%S"),
+        "Hisse": order["symbol"],
+        "Tip": TYPE_TR.get(order["type"], order["type"]),
+        "Yön": "Satış" if order["side"] == "sell" else "Alış",
+        "Fiyat": round(price, 2) if price is not None else "—",
+        "Adet/Tutar": amount,
+        "Durum": STATUS_TR.get(order["status"], order["status"]),
+    }
+
+
 def render_alpaca_dashboard():
     key_id = st.secrets.get("APCA_API_KEY_ID")
     secret_key = st.secrets.get("APCA_API_SECRET_KEY")
@@ -76,20 +99,7 @@ def render_alpaca_dashboard():
 
     st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
 
-    history_rows = []
-    for order in client.get_recent_orders(days=HISTORY_DAYS):
-        created = _to_tr_time(order["created_at"])
-        price = _order_price(order)
-        history_rows.append({
-            "_sort_ts": created,
-            "Tarih (TRT)": created.strftime("%d.%m.%Y %H:%M:%S"),
-            "Hisse": order["symbol"],
-            "Tip": TYPE_TR.get(order["type"], order["type"]),
-            "Yön": "Satış" if order["side"] == "sell" else "Alış",
-            "Fiyat": round(price, 2) if price is not None else "—",
-            "Adet": float(order["qty"]) if order.get("qty") else float(order.get("filled_qty") or 0),
-            "Durum": STATUS_TR.get(order["status"], order["status"]),
-        })
+    history_rows = [format_order_row(o) for o in client.get_recent_orders(days=HISTORY_DAYS)]
 
     if not history_rows:
         st.info(f"Son {HISTORY_DAYS} günde işlem yok.")

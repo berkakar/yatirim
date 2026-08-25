@@ -75,6 +75,17 @@ class AlpacaClient:
             "time_in_force": "day",
         })
 
+    def place_market_entry_notional(self, symbol: str, notional: float, side: str) -> dict:
+        """Buy/sell a dollar amount rather than a share count - Alpaca
+        fills at the real execution price, no stale-bar-close guessing."""
+        return self._post("/orders", {
+            "symbol": symbol,
+            "notional": f"{notional:.2f}",
+            "side": "buy" if side == "long" else "sell",
+            "type": "market",
+            "time_in_force": "day",
+        })
+
     def place_stop_order(self, symbol: str, qty: float, side: str, stop_price: float) -> dict:
         return self._post("/orders", {
             "symbol": symbol,
@@ -121,6 +132,34 @@ class AlpacaClient:
                 return order
             time.sleep(1)
         raise TimeoutError(f"Order {order_id} did not fill within {timeout}s")
+
+    def get_watchlist(self, watchlist_id: str) -> dict:
+        r = self._get(f"/watchlists/{watchlist_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def get_watchlist_by_name(self, name: str) -> dict | None:
+        r = self._get("/watchlists")
+        r.raise_for_status()
+        for wl in r.json():
+            if wl["name"] == name:
+                return self.get_watchlist(wl["id"])  # the list endpoint omits "assets"
+        return None
+
+    def get_or_create_watchlist(self, name: str) -> dict:
+        wl = self.get_watchlist_by_name(name)
+        if wl is not None:
+            return wl
+        return self._post("/watchlists", {"name": name, "symbols": []})
+
+    def set_watchlist_symbols(self, watchlist_id: str, symbols: list[str]) -> dict:
+        r = requests.put(
+            f"{self.trading_url}/watchlists/{watchlist_id}",
+            headers=self.headers,
+            json={"symbols": symbols},
+        )
+        r.raise_for_status()
+        return r.json()
 
     def get_raw_bars(self, symbol: str, timeframe: str, start_iso: str, feed: str = "iex") -> list[dict]:
         r = requests.get(

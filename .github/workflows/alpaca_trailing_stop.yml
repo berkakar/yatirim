@@ -18,6 +18,13 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - run: python alpaca_buy_points.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+
       - run: python alpaca_trailing_stop.py --once
         env:
           APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
