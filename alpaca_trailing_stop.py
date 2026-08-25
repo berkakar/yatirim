@@ -1,13 +1,26 @@
 """
 Structure-based trailing-stop bot for Alpaca paper trading.
 
-Manages every open position in the account: on each pass, it pulls the
-account's current positions, makes sure each has a resting stop order
-(placing an initial fixed-% stop if one doesn't exist yet - the video
-trails stops on an existing trade, it doesn't define entry/initial-risk
-sizing), then finds the latest break-of-structure-validated swing point
-per symbol (see structure.py) and - only if it tightens the stop -
-replaces the resting stop order with it. Never loosens a stop.
+Manages every open position in the account. Each pass, per position:
+
+  1. Makes sure a stop order is resting (places an initial fixed-% stop
+     if none exists yet - the video trails an existing trade, it doesn't
+     define entry/initial-risk sizing).
+  2. Structure is evaluated only from bars since we started managing this
+     position (its first stop order's timestamp), not an arbitrary fixed
+     lookback - otherwise "reference" swing points from market phases
+     that happened before entry can permanently block trailing.
+  3. Breakeven floor: once price has moved far enough in our favor, the
+     stop is guaranteed to be at least at entry, even if structure hasn't
+     validated a trail yet (this is the video's simpler first step).
+  4. Structure-based trail: finds the latest break-of-structure-validated
+     swing point (see structure.py - including its stale-reference reset,
+     so a reference that goes unbroken for too long doesn't freeze
+     trailing forever) and, gated by a higher-timeframe (daily EMA) trend
+     filter, trails the stop just past it using an ATR-scaled buffer.
+  5. Of whatever candidates apply, only the one that most tightens the
+     stop (and stays on the correct side of the current price) is sent -
+     never loosens, never sent past current price.
 
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
@@ -25,15 +38,24 @@ import requests
 from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+from indicators import atr, ema
 from structure import Bar, validated_trailing_level
 
 load_dotenv()
 
 TIMEFRAME = os.environ.get("TRADE_TIMEFRAME", "30Min")
 SWING_ORDER = int(os.environ.get("TRADE_SWING_ORDER", "2"))
-STOP_BUFFER_PCT = float(os.environ.get("TRADE_STOP_BUFFER_PCT", "0.1")) / 100
 INITIAL_STOP_PCT = float(os.environ.get("TRADE_INITIAL_STOP_PCT", "1.5")) / 100
 POLL_SECONDS = int(os.environ.get("TRADE_POLL_SECONDS", "60"))
+
+LOOKBACK_DAYS = int(os.environ.get("TRADE_LOOKBACK_DAYS", "15"))
+ATR_PERIOD = int(os.environ.get("TRADE_ATR_PERIOD", "14"))
+ATR_MULTIPLIER = float(os.environ.get("TRADE_ATR_MULTIPLIER", "0.25"))
+BREAKEVEN_TRIGGER_PCT = float(os.environ.get("TRADE_BREAKEVEN_TRIGGER_PCT", "1.0")) / 100
+STALE_REFERENCE_DAYS = float(os.environ.get("TRADE_STALE_REFERENCE_DAYS", "10"))
+TREND_EMA_PERIOD = int(os.environ.get("TRADE_TREND_EMA_PERIOD", "50"))
+
+FALLBACK_BUFFER_PCT = 0.001  # only used if ATR can't be computed yet (too few bars)
 
 ET = ZoneInfo("America/New_York")
 
@@ -42,13 +64,16 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
-def get_regular_hours_bars(client: AlpacaClient, symbol: str, timeframe: str, lookback_days: int = 15) -> list[Bar]:
-    start = (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
-    raw_bars = client.get_raw_bars(symbol, timeframe, start)
+def _parse_iso(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+def get_regular_hours_bars(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
+    raw_bars = client.get_raw_bars(symbol, timeframe, start.isoformat())
 
     bars = []
     for b in raw_bars:
-        ts = datetime.fromisoformat(b["t"].replace("Z", "+00:00")).astimezone(ET)
+        ts = _parse_iso(b["t"]).astimezone(ET)
         if ts.weekday() >= 5:
             continue
         if not (9, 30) <= (ts.hour, ts.minute) < (16, 0):
@@ -57,8 +82,39 @@ def get_regular_hours_bars(client: AlpacaClient, symbol: str, timeframe: str, lo
     return bars
 
 
+def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) -> datetime:
+    """The earlier of `lookback_days` ago and when we first started
+    managing this position's stop - whichever is more recent wins, so
+    structure from before we ever held the trade can't anchor the
+    reference point."""
+    default_start = datetime.now(timezone.utc) - timedelta(days=lookback_days)
+    history = client.get_stop_order_history(symbol, limit=200)
+    if not history:
+        return default_start
+    earliest = min(_parse_iso(o["created_at"]) for o in history)
+    return max(default_start, earliest)
+
+
+def check_trend_filter(client: AlpacaClient, symbol: str, side: str) -> bool:
+    """True if the higher-timeframe (daily) trend still supports trailing
+    further in this direction. Defaults to True (don't block) when there
+    isn't enough daily history yet, or the filter is disabled (period<=0)."""
+    if TREND_EMA_PERIOD <= 0:
+        return True
+
+    start = datetime.now(timezone.utc) - timedelta(days=TREND_EMA_PERIOD * 4)
+    raw_bars = client.get_raw_bars(symbol, "1Day", start.isoformat())
+    closes = [b["c"] for b in raw_bars]
+    trend_ema = ema(closes, TREND_EMA_PERIOD)
+    if trend_ema is None:
+        return True
+
+    last_close = closes[-1]
+    return last_close > trend_ema if side == "long" else last_close < trend_ema
+
+
 def seconds_until_open(clock: dict) -> float:
-    next_open = datetime.fromisoformat(clock["next_open"].replace("Z", "+00:00"))
+    next_open = _parse_iso(clock["next_open"])
     return max(0.0, (next_open - datetime.now(timezone.utc)).total_seconds())
 
 
@@ -81,30 +137,57 @@ def manage_position(client: AlpacaClient, pos: dict) -> None:
     current_stop_price = float(stop_order["stop_price"])
     stop_order_id = stop_order["id"]
 
-    bars = get_regular_hours_bars(client, symbol, TIMEFRAME)
+    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
+    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, management_start)
     if not bars:
         log(f"{symbol}: no regular-hours bars available, skipping.")
         return
 
-    pivot = validated_trailing_level(bars, side, SWING_ORDER)
-    if pivot is None:
+    last_price = bars[-1].c
+    candidates = []  # (price, reason) - the caller picks whichever tightens the stop most
+
+    if side == "long":
+        gain_pct = (last_price - entry_price) / entry_price
+    else:
+        gain_pct = (entry_price - last_price) / entry_price
+
+    if gain_pct >= BREAKEVEN_TRIGGER_PCT:
+        if side == "long" and entry_price > current_stop_price and entry_price < last_price:
+            candidates.append((entry_price, "breakeven"))
+        elif side == "short" and entry_price < current_stop_price and entry_price > last_price:
+            candidates.append((entry_price, "breakeven"))
+
+    if check_trend_filter(client, symbol, side):
+        pivot = validated_trailing_level(bars, side, SWING_ORDER, STALE_REFERENCE_DAYS)
+        if pivot is not None:
+            atr_value = atr(bars, ATR_PERIOD)
+            buffer_amount = atr_value * ATR_MULTIPLIER if atr_value is not None else pivot.price * FALLBACK_BUFFER_PCT
+
+            if side == "long":
+                candidate = pivot.price - buffer_amount
+                if candidate < last_price:
+                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
+            else:
+                candidate = pivot.price + buffer_amount
+                if candidate > last_price:
+                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
+
+    if not candidates:
         return
 
-    last_price = bars[-1].c
     if side == "long":
-        candidate = pivot.price * (1 - STOP_BUFFER_PCT)
-        improves = candidate > current_stop_price and candidate < last_price
+        best_price, reason = max(candidates, key=lambda c: c[0])
+        improves = best_price > current_stop_price
     else:
-        candidate = pivot.price * (1 + STOP_BUFFER_PCT)
-        improves = candidate < current_stop_price and candidate > last_price
+        best_price, reason = min(candidates, key=lambda c: c[0])
+        improves = best_price < current_stop_price
 
     if not improves:
         return
 
     try:
-        client.replace_stop_price(stop_order_id, candidate)
-        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {candidate:.2f} "
-            f"(validated structure at {pivot.price:.2f}, bar {pivot.t}).")
+        client.replace_stop_price(stop_order_id, best_price)
+        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {best_price:.2f} ({reason}).")
     except requests.HTTPError as e:
         log(f"{symbol}: failed to replace stop order: {e}")
 

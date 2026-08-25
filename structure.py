@@ -12,9 +12,15 @@ following the method described in JeaFx's "Stop Loss Trailing" video:
 Only closed bars are ever used, so a pivot needs `order` bars on both
 sides before it can be confirmed - this mirrors "don't chase every tick,
 wait for structure to be validated."
+
+If the current reference point goes unbroken for too long (a real trend
+change, not just a pullback), `max_reference_age_days` re-anchors the
+search to only the recent window instead of waiting forever for price to
+reclaim a level from a fundamentally different market phase.
 """
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 
 @dataclass(frozen=True)
@@ -49,45 +55,62 @@ def find_pivots(bars: list[Bar], order: int = 2) -> list[Pivot]:
     return pivots
 
 
-def validated_trailing_level(bars: list[Bar], side: str, order: int = 2) -> Pivot | None:
-    """Return the most recently validated structural pivot to trail the stop
-    behind, or None if structure hasn't validated a point yet."""
-    pivots = find_pivots(bars, order)
+def _parse(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
+
+def _walk(pivots: list[Pivot], side: str) -> tuple[Pivot | None, Pivot | None]:
+    """One pass of the reference/pending/validated walk. Returns
+    (current reference pivot, most recently validated pivot)."""
     if side == "long":
-        reference_high = None
-        pending_low = None
-        validated_low = None
-        for p in pivots:
-            if p.kind == "high":
-                if reference_high is None:
-                    reference_high = p
-                elif p.price > reference_high.price:
-                    if pending_low is not None:
-                        validated_low = pending_low
-                    reference_high = p
-                    pending_low = None
-            else:
-                if reference_high is not None:
-                    pending_low = p
-        return validated_low
+        ref_kind, better = "high", (lambda new, old: new.price > old.price)
+    else:
+        ref_kind, better = "low", (lambda new, old: new.price < old.price)
 
-    if side == "short":
-        reference_low = None
-        pending_high = None
-        validated_high = None
-        for p in pivots:
-            if p.kind == "low":
-                if reference_low is None:
-                    reference_low = p
-                elif p.price < reference_low.price:
-                    if pending_high is not None:
-                        validated_high = pending_high
-                    reference_low = p
-                    pending_high = None
-            else:
-                if reference_low is not None:
-                    pending_high = p
-        return validated_high
+    reference: Pivot | None = None
+    pending: Pivot | None = None
+    validated: Pivot | None = None
+    for p in pivots:
+        if p.kind == ref_kind:
+            if reference is None:
+                reference = p
+            elif better(p, reference):
+                if pending is not None:
+                    validated = pending
+                reference = p
+                pending = None
+        else:
+            if reference is not None:
+                pending = p
+    return reference, validated
 
-    raise ValueError(f"side must be 'long' or 'short', got {side!r}")
+
+def validated_trailing_level(
+    bars: list[Bar], side: str, order: int = 2, max_reference_age_days: float | None = None
+) -> Pivot | None:
+    """Return the most recently validated structural pivot to trail the stop
+    behind, or None if structure hasn't validated a point yet.
+
+    If the standing reference point (the swing high/low price must still
+    break to validate anything) is older than `max_reference_age_days`
+    relative to the last bar, structure is re-evaluated using only bars
+    from that window - the old reference is a stale echo of a market phase
+    that's already over, not something still worth waiting on.
+    """
+    if side not in ("long", "short"):
+        raise ValueError(f"side must be 'long' or 'short', got {side!r}")
+    if not bars:
+        return None
+
+    pivots = find_pivots(bars, order)
+    reference, validated = _walk(pivots, side)
+
+    if max_reference_age_days is not None and reference is not None:
+        last_ts = _parse(bars[-1].t)
+        if (last_ts - _parse(reference.t)) >= timedelta(days=max_reference_age_days):
+            cutoff = last_ts - timedelta(days=max_reference_age_days)
+            recent_bars = [b for b in bars if _parse(b.t) >= cutoff]
+            recent_pivots = find_pivots(recent_bars, order)
+            _, validated = _walk(recent_pivots, side)
+
+    return validated
