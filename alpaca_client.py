@@ -5,6 +5,7 @@ here so the trailing-stop script can run standalone under GitHub Actions.
 
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
 if sys.platform == "win32":
     # Some Windows setups (corporate AV/security software) inject a root CA
@@ -97,6 +98,18 @@ class AlpacaClient:
         })
         r.raise_for_status()
         return [o for o in r.json() if o["type"] in ("stop", "stop_limit")]
+
+    def get_recent_orders(self, days: int = 30, limit: int = 500) -> list[dict]:
+        """Every order (any symbol, any status - open, filled, replaced,
+        canceled) submitted in the last `days` days, across the whole
+        account. Unlike get_stop_order_history this isn't scoped to
+        currently-open positions, so closed-out trades still show up."""
+        after = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        r = self._get("/orders", params={
+            "status": "all", "after": after, "direction": "desc", "limit": limit,
+        })
+        r.raise_for_status()
+        return r.json()
 
     def wait_for_fill(self, order_id: str, timeout: float = 30) -> dict:
         deadline = time.monotonic() + timeout
