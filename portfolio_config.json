@@ -1,0 +1,8 @@
+{
+  "budget": 10000,
+  "weights": {
+    "NVDA": 40,
+    "AAPL": 30,
+    "MSFT": 30
+  }
+}
