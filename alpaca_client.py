@@ -161,6 +161,14 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_latest_trade_price(self, symbol: str, feed: str = "iex") -> float | None:
+        r = requests.get(
+            f"{self.data_url}/stocks/{symbol}/trades/latest", headers=self.headers, params={"feed": feed},
+        )
+        r.raise_for_status()
+        trade = r.json().get("trade")
+        return float(trade["p"]) if trade else None
+
     def get_raw_bars(self, symbol: str, timeframe: str, start_iso: str, feed: str = "iex") -> list[dict]:
         r = requests.get(
             f"{self.data_url}/stocks/{symbol}/bars",

@@ -55,7 +55,13 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     if zone is None:
         return
 
-    last_price = bars[-1].c
+    try:
+        last_price = client.get_latest_trade_price(symbol)
+    except Exception:
+        last_price = None
+    if last_price is None:
+        last_price = bars[-1].c  # fall back to the last completed bar if the live quote fails
+
     if last_price > zone.top:
         return  # hasn't pulled back into the zone yet
 

@@ -4,7 +4,7 @@ import pandas as pd
 import streamlit as st
 
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import format_order_row
+from alpaca_dashboard import format_order_row, TR_TZ
 from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME
 from demand_zones import find_buy_point
 from github_config import read_portfolio_config, write_portfolio_config
@@ -12,6 +12,42 @@ from github_config import read_portfolio_config, write_portfolio_config
 WATCHLIST_NAME = "premium-buy-portfolio"
 GITHUB_REPO = "berkakar/yatirim"
 BUY_LOOKBACK_DAYS = 60
+PRICE_REFRESH_SECONDS = 30
+
+
+@st.fragment(run_every=PRICE_REFRESH_SECONDS)
+def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str]):
+    start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
+    rows = []
+    for symbol in current_symbols:
+        bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start)
+        if not bars:
+            continue
+        try:
+            live_price = client.get_latest_trade_price(symbol)
+        except Exception:
+            live_price = None
+        current_price = live_price if live_price is not None else bars[-1].c
+
+        zone = find_buy_point(bars)
+        has_position = client.get_position(symbol) is not None
+
+        rows.append({
+            "Hisse": symbol,
+            "Güncel Fiyat": round(current_price, 2),
+            "Buy Point": round(zone.top, 2) if zone else "—",
+            "Mesafe %": round((current_price - zone.top) / current_price * 100, 2) if zone else "—",
+            "Dokunuş Sayısı": zone.tap_count if zone else "—",
+            "Durum": "Pozisyon Açık" if has_position else ("Bekleniyor" if zone else "Zone Yok"),
+        })
+
+    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+    st.caption(
+        f"Son güncelleme: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT "
+        f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
+        "Mesafe %, güncel fiyatın buy point'in ne kadar üzerinde olduğunu gösterir. "
+        "Fiyat buy point'e indiğinde (mesafe ≤ 0), gerçek alım GitHub Action tarafından yarım saatlik taramada yapılır."
+    )
 
 
 def render_premium_buy_portfolio(target_list: list[str]):
@@ -87,27 +123,7 @@ def render_premium_buy_portfolio(target_list: list[str]):
         return
 
     st.subheader("📍 Premium Buy Point Mesafeleri")
-    start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
-    rows = []
-    for symbol in current_symbols:
-        bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start)
-        if not bars:
-            continue
-        last_price = bars[-1].c
-        zone = find_buy_point(bars)
-        has_position = client.get_position(symbol) is not None
-
-        rows.append({
-            "Hisse": symbol,
-            "Güncel Fiyat": round(last_price, 2),
-            "Buy Point": round(zone.top, 2) if zone else "—",
-            "Mesafe %": round((last_price - zone.top) / last_price * 100, 2) if zone else "—",
-            "Dokunuş Sayısı": zone.tap_count if zone else "—",
-            "Durum": "Pozisyon Açık" if has_position else ("Bekleniyor" if zone else "Zone Yok"),
-        })
-
-    st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-    st.caption("Mesafe %, güncel fiyatın buy point'in ne kadar üzerinde olduğunu gösterir. Fiyat buy point'e indiğinde (mesafe ≤ 0) otomatik alım tetiklenir.")
+    _render_buy_point_table(client, current_symbols)
 
     st.subheader("📜 Son 30 Gün Alım/Satım Emirleri")
     history_rows = [
