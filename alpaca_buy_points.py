@@ -63,10 +63,25 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
         return
 
     zone = find_buy_point(bars, IMPULSE_PCT, IMPULSE_BARS, MAX_TAPS)
+
+    if zone is not None:
+        try:
+            live_price = client.get_latest_trade_price(symbol)
+        except Exception:
+            live_price = None
+        if live_price is None:
+            live_price = bars[-1].c
+        if zone.top >= live_price:
+            # A zone at or above the current price isn't a pullback target -
+            # a limit buy there would be marketable (fills near live_price
+            # instead of the intended discount). Treat it the same as no
+            # zone at all rather than ever placing an aggressive order.
+            zone = None
+
     if zone is None:
         if existing_order is not None:
             client.cancel_order(existing_order["id"])
-            log(f"{symbol}: demand zone no longer valid, canceled resting buy-limit order.")
+            log(f"{symbol}: no valid pullback zone below current price, canceled resting buy-limit order.")
         return
 
     dollar_amount = budget * (weight_pct / 100)

@@ -30,6 +30,8 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str]):
         current_price = live_price if live_price is not None else bars[-1].c
 
         zone = find_buy_point(bars)
+        if zone is not None and zone.top >= current_price:
+            zone = None  # not a pullback target if it's not below the current price
         has_position = client.get_position(symbol) is not None
 
         rows.append({

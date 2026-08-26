@@ -185,10 +185,19 @@ class AlpacaClient:
         return float(trade["p"]) if trade else None
 
     def get_raw_bars(self, symbol: str, timeframe: str, start_iso: str, feed: str = "iex") -> list[dict]:
-        r = requests.get(
-            f"{self.data_url}/stocks/{symbol}/bars",
-            headers=self.headers,
-            params={"timeframe": timeframe, "start": start_iso, "limit": 1000, "feed": feed, "adjustment": "raw"},
-        )
-        r.raise_for_status()
-        return r.json().get("bars") or []
+        # Alpaca paginates bars regardless of how far under `limit` the count
+        # is - a `next_page_token` can appear even at ~400 bars. Not
+        # following it silently truncates history to the first page.
+        bars = []
+        page_token = None
+        while True:
+            params = {"timeframe": timeframe, "start": start_iso, "limit": 1000, "feed": feed, "adjustment": "raw"}
+            if page_token:
+                params["page_token"] = page_token
+            r = requests.get(f"{self.data_url}/stocks/{symbol}/bars", headers=self.headers, params=params)
+            r.raise_for_status()
+            data = r.json()
+            bars.extend(data.get("bars") or [])
+            page_token = data.get("next_page_token")
+            if not page_token:
+                return bars
