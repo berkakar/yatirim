@@ -75,16 +75,31 @@ class AlpacaClient:
             "time_in_force": "day",
         })
 
-    def place_market_entry_notional(self, symbol: str, notional: float, side: str) -> dict:
-        """Buy/sell a dollar amount rather than a share count - Alpaca
-        fills at the real execution price, no stale-bar-close guessing."""
+    def get_open_limit_buy_order(self, symbol: str) -> dict | None:
+        r = self._get("/orders", params={"status": "open", "symbols": symbol})
+        r.raise_for_status()
+        for order in r.json():
+            if order["type"] == "limit" and order["side"] == "buy":
+                return order
+        return None
+
+    def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
+        # Alpaca requires fractional-qty orders to be DAY orders (rejects GTC).
+        # Since the buy-point scan re-syncs this order every few minutes during
+        # market hours anyway, a fresh DAY order each session behaves like a
+        # standing one in practice while still allowing exact budget sizing.
         return self._post("/orders", {
             "symbol": symbol,
-            "notional": f"{notional:.2f}",
+            "qty": qty,
             "side": "buy" if side == "long" else "sell",
-            "type": "market",
+            "type": "limit",
+            "limit_price": f"{limit_price:.2f}",
             "time_in_force": "day",
         })
+
+    def cancel_order(self, order_id: str) -> None:
+        r = requests.delete(f"{self.trading_url}/orders/{order_id}", headers=self.headers)
+        r.raise_for_status()
 
     def place_stop_order(self, symbol: str, qty: float, side: str, stop_price: float) -> dict:
         return self._post("/orders", {

@@ -1,16 +1,22 @@
 """
-Premium buy-point scanner + auto-buy for the user's watchlist portfolio.
+Premium buy-point scanner for the user's watchlist portfolio.
 
 Reads the "premium-buy-portfolio" Alpaca watchlist for symbols and
 portfolio_config.json (committed to this repo by the Streamlit page - see
 github_config.py) for the total budget and each symbol's weight. For
 every watchlisted symbol without an already-open position, finds the
-most recent still-valid demand zone (see demand_zones.py) and buys once
-price has pulled back into it (reached the zone's top).
+most recent still-valid demand zone (see demand_zones.py) and keeps a
+resting GTC limit buy order at the zone's top - placing it if none
+exists, updating it if the zone has moved, canceling it if the zone is
+no longer valid. The actual fill happens on Alpaca's side whenever price
+reaches the order, independent of how often this script runs - polling
+here only keeps the order in sync with the current zone, it doesn't need
+to catch the fill itself (unlike a market-order-on-poll approach, which
+can only react at whatever moment it happens to check).
 
 Run with --once (used by the GitHub Actions workflow, as an earlier step
-than the trailing-stop pass, so a fresh buy gets its initial stop placed
-in the same run).
+than the trailing-stop pass, so a fresh fill gets its initial stop
+placed in the same run).
 """
 
 import argparse
@@ -43,8 +49,13 @@ def load_local_config() -> dict:
 
 
 def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float) -> None:
+    existing_order = client.get_open_limit_buy_order(symbol)
+
     if client.get_position(symbol) is not None:
-        return  # already holding it - the trailing-stop step manages it from here
+        if existing_order is not None:
+            client.cancel_order(existing_order["id"])
+            log(f"{symbol}: position already open, canceled stale buy-limit order.")
+        return
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
     bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start)
@@ -53,25 +64,37 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
 
     zone = find_buy_point(bars, IMPULSE_PCT, IMPULSE_BARS, MAX_TAPS)
     if zone is None:
+        if existing_order is not None:
+            client.cancel_order(existing_order["id"])
+            log(f"{symbol}: demand zone no longer valid, canceled resting buy-limit order.")
         return
-
-    try:
-        last_price = client.get_latest_trade_price(symbol)
-    except Exception:
-        last_price = None
-    if last_price is None:
-        last_price = bars[-1].c  # fall back to the last completed bar if the live quote fails
-
-    if last_price > zone.top:
-        return  # hasn't pulled back into the zone yet
 
     dollar_amount = budget * (weight_pct / 100)
     if dollar_amount <= 0:
         return
 
-    order = client.place_market_entry_notional(symbol, dollar_amount, "long")
-    log(f"{symbol}: buy point hit (zone top {zone.top:.2f}, price {last_price:.2f}) - "
-        f"bought ${dollar_amount:.2f} worth. order {order['id']}.")
+    target_price = round(zone.top, 2)
+    target_qty = round(dollar_amount / target_price, 4)
+    if target_qty <= 0:
+        return
+
+    if existing_order is None:
+        order = client.place_limit_entry(symbol, target_qty, "long", target_price)
+        log(f"{symbol}: placed buy-limit at {target_price:.2f} (zone top), qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
+        return
+
+    current_price = float(existing_order["limit_price"])
+    current_qty = float(existing_order["qty"])
+    if abs(current_price - target_price) < 0.01 and abs(current_qty - target_qty) < 0.0001:
+        return  # already correctly placed
+
+    # Alpaca rejects qty changes on fractional-qty orders via replace ("qty
+    # must be an integer") - cancel and re-place instead, which works for
+    # both fractional and whole-share quantities.
+    client.cancel_order(existing_order["id"])
+    order = client.place_limit_entry(symbol, target_qty, "long", target_price)
+    log(f"{symbol}: updated buy-limit {current_price:.2f} -> {target_price:.2f} "
+        f"(zone changed). new order {order['id']}.")
 
 
 def run_once(client: AlpacaClient) -> None:
