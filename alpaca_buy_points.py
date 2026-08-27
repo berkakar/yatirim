@@ -32,8 +32,11 @@ from demand_zones import find_buy_point
 
 load_dotenv()
 
-WATCHLIST_NAME = "premium-buy-portfolio"
-CONFIG_PATH = "portfolio_config.json"
+# Tek kullanıcı (berkakar) varsayılıyor - çoklu kullanıcı desteği bu GitHub Action'a
+# henüz eklenmedi (Streamlit tarafındaki per-user değişikliklerle tutarlı kalması
+# için sadece isimler güncellendi).
+WATCHLIST_NAME = "premium-buy-portfolio-berkakar"
+CONFIG_PATH = "portfolio_config_berkakar.json"
 
 LOOKBACK_DAYS = int(os.environ.get("BUY_LOOKBACK_DAYS", "60"))
 IMPULSE_PCT = float(os.environ.get("BUY_IMPULSE_PCT", "3")) / 100

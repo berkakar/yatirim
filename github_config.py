@@ -63,9 +63,9 @@ def write_json_to_github(repo: str, token: str, path: str, config, message: str)
     r.raise_for_status()
 
 
-def read_portfolio_config(repo: str, token: str) -> dict:
-    return read_json_from_github(repo, token, CONFIG_PATH, DEFAULT_CONFIG)
+def read_portfolio_config(repo: str, token: str, username: str) -> dict:
+    return read_json_from_github(repo, token, f"portfolio_config_{username}.json", DEFAULT_CONFIG)
 
 
-def write_portfolio_config(repo: str, token: str, config: dict) -> None:
-    write_json_to_github(repo, token, CONFIG_PATH, config, "Update portfolio config")
+def write_portfolio_config(repo: str, token: str, config: dict, username: str) -> None:
+    write_json_to_github(repo, token, f"portfolio_config_{username}.json", config, f"Update portfolio config ({username})")

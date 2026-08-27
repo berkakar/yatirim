@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit_authenticator as stauth
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -42,34 +43,43 @@ MODULE_DISPLAY = {
     "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
 }
 
-SAVE_FILE = "selected_tickers.json"
+def _save_file(username):
+    return f"selected_tickers_{username}.json"
 
-def save_selections(tickers):
+def get_user_alpaca_creds(username):
+    """Kullanıcıya özel Alpaca anahtarlarını secrets.toml'daki [alpaca.<username>]
+    bölümünden okur. Tanımlı değilse (None, None) döner."""
+    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
+    return user_alpaca.get("key_id"), user_alpaca.get("secret_key")
+
+def save_selections(tickers, username):
     """Seçili hisseleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
     ayrıca yerel dosyaya da yazar - bkz. config.save_ticker_lists için aynı gerekçe."""
+    save_file = _save_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:
-            write_json_to_github(GITHUB_REPO, token, SAVE_FILE, list(tickers), "Update selected tickers")
+            write_json_to_github(GITHUB_REPO, token, save_file, list(tickers), f"Update selected tickers ({username})")
         except Exception as e:
             st.warning(f"⚠️ Seçili hisseler GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
-    with open(SAVE_FILE, 'w') as f:
+    with open(save_file, 'w') as f:
         json.dump(list(tickers), f)
 
-def load_selections():
+def load_selections(username):
+    save_file = _save_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:
-            data = read_json_from_github(GITHUB_REPO, token, SAVE_FILE, None)
+            data = read_json_from_github(GITHUB_REPO, token, save_file, None)
             if data is not None:
                 return set(data)
         except Exception:
             pass
 
-    if os.path.exists(SAVE_FILE):
+    if os.path.exists(save_file):
         try:
-            with open(SAVE_FILE, 'r') as f:
+            with open(save_file, 'r') as f:
                 return set(json.load(f))
         except:
             return set()
@@ -77,13 +87,37 @@ def load_selections():
 
 # Sayfa Yapılandırması
 st.set_page_config(layout="wide", page_title="Yatırım Terminali")
+
+# ------------------------------------------------------------------------------
+# GİRİŞ (AUTHENTICATION)
+# ------------------------------------------------------------------------------
+_credentials = {"usernames": {u: dict(v) for u, v in st.secrets["credentials"]["usernames"].items()}}
+authenticator = stauth.Authenticate(
+    _credentials,
+    st.secrets["cookie"]["name"],
+    st.secrets["cookie"]["key"],
+    st.secrets["cookie"]["expiry_days"],
+)
+authenticator.login(location="main")
+
+_auth_status = st.session_state.get("authentication_status")
+if _auth_status is False:
+    st.error("❌ Kullanıcı adı veya şifre hatalı.")
+    st.stop()
+elif _auth_status is None:
+    st.warning("🔒 Devam etmek için giriş yapın.")
+    st.stop()
+
+username = st.session_state["username"]
+
 st.title("📈 Profesyonel Yatırım Terminali")
+authenticator.logout("🚪 Çıkış Yap", "sidebar")
 
 # ------------------------------------------------------------------------------
 # DİNAMİK LİSTE YÜKLEME VE SESSION STATE
 # ------------------------------------------------------------------------------
 if 'ticker_lists' not in st.session_state:
-    st.session_state.ticker_lists = load_ticker_lists()
+    st.session_state.ticker_lists = load_ticker_lists(username)
 
 # ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
@@ -173,8 +207,7 @@ if module == NAV_HOME:
     st.header("🏠 Genel Bakış")
     st.caption("Hesap özeti, liste durumu ve bu oturumdaki son tarama sonuçları.")
 
-    key_id = st.secrets.get("APCA_API_KEY_ID")
-    secret_key = st.secrets.get("APCA_API_SECRET_KEY")
+    key_id, secret_key = get_user_alpaca_creds(username)
 
     if key_id and secret_key:
         try:
@@ -192,7 +225,7 @@ if module == NAV_HOME:
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:
-        st.info("Alpaca hesap özetini görmek için `.streamlit/secrets.toml` içine APCA_API_KEY_ID / APCA_API_SECRET_KEY ekleyin.")
+        st.info(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
 
     st.divider()
     st.subheader("📋 Hisse Listeleri")
@@ -363,7 +396,7 @@ elif module == "Stop Loss Hesaplayıcı":
     st.header("🛡️ Risk Yönetimi: Stop Loss & EMA Analizi")
     
     if 'selected_tickers' not in st.session_state:
-        st.session_state.selected_tickers = load_selections()
+        st.session_state.selected_tickers = load_selections(username)
 
     search_term = st.text_input("🔍 Hisseleri filtrelemek için yazın (örn: THY):", "").upper()
 
@@ -392,7 +425,7 @@ elif module == "Stop Loss Hesaplayıcı":
                 changed = True
     
     if changed:
-        save_selections(st.session_state.selected_tickers)
+        save_selections(st.session_state.selected_tickers, username)
 
     st.write(f"Şu an **{len(st.session_state.selected_tickers)}** hisse seçili ve kaydedildi.")
 
@@ -436,7 +469,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
     st.caption("Şirketler genel sektör yerine kendi özel iş modellerine (örn: GPU vs RAM vs Telekom) göre gruplanır ve iskontoları kıyaslanır.")
 
     if 'selected_tickers' not in st.session_state:
-        st.session_state.selected_tickers = load_selections()
+        st.session_state.selected_tickers = load_selections(username)
 
     col_mode, col_sec = st.columns([2, 2])
     
@@ -598,7 +631,7 @@ elif module == "⚙️ Hisse Listelerini Yönet":
                     st.warning(f"⚠️ **{new_symbol}** zaten {selected_m} listesinde mevcut.")
                 else:
                     st.session_state.ticker_lists[selected_m].append(new_symbol)
-                    save_ticker_lists(st.session_state.ticker_lists)
+                    save_ticker_lists(st.session_state.ticker_lists, username)
                     st.success(f"✅ **{new_symbol}**, {selected_m} listesine eklendi ve kaydedildi!")
                     st.rerun()
 
@@ -609,7 +642,7 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         if st.button("Listeden Çıkar", type="secondary"):
             if symbol_to_remove in current_market_list:
                 st.session_state.ticker_lists[selected_m].remove(symbol_to_remove)
-                save_ticker_lists(st.session_state.ticker_lists)
+                save_ticker_lists(st.session_state.ticker_lists, username)
                 st.success(f"🗑️ **{symbol_to_remove}**, {selected_m} listesinden çıkarıldı!")
                 st.rerun()
 
@@ -624,7 +657,7 @@ elif module == "⚙️ Hisse Listelerini Yönet":
             "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
             "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100))
         }
-        save_ticker_lists(st.session_state.ticker_lists)
+        save_ticker_lists(st.session_state.ticker_lists, username)
         st.success("Tüm listeler varsayılan ayarlara sıfırlandı!")
         st.rerun()
 
@@ -863,7 +896,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 elif module == "🦙 Alpaca Canlı Pozisyonlar":
     st.header("🦙 Alpaca Canlı Pozisyonlar")
     st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
-    render_alpaca_dashboard()
+    render_alpaca_dashboard(username)
 
 # ==============================================================================
 # 9. MODÜL: PREMIUM BUY POINT PORTFÖYÜ
@@ -871,4 +904,4 @@ elif module == "🦙 Alpaca Canlı Pozisyonlar":
 elif module == "🎯 Premium Buy Point Portföyü":
     st.header("🎯 Premium Buy Point Portföyü")
     st.caption("Seçtiğiniz hisseler için demand zone (premium buy point) taranır; fiyat zone'a girdiğinde otomatik alım yapılır.")
-    render_premium_buy_portfolio(target_list)
+    render_premium_buy_portfolio(target_list, username)

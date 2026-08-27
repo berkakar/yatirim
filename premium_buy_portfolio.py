@@ -9,7 +9,6 @@ from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME
 from demand_zones import find_buy_point
 from github_config import read_portfolio_config, write_portfolio_config
 
-WATCHLIST_NAME = "premium-buy-portfolio"
 GITHUB_REPO = "berkakar/yatirim"
 BUY_LOOKBACK_DAYS = 60
 PRICE_REFRESH_SECONDS = 30
@@ -52,22 +51,24 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str]):
     )
 
 
-def render_premium_buy_portfolio(target_list: list[str]):
-    key_id = st.secrets.get("APCA_API_KEY_ID")
-    secret_key = st.secrets.get("APCA_API_SECRET_KEY")
+def render_premium_buy_portfolio(target_list: list[str], username: str):
+    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
+    key_id = user_alpaca.get("key_id")
+    secret_key = user_alpaca.get("secret_key")
     github_token = st.secrets.get("GITHUB_TOKEN")
 
     if not key_id or not secret_key:
-        st.warning("`.streamlit/secrets.toml` içinde APCA_API_KEY_ID / APCA_API_SECRET_KEY tanımlı değil.")
+        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
         return
     if not github_token:
         st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - portföy ayarları kaydedilemez.")
         return
 
+    watchlist_name = f"premium-buy-portfolio-{username}"
     client = AlpacaClient(key_id, secret_key)
-    watchlist = client.get_or_create_watchlist(WATCHLIST_NAME)
+    watchlist = client.get_or_create_watchlist(watchlist_name)
     current_symbols = [a["symbol"] for a in watchlist.get("assets", [])]
-    config = read_portfolio_config(GITHUB_REPO, github_token)
+    config = read_portfolio_config(GITHUB_REPO, github_token, username)
 
     st.subheader("🎯 Portföy Seçimi")
     st.caption("Bu listedeki hisseler için premium buy point (demand zone) taranır ve fiyat oraya ulaştığında otomatik alım yapılır.")
@@ -117,7 +118,7 @@ def render_premium_buy_portfolio(target_list: list[str]):
             "budget": float(budget),
             "weights": {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()},
         }
-        write_portfolio_config(GITHUB_REPO, github_token, new_config)
+        write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
         st.success("Portföy kaydedildi.")
         st.rerun()
 

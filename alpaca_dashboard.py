@@ -62,11 +62,12 @@ def format_order_row(order: dict) -> dict:
     }
 
 
-def render_alpaca_dashboard():
-    key_id = st.secrets.get("APCA_API_KEY_ID")
-    secret_key = st.secrets.get("APCA_API_SECRET_KEY")
+def render_alpaca_dashboard(username):
+    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
+    key_id = user_alpaca.get("key_id")
+    secret_key = user_alpaca.get("secret_key")
     if not key_id or not secret_key:
-        st.warning("`.streamlit/secrets.toml` içinde APCA_API_KEY_ID / APCA_API_SECRET_KEY tanımlı değil.")
+        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
         return
 
     client = AlpacaClient(key_id, secret_key)

@@ -49,7 +49,8 @@ DEFAULT_BIST_100 = [
     "KERVT.IS", "KONYA.IS", "KRONT.IS"
 ]
 
-CUSTOM_FILE = "custom_tickers.json"
+def _custom_file(username):
+    return f"custom_tickers_{username}.json"
 
 
 def _defaults():
@@ -60,23 +61,24 @@ def _defaults():
     }
 
 
-def load_ticker_lists():
-    """Özel listeleri yükler. Önce GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı,
-    o da yoksa varsayılanları döner.
+def load_ticker_lists(username):
+    """Kullanıcıya özel listeleri yükler. Önce GitHub'daki (kalıcı) kopyayı, yoksa yerel
+    dosyayı, o da yoksa varsayılanları döner.
 
     Streamlit Cloud her yeniden başlatmada repoyu sıfırdan klonladığı için sadece
     diske yazmak kalıcı olmuyor - bu yüzden asıl kaynak GitHub'daki dosya."""
+    custom_file = _custom_file(username)
     data = None
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:
-            data = read_json_from_github(GITHUB_REPO, token, CUSTOM_FILE, {})
+            data = read_json_from_github(GITHUB_REPO, token, custom_file, {})
         except Exception:
             data = None
 
-    if not data and os.path.exists(CUSTOM_FILE):
+    if not data and os.path.exists(custom_file):
         try:
-            with open(CUSTOM_FILE, 'r', encoding='utf-8') as f:
+            with open(custom_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except Exception:
             data = None
@@ -91,15 +93,16 @@ def load_ticker_lists():
     }
 
 
-def save_ticker_lists(ticker_dict):
-    """Güncellenmiş listeleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
+def save_ticker_lists(ticker_dict, username):
+    """Kullanıcıya özel listeleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
     ayrıca yerel dosyaya da yazar."""
+    custom_file = _custom_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:
-            write_json_to_github(GITHUB_REPO, token, CUSTOM_FILE, ticker_dict, "Update custom ticker lists")
+            write_json_to_github(GITHUB_REPO, token, custom_file, ticker_dict, f"Update custom ticker lists ({username})")
         except Exception as e:
             st.warning(f"⚠️ Liste GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
-    with open(CUSTOM_FILE, 'w', encoding='utf-8') as f:
+    with open(custom_file, 'w', encoding='utf-8') as f:
         json.dump(ticker_dict, f, ensure_ascii=False, indent=4)
