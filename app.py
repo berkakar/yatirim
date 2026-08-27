@@ -18,8 +18,22 @@ from dtw_analysis import (
     load_cached_dtw_results,
     save_cached_dtw_results
 )
+from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard
 from premium_buy_portfolio import render_premium_buy_portfolio
+
+NAV_HOME = "🏠 Özet"
+MODULE_GROUPS = {
+    "🔍 Tarama": ["Fincan-Kulp Tarayıcı", "OBO & TOBO Tarayıcı"],
+    "📊 Analiz": [
+        "Stop Loss Hesaplayıcı",
+        "💎 Değerleme & Ucuzluk Skoru",
+        "🔄 DTW Zaman Serisi & Benzerlik Analizi",
+        "📊 Bağımsız Hisse Grafiği",
+    ],
+    "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
+    "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
+}
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -70,20 +84,14 @@ if 'ticker_lists' not in st.session_state:
 st.sidebar.header("Ayarlar")
 market = st.sidebar.radio("Piyasa Seçimi", ["NASDAQ 100", "BIST 100", "NYSE"])
 
-module = st.sidebar.radio(
-    "Modül Seçimi", 
-    [
-        "Fincan-Kulp Tarayıcı", 
-        "OBO & TOBO Tarayıcı", 
-        "Stop Loss Hesaplayıcı",
-        "💎 Değerleme & Ucuzluk Skoru",
-        "🔄 DTW Zaman Serisi & Benzerlik Analizi", # YENİ MODÜL
-        "📊 Bağımsız Hisse Grafiği",
-        "⚙️ Hisse Listelerini Yönet",
-        "🦙 Alpaca Canlı Pozisyonlar",
-        "🎯 Premium Buy Point Portföyü"
-    ]
-)
+st.sidebar.divider()
+category = st.sidebar.selectbox("📂 Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()), key="nav_category")
+if category == NAV_HOME:
+    module = NAV_HOME
+else:
+    module = st.sidebar.radio(
+        "Modül", MODULE_GROUPS[category], label_visibility="collapsed", key=f"nav_module_{category}"
+    )
 
 target_list = st.session_state.ticker_lists[market]
 
@@ -103,9 +111,71 @@ def render_chart_for(ticker):
 
 
 # ==============================================================================
+# 0. MODÜL: ÖZET (ANA SAYFA)
+# ==============================================================================
+if module == NAV_HOME:
+    st.header("🏠 Genel Bakış")
+    st.caption("Hesap özeti, liste durumu ve bu oturumdaki son tarama sonuçları.")
+
+    key_id = st.secrets.get("APCA_API_KEY_ID")
+    secret_key = st.secrets.get("APCA_API_SECRET_KEY")
+
+    if key_id and secret_key:
+        try:
+            client = AlpacaClient(key_id, secret_key)
+            positions = client.get_all_positions()
+            total_value = sum(float(p["market_value"]) for p in positions)
+            total_pl = sum(float(p["unrealized_pl"]) for p in positions)
+            total_cost = sum(float(p["cost_basis"]) for p in positions)
+            total_pl_pct = (total_pl / total_cost * 100) if total_cost else 0.0
+
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Açık Pozisyon", len(positions))
+            c2.metric("Toplam Pozisyon Değeri", f"${total_value:,.2f}")
+            c3.metric("Toplam Kâr/Zarar", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
+        except Exception as e:
+            st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
+    else:
+        st.info("Alpaca hesap özetini görmek için `.streamlit/secrets.toml` içine APCA_API_KEY_ID / APCA_API_SECRET_KEY ekleyin.")
+
+    st.divider()
+    st.subheader("📋 Hisse Listeleri")
+    lc1, lc2, lc3 = st.columns(3)
+    lc1.metric("NASDAQ 100 Listesi", len(st.session_state.ticker_lists["NASDAQ 100"]))
+    lc2.metric("NYSE Listesi", len(st.session_state.ticker_lists["NYSE"]))
+    lc3.metric("BIST 100 Listesi", len(st.session_state.ticker_lists["BIST 100"]))
+
+    st.divider()
+    st.subheader("🎯 Bu Oturumdaki Son Tarama Sonuçları")
+    sc1, sc2 = st.columns(2)
+    with sc1:
+        if 'cup_signals' in st.session_state:
+            st.metric("Fincan-Kulp Sinyali", len(st.session_state.cup_signals))
+        else:
+            st.info("Fincan-Kulp Tarayıcı bu oturumda henüz çalıştırılmadı.")
+    with sc2:
+        if 'obo_signals' in st.session_state:
+            st.metric("OBO / TOBO Sinyali", len(st.session_state.obo_signals))
+        else:
+            st.info("OBO & TOBO Tarayıcı bu oturumda henüz çalıştırılmadı.")
+
+    st.divider()
+    st.subheader("🚀 Hızlı Erişim")
+
+    def _go_to_category(cat_name):
+        st.session_state["nav_category"] = cat_name
+
+    nav_cols = st.columns(len(MODULE_GROUPS))
+    for col, cat_name in zip(nav_cols, MODULE_GROUPS.keys()):
+        col.button(
+            cat_name, use_container_width=True, key=f"quicknav_{cat_name}",
+            on_click=_go_to_category, args=(cat_name,),
+        )
+
+# ==============================================================================
 # 1. MODÜL: FİNCAN-KULP TARAYICI
 # ==============================================================================
-if module == "Fincan-Kulp Tarayıcı":
+elif module == "Fincan-Kulp Tarayıcı":
     st.header("🔍 Fincan-Kulp Tarayıcı")
     st.caption("Aşağıdaki butona basarak seçili piyasadaki formasyonları taratabilirsiniz.")
     

@@ -1,3 +1,4 @@
 # .gitignore dosyasına ekleyin
-.streamlit/
+.streamlit/*
+!.streamlit/config.toml
 .env
