@@ -91,6 +91,30 @@ if 'ticker_lists' not in st.session_state:
 market = st.sidebar.selectbox("Piyasa Seçimi", ["NASDAQ 100", "NYSE", "BIST 100"])
 
 st.sidebar.divider()
+st.markdown("""
+<style>
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] > div {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 0.4rem;
+}
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] button {
+    writing-mode: vertical-rl !important;
+    transform: rotate(180deg);
+    white-space: nowrap;
+    width: 2.4rem !important;
+    min-width: 2.4rem !important;
+    max-width: 2.4rem !important;
+    height: auto !important;
+    min-height: 7.5rem !important;
+    padding: 0.5rem 0.3rem !important;
+}
+[data-testid="stSidebar"] [data-testid="stButtonGroup"] button * {
+    writing-mode: inherit !important;
+}
+</style>
+""", unsafe_allow_html=True)
 if "nav_category" not in st.session_state:
     st.session_state["nav_category"] = NAV_HOME
 category = st.sidebar.segmented_control(
