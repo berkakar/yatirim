@@ -2,21 +2,123 @@ import yfinance as yf
 import pandas as pd
 import numpy as np
 import streamlit as st
+from scipy.signal import argrelextrema
 
 # ------------------------------------------------------------------------------
 # FORMASYON TESPİT FONKSİYONLARI (Kendi mevcut algoritmalarınızı buraya koyun)
 # ------------------------------------------------------------------------------
-def detect_cup_and_handle(df):
-    # Fincan-kulp tespit mantığınız
-    return None
+def _find_pivots(df, order=10):
+    """Yerel tepe (High pivot) ve dip (Low pivot) noktalarını kronolojik sırada döner."""
+    prices = df['Close'].values
+    high_idx = argrelextrema(prices, np.greater_equal, order=order)[0]
+    low_idx = argrelextrema(prices, np.less_equal, order=order)[0]
+    highs = df.iloc[high_idx].reset_index(drop=True)
+    lows = df.iloc[low_idx].reset_index(drop=True)
+    return highs, lows
 
-def detect_obo(df):
-    # OBO tespit mantığınız
-    return None
 
-def detect_tobo(df):
-    # TOBO tespit mantığınız
-    return None
+def detect_cup_and_handle(df, order=10, symmetry_threshold=0.05, depth_threshold=0.2, handle_window_days=30):
+    """
+    Klasik fincan-kulp formasyonu: A (sol tepe) -> B (fincan dibi) -> C (sağ tepe,
+    A'ya yakın seviyede) -> D (C'den sonraki ~30 gün içindeki kulp dibi, fincanın
+    alt yarısını aşmayan sığ bir geri çekilme). Aralıktaki en güncel geçerli
+    formasyonu {'A','B','C','D'} dict olarak döner, bulunamazsa None.
+    """
+    highs, lows = _find_pivots(df, order)
+
+    if len(highs) < 2 or lows.empty:
+        return None
+
+    found = None
+    for i in range(len(highs) - 1):
+        peak_A, peak_C = highs.iloc[i], highs.iloc[i + 1]
+        date_A, date_C = pd.Timestamp(peak_A['Date']), pd.Timestamp(peak_C['Date'])
+        price_A, price_C = float(peak_A['Close']), float(peak_C['Close'])
+        if price_A <= 0:
+            continue
+
+        cup_lows = lows[(lows['Date'] > date_A) & (lows['Date'] < date_C)]
+        if cup_lows.empty:
+            continue
+        dip_B = cup_lows.loc[cup_lows['Close'].idxmin()]
+        price_B = float(dip_B['Close'])
+
+        if abs(price_A - price_C) / price_A > symmetry_threshold:
+            continue
+        if (price_A - price_B) / price_A < depth_threshold:
+            continue
+
+        handle_lows = lows[(lows['Date'] > date_C) & (lows['Date'] <= date_C + pd.Timedelta(days=handle_window_days))]
+        if handle_lows.empty:
+            continue
+        dip_D = handle_lows.loc[handle_lows['Close'].idxmin()]
+        price_D = float(dip_D['Close'])
+
+        mid_depth = price_A - (price_A - price_B) * 0.5
+        if mid_depth < price_D < price_C:
+            found = {'A': peak_A, 'B': dip_B, 'C': peak_C, 'D': dip_D}
+
+    return found
+
+def _find_shoulder_head_pattern(pivots, want_max, symmetry_threshold, min_head_prominence):
+    """
+    Ardışık 3 pivottan (sol omuz, baş, sağ omuz) oluşan formasyonu arar.
+    want_max=True  -> baş, omuzlardan yüksek olmalı (OBO / tepe dönüş formasyonu).
+    want_max=False -> baş, omuzlardan düşük olmalı (TOBO / dip dönüş formasyonu).
+    Aralıktaki en güncel geçerli formasyonu döner, yoksa None.
+    """
+    if len(pivots) < 3:
+        return None
+
+    found = None
+    for i in range(len(pivots) - 2):
+        ls, head, rs = pivots.iloc[i], pivots.iloc[i + 1], pivots.iloc[i + 2]
+        p_ls, p_head, p_rs = float(ls['Close']), float(head['Close']), float(rs['Close'])
+        if p_ls <= 0:
+            continue
+
+        if want_max:
+            if not (p_head > p_ls and p_head > p_rs):
+                continue
+        else:
+            if not (p_head < p_ls and p_head < p_rs):
+                continue
+
+        # Omuzlar birbirine yakın seviyede olmalı
+        if abs(p_ls - p_rs) / p_ls > symmetry_threshold:
+            continue
+
+        # Baş, omuzların ortalamasından belirgin şekilde ayrışmalı (aksi halde üçü de
+        # aynı seviyede "üçlü tepe/dip" olur, omuz-baş-omuz değil)
+        avg_shoulder = (p_ls + p_rs) / 2
+        if avg_shoulder <= 0 or abs(p_head - avg_shoulder) / avg_shoulder < min_head_prominence:
+            continue
+
+        found = {'left_shoulder': ls, 'head': head, 'right_shoulder': rs}
+
+    return found
+
+
+def detect_obo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15):
+    """
+    Omuz-Baş-Omuz (Head & Shoulders) - tepe/dönüş formasyonu. Üç ardışık tepe pivotu;
+    ortadaki (baş) diğer ikisinden (omuzlar) belirgin şekilde yüksek, omuzlar ise
+    birbirine yakın seviyede olmalı. Bulunursa {'left_shoulder','head','right_shoulder'}
+    dict döner, aksi halde None.
+    """
+    highs, _ = _find_pivots(df, order)
+    return _find_shoulder_head_pattern(highs, True, symmetry_threshold, min_head_prominence)
+
+
+def detect_tobo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15):
+    """
+    Ters Omuz-Baş-Omuz (Inverse Head & Shoulders) - dip/dönüş formasyonu. Üç ardışık
+    dip pivotu; ortadaki (baş) diğer ikisinden belirgin şekilde düşük, omuzlar ise
+    birbirine yakın seviyede olmalı. Bulunursa {'left_shoulder','head','right_shoulder'}
+    dict döner, aksi halde None.
+    """
+    _, lows = _find_pivots(df, order)
+    return _find_shoulder_head_pattern(lows, False, symmetry_threshold, min_head_prominence)
 
 
 # ------------------------------------------------------------------------------
