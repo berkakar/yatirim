@@ -193,9 +193,11 @@ def calculate_sector_relative_scores(raw_data_list):
             elif 2.0 <= roa < 5.0: score += 3
 
         # 10. Borç / Özsermaye (5 Puan)
+        # Negatif oran, özsermayenin eksiye düştüğü (borcun varlıklardan fazla olduğu)
+        # anlamına gelir - bu ciddi bir risk sinyalidir, "düşük borç" olarak ödüllendirilmemeli.
         de = row['Borç / Özsermaye']
         if pd.notna(de):
-            if de <= 0.5: score += 5
+            if 0 <= de <= 0.5: score += 5
             elif 0.5 < de <= 1.0: score += 3
 
         # 11. Borç / Varlık % (4 Puan)
@@ -274,7 +276,7 @@ def style_valuation_df(df):
                 style_df.loc[idx, 'Net Kar Marjı %'] = 'color: #e63946;'
             if pd.notna(val_df.loc[idx, 'Faiz Karşılama Oranı']) and val_df.loc[idx, 'Faiz Karşılama Oranı'] < 1.5:
                 style_df.loc[idx, 'Faiz Karşılama Oranı'] = 'color: #e63946;'
-            if pd.notna(val_df.loc[idx, 'Borç / Özsermaye']) and val_df.loc[idx, 'Borç / Özsermaye'] > 1.5:
+            if pd.notna(val_df.loc[idx, 'Borç / Özsermaye']) and (val_df.loc[idx, 'Borç / Özsermaye'] > 1.5 or val_df.loc[idx, 'Borç / Özsermaye'] < 0):
                 style_df.loc[idx, 'Borç / Özsermaye'] = 'color: #e63946;'
             if pd.notna(val_df.loc[idx, 'Borç / Varlık %']) and val_df.loc[idx, 'Borç / Varlık %'] > 60.0:
                 style_df.loc[idx, 'Borç / Varlık %'] = 'color: #e63946;'

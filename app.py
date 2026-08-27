@@ -362,7 +362,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Alt Sektör (İş Modeli)": st.column_config.TextColumn("İş Modeli Grubu", help="💡 sub_sectors.json dosyasından gelen mikro grup (örn: RAM vs GPU)"),
             "Ana Sektör": st.column_config.TextColumn("Ana Sektör", help="yfinance Makro Sektörü"),
             "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n💡 40 Altı Kırmızı: Zayıf/Pahalı"),
-            "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı."),
+            "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı. Eksi değer, hissenin akranlarına göre PRİMLİ (daha pahalı) işlem gördüğü anlamına gelir."),
             "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="💡 Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
             "PEG": st.column_config.NumberColumn("PEG [10p]", help="💡 Optimum: < 1.0 (F/K ÷ EPS Büyümesi)."),
             "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="💡 Optimum: > %10."),
@@ -372,7 +372,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Brüt Kar Marjı %": st.column_config.NumberColumn("Brüt Kar Marjı % [7p]", help="💡 Optimum: %30 - %60."),
             "Faiz Karşılama Oranı": st.column_config.NumberColumn("Faiz Karşılama [7p]", help="💡 Optimum: > 3.0."),
             "Varlık Getirisi (ROA) %": st.column_config.NumberColumn("Varlık Getirisi (ROA) % [6p]", help="💡 Optimum: %5 - %10."),
-            "Borç / Özsermaye": st.column_config.NumberColumn("Borç / Özsermaye [5p]", help="💡 Optimum: < 0.5."),
+            "Borç / Özsermaye": st.column_config.NumberColumn("Borç / Özsermaye [5p]", help="💡 Optimum: 0 - 0.5. Eksi değer, şirketin özsermayesinin negatife düştüğü anlamına gelir; bu bir risk sinyalidir ve puan almaz."),
             "Borç / Varlık %": st.column_config.NumberColumn("Borç / Varlık % [4p]", help="💡 Optimum: < %50."),
             "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="💡 Optimum: 1.0 - 2.0."),
             "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="💡 Optimum: > 1.0."),
@@ -381,6 +381,36 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
 
         styled_df = style_valuation_df(df_val)
         st.dataframe(styled_df, column_config=column_config, use_container_width=True, hide_index=True)
+
+        st.divider()
+        with st.expander("ℹ️ Nihai Skor nasıl hesaplanıyor? Parametrelerin anlamı", expanded=True):
+            st.markdown("""
+**Nihai Skor**, aşağıdaki 14 kritere göre 0'dan başlayıp puan **eklenerek** hesaplanır (hiçbir kriterde puan düşülmez).
+Maksimum toplam **100 puan**dır. Bir kritere ait veri yfinance'ten gelmiyorsa (None/boş), o kriterden puan alınmaz —
+yani düşük skor her zaman "kötü şirket" anlamına gelmez, bazen sadece "eksik veri" anlamına gelir.
+
+| # | Kriter | Ağırlık | Ne anlama gelir? | Puanlama |
+|---|---|---|---|---|
+| 1 | **İş Modeli İskontosu %** | 15p | Hissenin F/K'sı, aynı mikro iş modelindeki (alt sektör) şirketlerin medyan F/K'sına göre ne kadar ucuz/pahalı. **Eksi değer = akranlarına göre daha pahalı (prim)**, bir hata değildir. | ≥30: 15p · 15-30: 10p · 0-15: 5p · <0 (prim): 0p |
+| 2 | **PEG** | 10p | F/K ÷ EPS büyüme oranı. 1'in altı, büyümesine göre ucuz demektir. | ≤1.0: 10p · 1.0-1.5: 5p |
+| 3 | **EPS Büyümesi %** | 10p | Yıllık kâr büyümesi. Negatifse şirketin kârı küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
+| 4 | **Gelir Büyümesi %** | 10p | Yıllık ciro büyümesi. Negatifse ciro küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
+| 5 | **Öz Sermaye Getirisi (ROE) %** | 10p | Özsermayenin ne kadar verimli kullanıldığı. | ≥10: 10p · 5-10: 5p |
+| 6 | **Net Kâr Marjı %** | 8p | Cironun ne kadarının net kâra dönüştüğü. | ≥15: 8p · 8-15: 4p |
+| 7 | **Brüt Kâr Marjı %** | 7p | Maliyet sonrası kalan marj. Çok yüksek de (>60) ideal kabul edilmez, orta bant tercih edilir. | 30-60: 7p · >60: 5p |
+| 8 | **Faiz Karşılama Oranı** | 7p | FAVÖK'ün faiz giderini kaç kat karşıladığı - borç ödeme gücü. | ≥3: 7p · 1.5-3: 3p |
+| 9 | **Varlık Getirisi (ROA) %** | 6p | Toplam varlıkların ne kadar verimli kullanıldığı. | ≥5: 6p · 2-5: 3p |
+| 10 | **Borç / Özsermaye** | 5p | Borcun özsermayeye oranı - kaldıraç seviyesi. **Eksi değer, özsermayenin negatife düştüğü anlamına gelir (ciddi risk sinyali) ve puan almaz.** | 0-0.5: 5p · 0.5-1.0: 3p |
+| 11 | **Borç / Varlık %** | 4p | Varlıkların ne kadarının borçla finanse edildiği. | ≤50: 4p · 50-70: 2p |
+| 12 | **Cari Oran** | 3p | Kısa vadeli varlık / kısa vadeli borç. 1'in altı likidite sıkıntısına işaret eder. | 1.0-2.0: 3p · >2.0: 2p |
+| 13 | **Likidite Oranı (Asit-Test)** | 3p | Stoklar hariç kısa vadeli ödeme gücü. | ≥1.0: 3p |
+| 14 | **Varlık Devir Hızı** | 2p | Varlıkların ciro üretme hızı. | 1.0-2.0: 2p · >2.0: 1p |
+
+**Neden bazı yüzdeler eksi görünüyor?** İskonto, büyüme (EPS/Gelir) ve kârlılık (ROE/ROA/marj) gibi kalemler gerçek
+piyasa/finansal verilerdir; şirket küçülüyorsa veya akranlarına göre pahalıysa bu değerler doğal olarak eksi çıkar -
+bu bir hesaplama hatası değil, gerçek durumun yansımasıdır ve yukarıdaki tabloda bu kriterler zaten puan almaz.
+Tek istisna **Borç/Özsermaye**'ydi: negatif özsermayeyi yanlışlıkla "düşük borç" sayıp tam puan veriyordu, bu düzeltildi.
+""")
 
 # ==============================================================================
 # 5. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
