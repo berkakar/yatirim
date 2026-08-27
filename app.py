@@ -109,6 +109,7 @@ st.markdown("""
     height: auto !important;
     min-height: 7.5rem !important;
     padding: 0.5rem 0.3rem !important;
+    font-size: 16.7px !important;
 }
 [data-testid="stSidebar"] [data-testid="stButtonGroup"] button * {
     writing-mode: inherit !important;
@@ -117,10 +118,14 @@ st.markdown("""
 """, unsafe_allow_html=True)
 if "nav_category" not in st.session_state:
     st.session_state["nav_category"] = NAV_HOME
-category = st.sidebar.segmented_control(
-    "Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()),
-    key="nav_category", required=True,
-)
+
+nav_col_tabs, nav_col_modules = st.sidebar.columns([1, 4], gap="small")
+with nav_col_tabs:
+    category = st.segmented_control(
+        "Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()),
+        key="nav_category", required=True, label_visibility="collapsed",
+    )
+
 if category == NAV_HOME:
     module = NAV_HOME
 else:
@@ -133,15 +138,16 @@ else:
     def _select_module(state_key, mod_name):
         st.session_state[state_key] = mod_name
 
-    for mod_name in modules_in_category:
-        st.sidebar.button(
-            MODULE_DISPLAY.get(mod_name, mod_name),
-            key=f"navbtn_{category}_{mod_name}",
-            use_container_width=True,
-            type="primary" if mod_name == module else "secondary",
-            on_click=_select_module,
-            args=(module_state_key, mod_name),
-        )
+    with nav_col_modules:
+        for mod_name in modules_in_category:
+            st.button(
+                MODULE_DISPLAY.get(mod_name, mod_name),
+                key=f"navbtn_{category}_{mod_name}",
+                use_container_width=True,
+                type="primary" if mod_name == module else "secondary",
+                on_click=_select_module,
+                args=(module_state_key, mod_name),
+            )
 
 target_list = st.session_state.ticker_lists[market]
 
