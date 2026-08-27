@@ -34,6 +34,13 @@ MODULE_GROUPS = {
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
     "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
 }
+# Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
+# değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
+MODULE_DISPLAY = {
+    "Fincan-Kulp Tarayıcı": "🔍 Fincan-Kulp Tarayıcı",
+    "OBO & TOBO Tarayıcı": "📉 OBO & TOBO Tarayıcı",
+    "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
+}
 
 SAVE_FILE = "selected_tickers.json"
 
@@ -81,17 +88,31 @@ if 'ticker_lists' not in st.session_state:
 # ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
 # ------------------------------------------------------------------------------
-st.sidebar.header("Ayarlar")
-market = st.sidebar.radio("Piyasa Seçimi", ["NASDAQ 100", "BIST 100", "NYSE"])
+market = st.sidebar.selectbox("Piyasa Seçimi", ["NASDAQ 100", "NYSE", "BIST 100"])
 
 st.sidebar.divider()
-category = st.sidebar.selectbox("📂 Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()), key="nav_category")
+category = st.sidebar.selectbox("Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()), key="nav_category")
 if category == NAV_HOME:
     module = NAV_HOME
 else:
-    module = st.sidebar.radio(
-        "Modül", MODULE_GROUPS[category], label_visibility="collapsed", key=f"nav_module_{category}"
-    )
+    modules_in_category = MODULE_GROUPS[category]
+    module_state_key = f"active_module_{category}"
+    if module_state_key not in st.session_state:
+        st.session_state[module_state_key] = modules_in_category[0]
+    module = st.session_state[module_state_key]
+
+    def _select_module(state_key, mod_name):
+        st.session_state[state_key] = mod_name
+
+    for mod_name in modules_in_category:
+        st.sidebar.button(
+            MODULE_DISPLAY.get(mod_name, mod_name),
+            key=f"navbtn_{category}_{mod_name}",
+            use_container_width=True,
+            type="primary" if mod_name == module else "secondary",
+            on_click=_select_module,
+            args=(module_state_key, mod_name),
+        )
 
 target_list = st.session_state.ticker_lists[market]
 
