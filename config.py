@@ -2,6 +2,12 @@
 import json
 import os
 
+import streamlit as st
+
+from github_config import read_json_from_github, write_json_to_github
+
+GITHUB_REPO = "berkakar/yatirim"
+
 # ------------------------------------------------------------------------------
 # VARSAYILAN LİSTELER (DEFAULT)
 # ------------------------------------------------------------------------------
@@ -45,27 +51,55 @@ DEFAULT_BIST_100 = [
 
 CUSTOM_FILE = "custom_tickers.json"
 
-def load_ticker_lists():
-    """Özel listeleri JSON dosyasından yükler. Dosya yoksa varsayılanları döner."""
-    if os.path.exists(CUSTOM_FILE):
-        try:
-            with open(CUSTOM_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                return {
-                    "NASDAQ 100": list(dict.fromkeys(data.get("NASDAQ 100", DEFAULT_NASDAQ_100))),
-                    "NYSE": list(dict.fromkeys(data.get("NYSE", DEFAULT_NYSE))),
-                    "BIST 100": list(dict.fromkeys(data.get("BIST 100", DEFAULT_BIST_100)))
-                }
-        except Exception:
-            pass
-            
+
+def _defaults():
     return {
         "NASDAQ 100": list(dict.fromkeys(DEFAULT_NASDAQ_100)),
         "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
         "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100))
     }
 
+
+def load_ticker_lists():
+    """Özel listeleri yükler. Önce GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı,
+    o da yoksa varsayılanları döner.
+
+    Streamlit Cloud her yeniden başlatmada repoyu sıfırdan klonladığı için sadece
+    diske yazmak kalıcı olmuyor - bu yüzden asıl kaynak GitHub'daki dosya."""
+    data = None
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, CUSTOM_FILE, {})
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(CUSTOM_FILE):
+        try:
+            with open(CUSTOM_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if not data:
+        return _defaults()
+
+    return {
+        "NASDAQ 100": list(dict.fromkeys(data.get("NASDAQ 100", DEFAULT_NASDAQ_100))),
+        "NYSE": list(dict.fromkeys(data.get("NYSE", DEFAULT_NYSE))),
+        "BIST 100": list(dict.fromkeys(data.get("BIST 100", DEFAULT_BIST_100)))
+    }
+
+
 def save_ticker_lists(ticker_dict):
-    """Güncellenmiş listeleri JSON dosyasına kaydeder."""
+    """Güncellenmiş listeleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
+    ayrıca yerel dosyaya da yazar."""
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, CUSTOM_FILE, ticker_dict, "Update custom ticker lists")
+        except Exception as e:
+            st.warning(f"⚠️ Liste GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
     with open(CUSTOM_FILE, 'w', encoding='utf-8') as f:
         json.dump(ticker_dict, f, ensure_ascii=False, indent=4)

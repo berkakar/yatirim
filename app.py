@@ -5,7 +5,8 @@ import plotly.graph_objects as go
 import json
 import os
 
-from config import load_ticker_lists, save_ticker_lists, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
+from config import load_ticker_lists, save_ticker_lists, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
+from github_config import read_json_from_github, write_json_to_github
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
 from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
@@ -23,10 +24,28 @@ from premium_buy_portfolio import render_premium_buy_portfolio
 SAVE_FILE = "selected_tickers.json"
 
 def save_selections(tickers):
+    """Seçili hisseleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
+    ayrıca yerel dosyaya da yazar - bkz. config.save_ticker_lists için aynı gerekçe."""
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, SAVE_FILE, list(tickers), "Update selected tickers")
+        except Exception as e:
+            st.warning(f"⚠️ Seçili hisseler GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
     with open(SAVE_FILE, 'w') as f:
         json.dump(list(tickers), f)
 
 def load_selections():
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, SAVE_FILE, None)
+            if data is not None:
+                return set(data)
+        except Exception:
+            pass
+
     if os.path.exists(SAVE_FILE):
         try:
             with open(SAVE_FILE, 'r') as f:
