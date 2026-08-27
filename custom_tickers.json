@@ -163,7 +163,8 @@
     "STDN",
     "AEP",
     "DTE",
-    "FE"
+    "FE",
+    "CMS"
   ],
   "BIST 100": [
     "THYAO.IS",
