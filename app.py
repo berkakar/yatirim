@@ -91,7 +91,12 @@ if 'ticker_lists' not in st.session_state:
 market = st.sidebar.selectbox("Piyasa Seçimi", ["NASDAQ 100", "NYSE", "BIST 100"])
 
 st.sidebar.divider()
-category = st.sidebar.selectbox("Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()), key="nav_category")
+if "nav_category" not in st.session_state:
+    st.session_state["nav_category"] = NAV_HOME
+category = st.sidebar.segmented_control(
+    "Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()),
+    key="nav_category", required=True,
+)
 if category == NAV_HOME:
     module = NAV_HOME
 else:
