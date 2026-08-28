@@ -1,8 +1,7 @@
 {
   "budget": 10000.0,
   "weights": {
-    "AMZN": 20.0,
-    "NVDA": 20.0,
-    "SPCX": 33.33
+    "AAPL": 50.0,
+    "MSFT": 50.0
   }
 }
