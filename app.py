@@ -14,7 +14,7 @@ from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores,
 from dtw_analysis import (
     fetch_and_cache_5m_data,
     compute_dtw_similarity,
-    compute_cross_similarity_parallel,
+    compute_two_day_trend,
     find_local_extremes,
     load_cached_dtw_results,
     save_cached_dtw_results
@@ -706,32 +706,28 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                         d1 = dtw_data[ticker]["day1"]["prices"]
                         d2 = dtw_data[ticker]["day2"]["prices"]
                         sim, dist = compute_dtw_similarity(d1, d2, max_warping_window, time_penalty)
+                        change_pct, trend = compute_two_day_trend(d1, d2)
                         self_sim_results.append({
                             "Hisse": ticker,
                             "1. Gün Tarihi": dtw_data[ticker]["day1"]["date"],
                             "2. Gün Tarihi": dtw_data[ticker]["day2"]["date"],
                             "DTW Benzerlik Skoru %": sim,
-                            "DTW Mesafesi": dist
+                            "DTW Mesafesi": dist,
+                            "2 Günlük Değişim %": change_pct,
+                            "Trend": trend
                         })
                     st.session_state.self_sim_results = self_sim_results
 
-                    # Çapraz Benzerlik Hesapla
-                    cross_sim_results = compute_cross_similarity_parallel(
-                        dtw_data, min_similarity=0, max_warping_window=max_warping_window, time_penalty=time_penalty
-                    )
-                    st.session_state.cross_sim_results = cross_sim_results
-
                     # Sonuçları diske kaydet
-                    save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results, cross_sim_results)
+                    save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results)
                     st.success(f"✅ {len(dtw_data)} hissenin analizi tamamlandı!")
             else:
                 st.error("⚠️ Veri çekilemedi.")
 
     # 3. Diskteki cache sonuçlarını her durumda (parametreler uyuşuyorsa) oturuma otomatik yükle
-    cached_self, cached_cross = load_cached_dtw_results(max_warping_window, time_penalty)
-    if cached_self is not None and cached_cross is not None:
+    cached_self = load_cached_dtw_results(max_warping_window, time_penalty)
+    if cached_self is not None:
         st.session_state.self_sim_results = cached_self
-        st.session_state.cross_sim_results = cached_cross
     elif 'self_sim_results' not in st.session_state or not st.session_state.self_sim_results:
         if 'dtw_data' in st.session_state and st.session_state.dtw_data:
             dtw_data = st.session_state.dtw_data
@@ -741,40 +737,45 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                 d1 = dtw_data[ticker]["day1"]["prices"]
                 d2 = dtw_data[ticker]["day2"]["prices"]
                 sim, dist = compute_dtw_similarity(d1, d2, max_warping_window, time_penalty)
+                change_pct, trend = compute_two_day_trend(d1, d2)
                 self_sim_results.append({
                     "Hisse": ticker,
                     "1. Gün Tarihi": dtw_data[ticker]["day1"]["date"],
                     "2. Gün Tarihi": dtw_data[ticker]["day2"]["date"],
                     "DTW Benzerlik Skoru %": sim,
-                    "DTW Mesafesi": dist
+                    "DTW Mesafesi": dist,
+                    "2 Günlük Değişim %": change_pct,
+                    "Trend": trend
                 })
             st.session_state.self_sim_results = self_sim_results
-            st.session_state.cross_sim_results = compute_cross_similarity_parallel(
-                dtw_data, min_similarity=0, max_warping_window=max_warping_window, time_penalty=time_penalty
-            )
-            save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results, st.session_state.cross_sim_results)
+            save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results)
 
     # 4. GÖRSELLEŞTİRME KISMI (SEKMELER VE GÜVENLİ FİLTRELEME)
     if 'dtw_data' in st.session_state and st.session_state.dtw_data:
         stocks_dict = st.session_state.dtw_data
         stock_keys = list(stocks_dict.keys())
 
-        tab1, tab2, tab3 = st.tabs(["📌 1. Kendi İçinde Benzerlik", "🌐 2. Hisseler Arası Benzerlik", "📈 3. İnteraktif Karşılaştırmalı Grafik"])
+        tab1, tab2 = st.tabs(["📌 1. Kendi İçinde Benzerlik", "📈 2. İnteraktif Karşılaştırmalı Grafik"])
 
         # TAB 1: KENDİ İÇİNDE BENZERLİK (Tip Güvenceli Filtreleme)
         with tab1:
             st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
             if 'self_sim_results' in st.session_state and st.session_state.self_sim_results:
                 df_self = pd.DataFrame(st.session_state.self_sim_results)
-                
+
                 # JSON'dan gelen sayısal skorları kesin olarak float tipine dönüştür
                 df_self["DTW Benzerlik Skoru %"] = pd.to_numeric(df_self["DTW Benzerlik Skoru %"], errors='coerce')
-                
+
                 df_filtered_self = df_self[df_self["DTW Benzerlik Skoru %"] >= float(min_similarity)].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
-                
+
                 st.caption(f"Toplam {len(df_self)} hisse içerisinden, %{min_similarity} ve üzeri benzerliğe sahip {len(df_filtered_self)} hisse listeleniyor.")
-                
+
                 if not df_filtered_self.empty:
+                    up_count = int((df_filtered_self["2 Günlük Değişim %"] >= 0).sum())
+                    down_count = int((df_filtered_self["2 Günlük Değişim %"] < 0).sum())
+                    tc1, tc2 = st.columns(2)
+                    tc1.metric("📈 2 Günlük Yükseliş Trendinde", up_count)
+                    tc2.metric("📉 2 Günlük Düşüş Trendinde", down_count)
                     st.dataframe(df_filtered_self, use_container_width=True, hide_index=True)
                 else:
                     max_score = df_self["DTW Benzerlik Skoru %"].max() if not df_self.empty else 0
@@ -782,27 +783,8 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
             else:
                 st.warning("Veri bulunamadı. Lütfen yukarıdaki butona tıklayın.")
 
-        # TAB 2: HİSSELER ARASI ÇAPRAZ BENZERLİK (Tip Güvenceli Filtreleme)
+        # TAB 2: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK (Sadece Görselde Türkiye Saati Dönüşümü)
         with tab2:
-            st.subheader("🔀 Farklı Hisselerin Son Gün Fiyat Hareketi Benzerliği")
-            if 'cross_sim_results' in st.session_state and st.session_state.cross_sim_results:
-                df_cross = pd.DataFrame(st.session_state.cross_sim_results)
-                
-                df_cross["DTW Benzerlik Skoru %"] = pd.to_numeric(df_cross["DTW Benzerlik Skoru %"], errors='coerce')
-                
-                df_filtered_cross = df_cross[df_cross["DTW Benzerlik Skoru %"] >= float(min_similarity)].sort_values(by="DTW Benzerlik Skoru %", ascending=False)
-                
-                st.caption(f"Toplam {len(df_cross)} çift içerisinden, %{min_similarity} ve üzeri benzerliğe sahip {len(df_filtered_cross)} çift listeleniyor.")
-                
-                if not df_filtered_cross.empty:
-                    st.dataframe(df_filtered_cross, use_container_width=True, hide_index=True)
-                else:
-                    st.warning(f"Seçilen %{min_similarity} eşik değerinin üzerinde eşleşen hisse çifti bulunamadı.")
-            else:
-                st.warning("Veri bulunamadı. Lütfen yukarıdaki butona tıklayın.")
-
-# TAB 3: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK (Sadece Görselde Türkiye Saati Dönüşümü)
-        with tab3:
             st.subheader("📈 Karşılaştırmalı Zaman Serisi Grafiği (Türkiye Saati)")
             comp_mode = st.radio("Karşılaştırma Tipi:", ["Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)", "İki Farklı Hisse (Son Gün)"], horizontal=True)
             

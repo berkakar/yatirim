@@ -142,39 +142,22 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
     return updated_stocks
 
 
-def _compute_pair_similarity(args):
-    t1, t2, p1, p2, date_str, min_similarity, max_warping_window, time_penalty = args
-    sim, df_dist = compute_dtw_similarity(p1, p2, max_warping_window=max_warping_window, time_penalty=time_penalty)
-    if sim >= min_similarity:
-        return {
-            "Hisse 1": t1,
-            "Hisse 2": t2,
-            "İşlem Günü": date_str,
-            "DTW Benzerlik Skoru %": sim,
-            "DTW Mesafesi": df_dist
-        }
-    return None
+def compute_two_day_trend(day1_prices, day2_prices):
+    """
+    1. günün açılışından 2. günün kapanışına net fiyat değişimini hesaplar ve
+    bunu yükseliş/düşüş trendi olarak sınıflandırır.
+    """
+    if not day1_prices or not day2_prices:
+        return None, "Bilinmiyor"
 
+    start_price = float(day1_prices[0])
+    end_price = float(day2_prices[-1])
+    if start_price == 0:
+        return None, "Bilinmiyor"
 
-def compute_cross_similarity_parallel(stocks_dict, min_similarity=75, max_warping_window=12, time_penalty=0.10, max_workers=8):
-    stock_keys = list(stocks_dict.keys())
-    tasks = []
-    
-    for i in range(len(stock_keys)):
-        for j in range(i + 1, len(stock_keys)):
-            t1, t2 = stock_keys[i], stock_keys[j]
-            p1 = stocks_dict[t1]["day2"]["prices"]
-            p2 = stocks_dict[t2]["day2"]["prices"]
-            date_str = stocks_dict[t1]["day2"]["date"]
-            tasks.append((t1, t2, p1, p2, date_str, min_similarity, max_warping_window, time_penalty))
-
-    results = []
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        for res in executor.map(_compute_pair_similarity, tasks):
-            if res is not None:
-                results.append(res)
-                
-    return results
+    change_pct = round((end_price - start_price) / start_price * 100, 2)
+    trend = "📈 Yükseliş" if change_pct >= 0 else "📉 Düşüş"
+    return change_pct, trend
 
 
 def load_cached_dtw_results(max_warping_window, time_penalty):
@@ -188,14 +171,14 @@ def load_cached_dtw_results(max_warping_window, time_penalty):
                 if (meta.get("last_update_date") == today_str and
                     meta.get("max_warping_window") == max_warping_window and
                     meta.get("time_penalty") == time_penalty):
-                    return cache.get("self_similarity"), cache.get("cross_similarity")
+                    return cache.get("self_similarity")
         except Exception:
             pass
-    return None, None
+    return None
 
 
-def save_cached_dtw_results(max_warping_window, time_penalty, self_sim, cross_sim):
-    """Hesaplanan tüm DTW sonuçlarını skorsuz olarak diske kaydeder."""
+def save_cached_dtw_results(max_warping_window, time_penalty, self_sim):
+    """Hesaplanan DTW öz-benzerlik sonuçlarını diske kaydeder."""
     today_str = str(date.today())
     cache = {
         "_meta": {
@@ -203,8 +186,7 @@ def save_cached_dtw_results(max_warping_window, time_penalty, self_sim, cross_si
             "max_warping_window": max_warping_window,
             "time_penalty": time_penalty
         },
-        "self_similarity": self_sim,
-        "cross_similarity": cross_sim
+        "self_similarity": self_sim
     }
     with open(DTW_RESULTS_CACHE_FILE, 'w', encoding='utf-8') as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
