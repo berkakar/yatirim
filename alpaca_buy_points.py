@@ -21,6 +21,7 @@ placed in the same run).
 
 import argparse
 import json
+import math
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -92,7 +93,7 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
         return
 
     target_price = round(zone.top, 2)
-    target_qty = round(dollar_amount / target_price, 4)
+    target_qty = math.floor(dollar_amount / target_price)
     if target_qty <= 0:
         return
 

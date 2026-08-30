@@ -84,17 +84,13 @@ class AlpacaClient:
         return None
 
     def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
-        # Alpaca requires fractional-qty orders to be DAY orders (rejects GTC).
-        # Since the buy-point scan re-syncs this order every few minutes during
-        # market hours anyway, a fresh DAY order each session behaves like a
-        # standing one in practice while still allowing exact budget sizing.
         return self._post("/orders", {
             "symbol": symbol,
             "qty": qty,
             "side": "buy" if side == "long" else "sell",
             "type": "limit",
             "limit_price": f"{limit_price:.2f}",
-            "time_in_force": "day",
+            "time_in_force": "gtc",
         })
 
     def cancel_order(self, order_id: str) -> None:
