@@ -3,6 +3,7 @@ import json
 import os
 
 import streamlit as st
+import yfinance as yf
 
 from github_config import read_json_from_github, write_json_to_github
 
@@ -106,3 +107,31 @@ def save_ticker_lists(ticker_dict, username):
 
     with open(custom_file, 'w', encoding='utf-8') as f:
         json.dump(ticker_dict, f, ensure_ascii=False, indent=4)
+
+
+def search_tickers(query, max_results=8):
+    """Yahoo Finance'in kendi arama API'si (yf.Search) üzerinden şirket adı/sembole
+    göre hisse arar - hem ABD hem BIST hisselerini kapsar. Sonuçları
+    [{'symbol','name','exchange'}, ...] olarak döner, hata/sonuç yoksa boş liste."""
+    if not query or not query.strip():
+        return []
+    try:
+        matches = yf.Search(query.strip(), max_results=max_results).quotes or []
+    except Exception:
+        return []
+
+    results = []
+    for q in matches:
+        quote_type = q.get('quoteType', '')
+        if quote_type and quote_type != 'EQUITY':
+            continue
+        symbol = q.get('symbol')
+        if not symbol:
+            continue
+        name = q.get('shortname') or q.get('longname') or symbol
+        results.append({
+            "symbol": symbol,
+            "name": name,
+            "exchange": q.get('exchange', ''),
+        })
+    return results

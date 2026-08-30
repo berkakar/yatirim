@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import json
 import os
 
-from config import load_ticker_lists, save_ticker_lists, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
+from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import get_scanner_data
@@ -621,20 +621,42 @@ elif module == "⚙️ Hisse Listelerini Yönet":
 
     with col_add:
         st.subheader("➕ Yeni Hisse Ekle")
-        new_symbol = st.text_input("Hisse Sembolü (Örn: NVDA veya TUPRS):", "").upper().strip()
-        
-        if st.button("Listeye Ekle", type="primary"):
-            if new_symbol:
-                if selected_m == "BIST 100" and not new_symbol.endswith(".IS"):
-                    new_symbol += ".IS"
+        search_query = st.text_input(
+            "Şirket adı veya sembol yazıp Enter'a basın:", key="ticker_search_query"
+        )
 
-                if new_symbol in current_market_list:
-                    st.warning(f"⚠️ **{new_symbol}** zaten {selected_m} listesinde mevcut.")
-                else:
-                    st.session_state.ticker_lists[selected_m].append(new_symbol)
-                    save_ticker_lists(st.session_state.ticker_lists, username)
-                    st.success(f"✅ **{new_symbol}**, {selected_m} listesine eklendi ve kaydedildi!")
-                    st.rerun()
+        if "ticker_add_message" in st.session_state:
+            kind, msg = st.session_state.pop("ticker_add_message")
+            getattr(st, kind)(msg)
+
+        def _add_symbol(symbol, market):
+            if market == "BIST 100" and not symbol.endswith(".IS"):
+                symbol += ".IS"
+            if symbol in st.session_state.ticker_lists[market]:
+                st.session_state.ticker_add_message = ("warning", f"⚠️ **{symbol}** zaten {market} listesinde mevcut.")
+                return
+            st.session_state.ticker_lists[market].append(symbol)
+            save_ticker_lists(st.session_state.ticker_lists, username)
+            st.session_state.ticker_add_message = ("success", f"✅ **{symbol}**, {market} listesine eklendi ve kaydedildi!")
+            st.session_state.ticker_search_query = ""
+            st.session_state.pop("ticker_search_results", None)
+            st.session_state.pop("ticker_search_last_query", None)
+
+        if search_query and search_query.strip():
+            if st.session_state.get("ticker_search_last_query") != search_query:
+                st.session_state.ticker_search_results = search_tickers(search_query)
+                st.session_state.ticker_search_last_query = search_query
+
+            search_results = st.session_state.get("ticker_search_results", [])
+            if not search_results:
+                st.info("Eşleşen sonuç bulunamadı.")
+            else:
+                for r in search_results:
+                    label = f"{r['symbol']} — {r['name']}" + (f" ({r['exchange']})" if r['exchange'] else "")
+                    st.button(
+                        label, key=f"add_search_{r['symbol']}", use_container_width=True,
+                        on_click=_add_symbol, args=(r['symbol'], selected_m),
+                    )
 
     with col_del:
         st.subheader("🗑️ Hisse Çıkar")
