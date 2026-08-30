@@ -60,12 +60,15 @@ def detect_cup_and_handle(df, order=10, symmetry_threshold=0.05, depth_threshold
 
     return found
 
-def _find_shoulder_head_pattern(pivots, want_max, symmetry_threshold, min_head_prominence):
+def _find_shoulder_head_pattern(pivots, want_max, symmetry_threshold, min_head_prominence,
+                                 latest_date, max_age_days):
     """
     Ardışık 3 pivottan (sol omuz, baş, sağ omuz) oluşan formasyonu arar.
     want_max=True  -> baş, omuzlardan yüksek olmalı (OBO / tepe dönüş formasyonu).
     want_max=False -> baş, omuzlardan düşük olmalı (TOBO / dip dönüş formasyonu).
-    Aralıktaki en güncel geçerli formasyonu döner, yoksa None.
+    Sağ omuz, latest_date'ten en fazla max_age_days gün önce oluşmuş olmalı - aksi
+    halde formasyon güncel sayılmaz. Aralıktaki en güncel geçerli formasyonu döner,
+    yoksa None.
     """
     if len(pivots) < 3:
         return None
@@ -94,31 +97,43 @@ def _find_shoulder_head_pattern(pivots, want_max, symmetry_threshold, min_head_p
         if avg_shoulder <= 0 or abs(p_head - avg_shoulder) / avg_shoulder < min_head_prominence:
             continue
 
+        # Sağ omuz güncel olmalı - eski (tamamlanmış, artık aksiyon alınamayacak) bir
+        # formasyonu tarayıcıda göstermenin bir anlamı yok
+        age_days = (latest_date - pd.Timestamp(rs['Date'])).days
+        if age_days > max_age_days:
+            continue
+
         found = {'left_shoulder': ls, 'head': head, 'right_shoulder': rs}
 
     return found
 
 
-def detect_obo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15):
+def detect_obo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15, max_age_days=5):
     """
     Omuz-Baş-Omuz (Head & Shoulders) - tepe/dönüş formasyonu. Üç ardışık tepe pivotu;
     ortadaki (baş) diğer ikisinden (omuzlar) belirgin şekilde yüksek, omuzlar ise
-    birbirine yakın seviyede olmalı. Bulunursa {'left_shoulder','head','right_shoulder'}
-    dict döner, aksi halde None.
+    birbirine yakın seviyede olmalı; sağ omuz en fazla max_age_days gün önce oluşmuş
+    olmalı. Bulunursa {'left_shoulder','head','right_shoulder'} dict döner, aksi
+    halde None.
     """
     highs, _ = _find_pivots(df, order)
-    return _find_shoulder_head_pattern(highs, True, symmetry_threshold, min_head_prominence)
+    latest_date = pd.Timestamp(df['Date'].iloc[-1])
+    return _find_shoulder_head_pattern(highs, True, symmetry_threshold, min_head_prominence,
+                                        latest_date, max_age_days)
 
 
-def detect_tobo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15):
+def detect_tobo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15, max_age_days=5):
     """
     Ters Omuz-Baş-Omuz (Inverse Head & Shoulders) - dip/dönüş formasyonu. Üç ardışık
     dip pivotu; ortadaki (baş) diğer ikisinden belirgin şekilde düşük, omuzlar ise
-    birbirine yakın seviyede olmalı. Bulunursa {'left_shoulder','head','right_shoulder'}
-    dict döner, aksi halde None.
+    birbirine yakın seviyede olmalı; sağ omuz en fazla max_age_days gün önce oluşmuş
+    olmalı. Bulunursa {'left_shoulder','head','right_shoulder'} dict döner, aksi
+    halde None.
     """
     _, lows = _find_pivots(df, order)
-    return _find_shoulder_head_pattern(lows, False, symmetry_threshold, min_head_prominence)
+    latest_date = pd.Timestamp(df['Date'].iloc[-1])
+    return _find_shoulder_head_pattern(lows, False, symmetry_threshold, min_head_prominence,
+                                        latest_date, max_age_days)
 
 
 # ------------------------------------------------------------------------------
