@@ -5,6 +5,8 @@ import numpy as np
 import json
 import os
 
+from ui_style import zebra_style
+
 SUB_SECTOR_FILE = "sub_sectors.json"
 
 def load_sub_sectors():
@@ -285,4 +287,4 @@ def style_valuation_df(df):
 
         return style_df
 
-    return df.style.apply(apply_styles, axis=None)
+    return zebra_style(df, extra_style_fn=apply_styles)

@@ -8,6 +8,7 @@ import os
 
 from config import load_ticker_lists, save_ticker_lists, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
 from github_config import read_json_from_github, write_json_to_github
+from ui_style import zebra_style
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
 from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
@@ -459,7 +460,7 @@ elif module == "Stop Loss Hesaplayıcı":
         if results:
             df_res = pd.DataFrame(results)
             st.subheader("📊 Detaylı Stop Loss & EMA Analizi")
-            st.dataframe(df_res, use_container_width=True, hide_index=True)
+            st.dataframe(zebra_style(df_res), use_container_width=True, hide_index=True)
 
 # ==============================================================================
 # 4. MODÜL: DEĞERLEME & UCUZLUK SKORU (MİKRO İŞ MODELİ GRUPLAMALI)
@@ -776,7 +777,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                     tc1, tc2 = st.columns(2)
                     tc1.metric("📈 2 Günlük Yükseliş Trendinde", up_count)
                     tc2.metric("📉 2 Günlük Düşüş Trendinde", down_count)
-                    st.dataframe(df_filtered_self, use_container_width=True, hide_index=True)
+                    st.dataframe(zebra_style(df_filtered_self), use_container_width=True, hide_index=True)
                 else:
                     max_score = df_self["DTW Benzerlik Skoru %"].max() if not df_self.empty else 0
                     st.warning(f"⚠️ Seçtiğiniz **%{min_similarity}** eşik değerinin üzerinde öz-benzerlik gösteren hisse bulunamadı. (Bu veri setindeki en yüksek öz-benzerlik: **%{max_score}**).")

@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from alpaca_client import AlpacaClient
+from ui_style import zebra_style
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 HISTORY_DAYS = 30
@@ -95,7 +96,7 @@ def render_alpaca_dashboard(username):
                 "Stoptan Uzaklık %": round((current - stop_price) / current * 100, 2) if stop_price is not None else "—",
             })
 
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
 
     st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
@@ -111,5 +112,5 @@ def render_alpaca_dashboard(username):
         .sort_values("_sort_ts", ascending=False)
         .drop(columns=["_sort_ts"])
     )
-    st.dataframe(history_df, use_container_width=True, hide_index=True)
+    st.dataframe(zebra_style(history_df), use_container_width=True, hide_index=True)
     st.caption("Sütun başlıklarına tıklayarak sıralayabilirsiniz. Varsayılan sıralama: en yeni işlem en üstte. Kapanmış pozisyonlar da dahildir.")
