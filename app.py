@@ -11,7 +11,7 @@ from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import get_scanner_data
 from stoploss import get_stoploss_data
-from valuation import fetch_single_ticker_raw, calculate_sector_relative_scores, style_valuation_df
+from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
     fetch_and_cache_5m_data,
     compute_dtw_similarity,
@@ -487,19 +487,19 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         if not scan_list:
             st.warning("⚠️ Lütfen analiz etmek için en az bir hisse seçin.")
         else:
-            raw_results = []
             progress_bar = st.progress(0)
             status_text = st.empty()
 
-            for i, ticker in enumerate(scan_list):
-                status_text.text(f"Finansal veriler çekiliyor ({i+1}/{len(scan_list)}): {ticker}")
-                res = fetch_single_ticker_raw(ticker)
-                if res:
-                    raw_results.append(res)
-                progress_bar.progress((i + 1) / len(scan_list))
+            def _report_progress(done, total, ticker):
+                status_text.text(f"Veriler kontrol ediliyor ({done}/{total}): {ticker}")
+                progress_bar.progress(done / total)
+
+            raw_results, freshly_fetched = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
 
             status_text.empty()
             progress_bar.empty()
+            cached_count = len(scan_list) - len(freshly_fetched)
+            st.caption(f"💾 {cached_count} hisse paylaşımlı önbellekten kullanıldı, {len(freshly_fetched)} hisse Yahoo Finance'den yeniden çekildi.")
 
             # İş modeli alt sektör ortalamalarına ve 100 puanlık matrise göre skorla
             st.session_state.val_results = calculate_sector_relative_scores(raw_results)

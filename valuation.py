@@ -4,10 +4,20 @@ import pandas as pd
 import numpy as np
 import json
 import os
+import streamlit as st
+from datetime import date, datetime, timedelta, timezone
 
+from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 
 SUB_SECTOR_FILE = "sub_sectors.json"
+
+GITHUB_REPO = "berkakar/yatirim"
+VALUATION_CACHE_FILE = "valuation_cache.json"
+# Bir hissenin en son bilinen bilanço (mostRecentQuarter) tarihinden itibaren, yeni bir
+# çeyrek raporu beklenmeden önce en az bu kadar gün geçmiş olmalı (~1 çeyrek + şirketlerin
+# raporlama gecikmesi için tampon). Bu süre dolmadan aynı hisse tekrar çekilmez.
+QUARTER_REFRESH_BUFFER_DAYS = 100
 
 def load_sub_sectors():
     """sub_sectors.json dosyasından özel alt sektör haritasını yükler."""
@@ -89,6 +99,17 @@ def fetch_single_ticker_raw(ticker):
         if total_revenue and total_assets and total_assets > 0:
             asset_turnover = round(total_revenue / total_assets, 2)
 
+        # En son bilinen bilanço (çeyrek rapor) tarihi - paylaşımlı önbelleğin ne zaman
+        # yeniden çekim yapması gerektiğine karar vermesi için kullanılır (bkz.
+        # fetch_tickers_with_shared_cache).
+        most_recent_quarter = None
+        mrq_ts = info.get('mostRecentQuarter')
+        if mrq_ts:
+            try:
+                most_recent_quarter = datetime.fromtimestamp(mrq_ts, tz=timezone.utc).date().isoformat()
+            except Exception:
+                most_recent_quarter = None
+
         return {
             "Hisse": ticker,
             "Alt Sektör (İş Modeli)": alt_sek,
@@ -108,10 +129,107 @@ def fetch_single_ticker_raw(ticker):
             "Borç / Varlık %": debt_to_assets,
             "Cari Oran": current_ratio,
             "Likidite Oranı": quick_ratio,
-            "Varlık Devir Hızı": asset_turnover
+            "Varlık Devir Hızı": asset_turnover,
+            "_most_recent_quarter": most_recent_quarter
         }
     except Exception:
         return None
+
+
+def _load_valuation_cache():
+    """Paylaşımlı değerleme önbelleğini yükler - önce GitHub'daki (kalıcı, tüm
+    kullanıcıların paylaştığı) kopyayı, yoksa yerel dosyayı dener."""
+    data = None
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, VALUATION_CACHE_FILE, {})
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(VALUATION_CACHE_FILE):
+        try:
+            with open(VALUATION_CACHE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    return data or {}
+
+
+def _save_valuation_cache(cache):
+    """Güncellenmiş önbelleği kalıcı olması için GitHub'a commit'ler (mümkün
+    olduğunda), ayrıca yerel dosyaya da yazar."""
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, VALUATION_CACHE_FILE, cache, "Update valuation cache")
+        except Exception as e:
+            st.warning(f"⚠️ Değerleme önbelleği GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
+    with open(VALUATION_CACHE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
+def _needs_refresh(cache_entry):
+    """Bir hissenin önbellek kaydının yeniden çekilmesi gerekip gerekmediğine, sabit
+    bir süre (TTL) yerine en son bilinen bilanço (mostRecentQuarter) tarihine göre
+    karar verir: yeni bir çeyrek rapor beklenen tarihe kadar tekrar çekmez."""
+    if cache_entry is None:
+        return True
+    raw = cache_entry.get("raw")
+    if not raw:
+        return True
+    mrq = raw.get("_most_recent_quarter")
+    if not mrq:
+        return True
+    try:
+        mrq_date = date.fromisoformat(mrq)
+    except Exception:
+        return True
+    next_expected = mrq_date + timedelta(days=QUARTER_REFRESH_BUFFER_DAYS)
+    return date.today() >= next_expected
+
+
+def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
+    """Verilen hisseler için ham değerleme verilerini döner; mümkün olduğunca
+    paylaşımlı önbellekten yararlanarak gereksiz Yahoo Finance çağrılarını önler.
+
+    Bir hisse hiç çekilmediyse en az bir kere çekilir; daha sonra en son bilinen
+    bilanço tarihine göre yeni bir çeyrek rapor beklenmiyorsa tekrar çekilmez,
+    önbellekteki veri kullanılır. Tüm kullanıcılar aynı paylaşımlı JSON dosyasını
+    (GitHub üzerinden) okur/yazar, böylece bir kullanıcı için çekilen veri diğer
+    kullanıcılar tarafından da tekrar çekilmeden kullanılabilir.
+
+    Döner: (ham_veri_listesi, bu_çalıştırmada_yeniden_çekilen_hisseler)
+    """
+    cache = _load_valuation_cache()
+    results = []
+    freshly_fetched = []
+    cache_changed = False
+
+    for i, ticker in enumerate(ticker_list):
+        entry = cache.get(ticker)
+        if _needs_refresh(entry):
+            raw = fetch_single_ticker_raw(ticker)
+            if raw:
+                cache[ticker] = {"raw": raw, "cached_at": date.today().isoformat()}
+                cache_changed = True
+                freshly_fetched.append(ticker)
+                results.append(raw)
+            elif entry:
+                # Yeniden çekim başarısız oldu (ör. geçici ağ hatası) - eski veriyi kullanmaya devam et
+                results.append(entry["raw"])
+        else:
+            results.append(entry["raw"])
+
+        if progress_callback:
+            progress_callback(i + 1, len(ticker_list), ticker)
+
+    if cache_changed:
+        _save_valuation_cache(cache)
+
+    return results, freshly_fetched
 
 
 def calculate_sector_relative_scores(raw_data_list):
