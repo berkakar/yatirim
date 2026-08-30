@@ -17,18 +17,21 @@ def _find_pivots(df, order=10):
     return highs, lows
 
 
-def detect_cup_and_handle(df, order=10, symmetry_threshold=0.05, depth_threshold=0.2, handle_window_days=30):
+def detect_cup_and_handle(df, order=10, symmetry_threshold=0.05, depth_threshold=0.2, handle_window_days=30, max_age_days=5):
     """
     Klasik fincan-kulp formasyonu: A (sol tepe) -> B (fincan dibi) -> C (sağ tepe,
     A'ya yakın seviyede) -> D (C'den sonraki ~30 gün içindeki kulp dibi, fincanın
-    alt yarısını aşmayan sığ bir geri çekilme). Aralıktaki en güncel geçerli
-    formasyonu {'A','B','C','D'} dict olarak döner, bulunamazsa None.
+    alt yarısını aşmayan sığ bir geri çekilme). D (formasyonun en güncel noktası)
+    veri setindeki son günden en fazla max_age_days gün önce oluşmuş olmalı - aksi
+    halde formasyon güncel sayılmaz. Aralıktaki en güncel geçerli formasyonu
+    {'A','B','C','D'} dict olarak döner, bulunamazsa None.
     """
     highs, lows = _find_pivots(df, order)
 
     if len(highs) < 2 or lows.empty:
         return None
 
+    latest_date = pd.Timestamp(df['Date'].iloc[-1])
     found = None
     for i in range(len(highs) - 1):
         peak_A, peak_C = highs.iloc[i], highs.iloc[i + 1]
@@ -55,8 +58,16 @@ def detect_cup_and_handle(df, order=10, symmetry_threshold=0.05, depth_threshold
         price_D = float(dip_D['Close'])
 
         mid_depth = price_A - (price_A - price_B) * 0.5
-        if mid_depth < price_D < price_C:
-            found = {'A': peak_A, 'B': dip_B, 'C': peak_C, 'D': dip_D}
+        if not (mid_depth < price_D < price_C):
+            continue
+
+        # Kulp dibi (D) güncel olmalı - eski (tamamlanmış) bir formasyonu
+        # tarayıcıda göstermenin bir anlamı yok
+        age_days = (latest_date - pd.Timestamp(dip_D['Date'])).days
+        if age_days > max_age_days:
+            continue
+
+        found = {'A': peak_A, 'B': dip_B, 'C': peak_C, 'D': dip_D}
 
     return found
 
