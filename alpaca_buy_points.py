@@ -3,16 +3,17 @@ Premium buy-point scanner for the user's watchlist portfolio.
 
 Reads the "premium-buy-portfolio" Alpaca watchlist for symbols and
 portfolio_config.json (committed to this repo by the Streamlit page - see
-github_config.py) for the total budget and each symbol's weight. For
-every watchlisted symbol without an already-open position, finds the
-most recent still-valid demand zone (see demand_zones.py) and keeps a
-resting GTC limit buy order at the zone's top - placing it if none
-exists, updating it if the zone has moved, canceling it if the zone is
-no longer valid. The actual fill happens on Alpaca's side whenever price
-reaches the order, independent of how often this script runs - polling
-here only keeps the order in sync with the current zone, it doesn't need
-to catch the fill itself (unlike a market-order-on-poll approach, which
-can only react at whatever moment it happens to check).
+github_config.py) for the total budget, each symbol's weight, and which
+buy-point algorithm (see buy_algorithms.py) is active - the same single
+choice applies to every symbol. For every watchlisted symbol without an
+already-open position, runs that algorithm and keeps a resting GTC limit
+buy order at its price - placing it if none exists, updating it if the
+signal has moved, canceling it if there's no longer a valid signal. The
+actual fill happens on Alpaca's side whenever price reaches the order,
+independent of how often this script runs - polling here only keeps the
+order in sync with the current signal, it doesn't need to catch the fill
+itself (unlike a market-order-on-poll approach, which can only react at
+whatever moment it happens to check).
 
 Run with --once (used by the GitHub Actions workflow, as an earlier step
 than the trailing-stop pass, so a fresh fill gets its initial stop
@@ -29,7 +30,7 @@ from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME, log
-from demand_zones import find_buy_point
+from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 
 load_dotenv()
 
@@ -40,9 +41,7 @@ WATCHLIST_NAME = "premium-buy-portfolio-berkakar"
 CONFIG_PATH = "portfolio_config_berkakar.json"
 
 LOOKBACK_DAYS = int(os.environ.get("BUY_LOOKBACK_DAYS", "60"))
-IMPULSE_PCT = float(os.environ.get("BUY_IMPULSE_PCT", "3")) / 100
-IMPULSE_BARS = int(os.environ.get("BUY_IMPULSE_BARS", "3"))
-MAX_TAPS = int(os.environ.get("BUY_MAX_TAPS", "2"))
+DAILY_LOOKBACK_DAYS = int(os.environ.get("BUY_DAILY_LOOKBACK_DAYS", "400"))
 
 
 def load_local_config() -> dict:
@@ -52,7 +51,7 @@ def load_local_config() -> dict:
         return json.load(f)
 
 
-def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float) -> None:
+def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str) -> None:
     existing_order = client.get_open_limit_buy_order(symbol)
 
     if client.get_position(symbol) is not None:
@@ -66,40 +65,44 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     if not bars:
         return
 
-    zone = find_buy_point(bars, IMPULSE_PCT, IMPULSE_BARS, MAX_TAPS)
+    daily_closes = None
+    if algorithm == "trend_pullback":
+        daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
+        try:
+            daily_closes = [b["c"] for b in client.get_raw_bars(symbol, "1Day", daily_start.isoformat())]
+        except Exception:
+            daily_closes = []
 
-    if zone is not None:
+    _, algo_fn = ALGORITHMS[algorithm]
+    signal = algo_fn(bars, daily_closes)
+
+    if signal is not None:
         try:
             live_price = client.get_latest_trade_price(symbol)
         except Exception:
             live_price = None
         if live_price is None:
             live_price = bars[-1].c
-        if zone.top >= live_price:
-            # A zone at or above the current price isn't a pullback target -
-            # a limit buy there would be marketable (fills near live_price
-            # instead of the intended discount). Treat it the same as no
-            # zone at all rather than ever placing an aggressive order.
-            zone = None
+        signal = reject_if_marketable(signal, live_price)
 
-    if zone is None:
+    if signal is None:
         if existing_order is not None:
             client.cancel_order(existing_order["id"])
-            log(f"{symbol}: no valid pullback zone below current price, canceled resting buy-limit order.")
+            log(f"{symbol}: no valid buy signal ({algorithm}), canceled resting buy-limit order.")
         return
 
     dollar_amount = budget * (weight_pct / 100)
     if dollar_amount <= 0:
         return
 
-    target_price = round(zone.top, 2)
+    target_price = signal.price
     target_qty = math.floor(dollar_amount / target_price)
     if target_qty <= 0:
         return
 
     if existing_order is None:
         order = client.place_limit_entry(symbol, target_qty, "long", target_price)
-        log(f"{symbol}: placed buy-limit at {target_price:.2f} (zone top), qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
+        log(f"{symbol}: placed buy-limit at {target_price:.2f} ({signal.reason}), qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
         return
 
     current_price = float(existing_order["limit_price"])
@@ -113,7 +116,7 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     client.cancel_order(existing_order["id"])
     order = client.place_limit_entry(symbol, target_qty, "long", target_price)
     log(f"{symbol}: updated buy-limit {current_price:.2f} -> {target_price:.2f} "
-        f"(zone changed). new order {order['id']}.")
+        f"({signal.reason}). new order {order['id']}.")
 
 
 def run_once(client: AlpacaClient) -> None:
@@ -130,10 +133,13 @@ def run_once(client: AlpacaClient) -> None:
     config = load_local_config()
     budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
+    algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
+    if algorithm not in ALGORITHMS:
+        algorithm = DEFAULT_ALGORITHM
 
     for asset in watchlist["assets"]:
         symbol = asset["symbol"]
-        check_symbol(client, symbol, float(weights.get(symbol, 0)), budget)
+        check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm)
 
 
 def build_client() -> AlpacaClient:
