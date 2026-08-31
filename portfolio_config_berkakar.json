@@ -1,7 +1,9 @@
 {
   "budget": 10000.0,
   "weights": {
-    "AAPL": 50.0,
-    "MSFT": 50.0
-  }
+    "AMZN": 33.33,
+    "NVDA": 33.33,
+    "INTC": 33.33
+  },
+  "algorithm": "trend_pullback"
 }
