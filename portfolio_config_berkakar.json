@@ -5,5 +5,5 @@
     "NVDA": 33.33,
     "INTC": 33.33
   },
-  "algorithm": "trend_pullback"
+  "algorithm": "demand_zone"
 }
