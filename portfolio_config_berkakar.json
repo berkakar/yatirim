@@ -1,9 +1,14 @@
 {
   "budget": 10000.0,
   "weights": {
-    "AMZN": 33.33,
-    "NVDA": 33.33,
-    "INTC": 33.33
+    "AMZN": 12.0,
+    "NVDA": 12.0,
+    "INTC": 12.0,
+    "MU": 12.5,
+    "NXPI": 12.5,
+    "NOW": 12.5,
+    "TTWO": 12.5,
+    "SKHY": 12.5
   },
   "algorithm": "demand_zone"
 }
