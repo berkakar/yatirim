@@ -97,7 +97,7 @@ def render_alpaca_dashboard(username):
             })
 
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
-        st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
+        st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
 
     st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
 

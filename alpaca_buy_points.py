@@ -61,7 +61,7 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
         return
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start)
+    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start, exclude_forming=True)
     if not bars:
         return
 
