@@ -83,15 +83,19 @@ class AlpacaClient:
                 return order
         return None
 
-    def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
-        return self._post("/orders", {
+    def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float,
+                           client_order_id: str | None = None) -> dict:
+        payload = {
             "symbol": symbol,
             "qty": qty,
             "side": "buy" if side == "long" else "sell",
             "type": "limit",
             "limit_price": f"{limit_price:.2f}",
             "time_in_force": "gtc",
-        })
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
 
     def cancel_order(self, order_id: str) -> None:
         r = requests.delete(f"{self.trading_url}/orders/{order_id}", headers=self.headers)

@@ -100,8 +100,13 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     if target_qty <= 0:
         return
 
+    # Tags the order with which algorithm produced it (parsed back out in
+    # alpaca_dashboard.py's history table) - "algo-<id>-<symbol>-<epoch>",
+    # dash-separated since algorithm ids use underscores.
+    client_order_id = f"algo-{algorithm}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
+
     if existing_order is None:
-        order = client.place_limit_entry(symbol, target_qty, "long", target_price)
+        order = client.place_limit_entry(symbol, target_qty, "long", target_price, client_order_id=client_order_id)
         log(f"{symbol}: placed buy-limit at {target_price:.2f} ({signal.reason}), qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
         return
 
@@ -114,7 +119,7 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     # must be an integer") - cancel and re-place instead, which works for
     # both fractional and whole-share quantities.
     client.cancel_order(existing_order["id"])
-    order = client.place_limit_entry(symbol, target_qty, "long", target_price)
+    order = client.place_limit_entry(symbol, target_qty, "long", target_price, client_order_id=client_order_id)
     log(f"{symbol}: updated buy-limit {current_price:.2f} -> {target_price:.2f} "
         f"({signal.reason}). new order {order['id']}.")
 
