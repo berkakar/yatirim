@@ -23,6 +23,7 @@ from dtw_analysis import (
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard
 from premium_buy_portfolio import render_premium_buy_portfolio
+from tefas_fonlari import render_turk_fonlari
 
 NAV_HOME = "🏠 Özet"
 MODULE_GROUPS = {
@@ -34,6 +35,7 @@ MODULE_GROUPS = {
         "📊 Bağımsız Hisse Grafiği",
     ],
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
+    "🇹🇷 Türk Fonları": ["Türk Fonları"],
     "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
@@ -42,6 +44,7 @@ MODULE_DISPLAY = {
     "Fincan-Kulp Tarayıcı": "🔍 Fincan-Kulp Tarayıcı",
     "OBO & TOBO Tarayıcı": "📉 OBO & TOBO Tarayıcı",
     "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
+    "Türk Fonları": "🇹🇷 Türk Fonları",
 }
 
 def _save_file(username):
@@ -910,3 +913,11 @@ elif module == "🎯 Premium Buy Point Portföyü":
     st.header("🎯 Premium Buy Point Portföyü")
     st.caption("Seçtiğiniz hisseler için demand zone (premium buy point) taranır; fiyat zone'a girdiğinde otomatik alım yapılır.")
     render_premium_buy_portfolio(target_list, username)
+
+# ==============================================================================
+# 10. MODÜL: TÜRK FONLARI
+# ==============================================================================
+elif module == "Türk Fonları":
+    st.header("🇹🇷 Türk Fonları")
+    st.caption("TEFAS'tan günlük çekilen Hisse Senedi Yoğun, Değişken, Mutlak Getiri ve İstatistiksel Arbitraj fonlarının fiyat/hacim değişim tablosu.")
+    render_turk_fonlari()
