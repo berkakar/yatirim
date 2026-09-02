@@ -29,6 +29,7 @@ between passes and until the market reopens.
 
 import argparse
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -68,7 +69,20 @@ def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
 
-def get_regular_hours_bars(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
+_TIMEFRAME_UNITS = {"Min": timedelta(minutes=1), "Hour": timedelta(hours=1), "Day": timedelta(days=1)}
+
+
+def _timeframe_duration(timeframe: str) -> timedelta:
+    match = re.match(r"^(\d+)(Min|Hour|Day)$", timeframe)
+    if not match:
+        raise ValueError(f"Unrecognized timeframe: {timeframe!r}")
+    n, unit = match.groups()
+    return int(n) * _TIMEFRAME_UNITS[unit]
+
+
+def get_regular_hours_bars(
+    client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
+) -> list[Bar]:
     raw_bars = client.get_raw_bars(symbol, timeframe, start.isoformat())
 
     bars = []
@@ -79,6 +93,12 @@ def get_regular_hours_bars(client: AlpacaClient, symbol: str, timeframe: str, st
         if not (9, 30) <= (ts.hour, ts.minute) < (16, 0):
             continue
         bars.append(Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]))
+
+    if exclude_forming and bars:
+        last_start = _parse_iso(bars[-1].t)
+        if last_start + _timeframe_duration(timeframe) > datetime.now(timezone.utc):
+            bars.pop()  # still-forming bar - buy-point signals shouldn't chase intra-bar noise
+
     return bars
 
 

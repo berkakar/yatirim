@@ -22,7 +22,7 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str], ac
     daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
     rows = []
     for symbol in current_symbols:
-        bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start)
+        bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start, exclude_forming=True)
         if not bars:
             continue
         try:
@@ -55,7 +55,7 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str], ac
         f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
         f"Her sütun ilgili algoritmanın ürettiği fiyatı gösterir (\"—\" = sinyal yok). "
         f"'Kullanılacak Fiyat', aşağıda seçtiğiniz algoritmanın ({ALGORITHMS[active_algorithm][0]}) sonucudur - "
-        "gerçek alım GitHub Action tarafından yarım saatlik taramada bu fiyat/algoritma ile yapılır."
+        "gerçek alım GitHub Action tarafından 5 dakikalık taramada bu fiyat/algoritma ile yapılır."
     )
 
 

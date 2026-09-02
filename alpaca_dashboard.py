@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from alpaca_client import AlpacaClient
+from buy_algorithms import ALGORITHMS
 from ui_style import zebra_style
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -40,6 +41,19 @@ def _order_price(order: dict) -> float | None:
     return None
 
 
+def _algorithm_label(order: dict) -> str:
+    """alpaca_buy_points.py tags buy-limit entries with client_order_id
+    "algo-<algorithm_id>-<symbol>-<epoch>" so historical orders stay
+    attributed to whichever algorithm was active when each was placed, even
+    after the portfolio's active algorithm later changes. Orders placed
+    before this tagging existed, or not a tagged buy-limit entry, show "—"."""
+    parts = (order.get("client_order_id") or "").split("-")
+    if len(parts) != 4 or parts[0] != "algo":
+        return "—"
+    algo = ALGORITHMS.get(parts[1])
+    return algo[0] if algo else "—"
+
+
 def format_order_row(order: dict) -> dict:
     created = _to_tr_time(order["created_at"])
     price = _order_price(order)
@@ -56,6 +70,7 @@ def format_order_row(order: dict) -> dict:
         "Tarih (TRT)": created.strftime("%d.%m.%Y %H:%M:%S"),
         "Hisse": order["symbol"],
         "Tip": TYPE_TR.get(order["type"], order["type"]),
+        "Algoritma": _algorithm_label(order),
         "Yön": "Satış" if order["side"] == "sell" else "Alış",
         "Fiyat": round(price, 2) if price is not None else "—",
         "Adet/Tutar": amount,
@@ -97,7 +112,7 @@ def render_alpaca_dashboard(username):
             })
 
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
-        st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından yarım saatte bir güncellenir.")
+        st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
 
     st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
 
