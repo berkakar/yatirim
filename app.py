@@ -923,7 +923,7 @@ elif module == "🎯 Premium Buy Point Portföyü":
 elif module == "Türk Fonları":
     st.header("🇹🇷 Türk Fonları")
     st.caption("TEFAS'tan günlük çekilen Hisse Senedi Yoğun, Değişken, Mutlak Getiri ve İstatistiksel Arbitraj fonlarının fiyat/hacim değişim tablosu.")
-    render_turk_fonlari()
+    render_turk_fonlari(username)
 
 # ==============================================================================
 # 11. MODÜL: BACKTEST

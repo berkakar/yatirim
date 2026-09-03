@@ -10,3 +10,4 @@ requests
 python-dotenv
 truststore
 tzdata
+pdfplumber

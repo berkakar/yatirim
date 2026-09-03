@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
+from kap_fund_holdings import render_kap_holdings
 from tefas_fonlari_data import CACHE_FILE, FUND_CATEGORIES, LOOKBACK_WINDOWS, load_cache
 from ui_style import zebra_style
 
@@ -71,7 +72,7 @@ def _build_column_config() -> dict:
     return config
 
 
-def render_turk_fonlari():
+def render_turk_fonlari(username: str):
     st.caption(
         "Kategori, fon unvanındaki anahtar kelimelere göre otomatik belirlenir. "
         "Veriler günde 1 kez, TEFAS fiyatlarını tamamladıktan 10 dakika sonra "
@@ -123,3 +124,6 @@ def render_turk_fonlari():
         use_container_width=True,
         hide_index=True,
     )
+
+    st.divider()
+    render_kap_holdings(username)
