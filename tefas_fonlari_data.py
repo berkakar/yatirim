@@ -73,6 +73,7 @@ def _merge_rows(funds: dict, rows: list[dict]) -> None:
             continue
         day = str(raw_date)[:10]  # TEFAS "2026-09-02T00:00:00" -> "2026-09-02"
         size = row.get("portfolio_size")
+        shares = row.get("shares_outstanding")
 
         entry = funds.setdefault(code, {"fund_name": row.get("fund_name") or "", "history": {}})
         if row.get("fund_name"):
@@ -80,6 +81,7 @@ def _merge_rows(funds: dict, rows: list[dict]) -> None:
         entry["history"][day] = {
             "price": float(price),
             "portfolio_size": float(size) if size is not None else None,
+            "shares_outstanding": float(shares) if shares is not None else None,
         }
 
 
@@ -92,6 +94,16 @@ def _pct_change(new: float | None, old: float | None) -> float | None:
     if new is None or old is None or old == 0:
         return None
     return round((new - old) / old * 100, 2)
+
+
+def _net_flow(today_shares: float | None, prev_shares: float | None, today_price: float | None) -> float | None:
+    """Net Para Girişi/Çıkışı = (bugünkü pay sayısı - dünkü pay sayısı) ×
+    bugünkü fiyat. Tedavüldeki pay sayısı artıyorsa yeni pay çıkarılıp
+    satılıyor demektir (paraya çevrilince pozitif = net giriş); azalıyorsa
+    pay geri alınıyor demektir (negatif = net çıkış)."""
+    if today_shares is None or prev_shares is None or today_price is None:
+        return None
+    return round((today_shares - prev_shares) * today_price, 2)
 
 
 def _build_table(funds: dict) -> list[dict]:
@@ -114,6 +126,9 @@ def _build_table(funds: dict) -> list[dict]:
             "Tarih": dates[-1],
             "Önceki Gün Fiyat": round(prev["price"], 4),
             "Bugünkü Fiyat": round(today["price"], 4),
+            "Net Para Girişi/Çıkışı": _net_flow(
+                today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"],
+            ),
         }
         for window in LOOKBACK_WINDOWS:
             if len(series) > window:
