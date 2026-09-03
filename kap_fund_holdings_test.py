@@ -1,100 +1,92 @@
-"""Geçici manuel doğrulama scripti - bilinen gerçek "Portföy Dağılım Raporu"
-bildirim ID'lerini (WebSearch ile bulunan) doğrudan sorgulayıp KAP'ın gerçek
-veri şeklini keşfetmek için. Bu depoda kalıcı bir özellik değil; doğrulama
-sonrası kap_test.yml ile birlikte kaldırılacak.
+"""Geçici manuel doğrulama scripti - önceki turda gerçek "Portföy Dağılım
+Raporu" tablosunun file/download eki üzerinden başarıyla okunduğu doğrulandı.
+Bu turda: (1) o bildirimin mkkMemberOid'ini çıkarıp o OID'e göre scoped
+byCriteria araması gerçekten çalışıyor mu test ediyor, (2) kritik alanları
+log'un SONUNDA kompakt biçimde yazdırıyor (önceki turlarda dev PDF tablo
+dökümleri yüzünden log tail'i JSON'u kesiyordu).
 """
-import glob
 import json
-import struct
+from datetime import date, timedelta
 
-import pdfplumber
 import requests
 
 DETAIL_URL = "https://www.kap.org.tr/tr/api/notification/attachment-detail/{idx}"
-FILE_DOWNLOAD_URL = "https://www.kap.org.tr/tr/api/file/download/{obj_id}"
-BILDIRIM_PDF_URL = "https://www.kap.org.tr/en/api/BildirimPdf/{idx}"
+BY_CRITERIA_URL = "https://www.kap.org.tr/tr/api/disclosure/members/byCriteria"
+MEMBER_FILTER_URL = "https://www.kap.org.tr/tr/api/member/filter/{code}"
 
-# WebSearch ile bulunan gerçek örnekler:
-#  - kap.org.tr/tr/Bildirim/1473544  "kya fon portföy dağılım raporu temmuz 2025"
-#  - kap.org.tr/en/api/BildirimPdf/1247775  "Portföy Dağılım Raporu İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU"
 KNOWN_IDS = [1473544, 1247775]
+summary_lines = []
 
 
-def unwrap_java_bytes(raw: bytes) -> bytes | None:
-    if raw[:4] != b"\xac\xed\x00\x05":
-        return None
-    try:
-        i = raw.index(b"\x78\x70", 10)
-        arr_len = struct.unpack(">I", raw[i + 2:i + 6])[0]
-        return raw[i + 6:i + 6 + arr_len]
-    except Exception as e:
-        print(f"Java unwrap failed: {e}")
-        return None
+def log(line: str):
+    print(line)
+    summary_lines.append(line)
 
 
 for idx in KNOWN_IDS:
-    print(f"\n{'=' * 60}\nDETAIL for disclosureIndex={idx}\n{'=' * 60}")
+    log(f"\n### idx={idx} ###")
     r = requests.get(DETAIL_URL.format(idx=idx), timeout=20)
-    print(f"status: {r.status_code}")
+    log(f"detail status: {r.status_code}")
     if not r.ok:
-        print(r.text[:500])
         continue
-
     detail = r.json()
-    print(json.dumps(detail, ensure_ascii=False)[:4000])
-
     if not (isinstance(detail, list) and detail):
+        log(f"unexpected detail shape: {type(detail)}")
         continue
     entry = detail[0]
-
-    body = entry.get("disclosureBody")
-    if body:
-        joined = " ".join(body) if isinstance(body, list) else str(body)
-        print(f"\ndisclosureBody length: {len(joined)} chars, first 2000:")
-        print(joined[:2000])
-
+    disclosure = entry.get("disclosure") or entry
+    basic = disclosure.get("disclosureBasic") or {}
+    det = disclosure.get("disclosureDetail") or {}
+    log(f"basic.title={basic.get('title')!r}")
+    log(f"basic.companyTitle={basic.get('companyTitle')!r}")
+    log(f"basic.mkkMemberOid={basic.get('mkkMemberOid')!r}")
+    log(f"basic.disclosureId={basic.get('disclosureId')!r}")
+    log(f"basic.publishDate={basic.get('publishDate')!r}")
+    log(f"basic.fundType={basic.get('fundType')!r}")
+    log(f"basic.stockCode={basic.get('stockCode')!r}")
+    log(f"det.fundOid={det.get('fundOid')!r}")
+    log(f"det.memberType={det.get('memberType')!r}")
     attachments = entry.get("attachments") or []
-    print(f"\nattachments: {attachments}")
-    for att in attachments:
-        obj_id = att.get("objId")
-        if not obj_id:
-            continue
-        file_r = requests.get(FILE_DOWNLOAD_URL.format(obj_id=obj_id), timeout=30)
-        print(f"file/download status for {obj_id}: {file_r.status_code}, {len(file_r.content)} bytes, "
-              f"starts with: {file_r.content[:20]!r}")
-        raw = file_r.content
-        pdf_bytes = unwrap_java_bytes(raw) if raw[:4] != b"%PDF" else raw
-        if pdf_bytes:
-            print(f"PDF bytes: {len(pdf_bytes)}, starts with {pdf_bytes[:10]!r}")
-            path = f"/tmp/kap_test_{idx}_{obj_id}.pdf"
-            with open(path, "wb") as f:
-                f.write(pdf_bytes)
-            print(f"Saved to {path}")
+    log(f"attachments={json.dumps(attachments, ensure_ascii=False)}")
 
-    pdf_r = requests.get(BILDIRIM_PDF_URL.format(idx=idx), timeout=30)
-    print(f"\nBildirimPdf status: {pdf_r.status_code}, {len(pdf_r.content)} bytes, "
-          f"starts with {pdf_r.content[:10]!r}")
-    if pdf_r.ok and pdf_r.content[:4] == b"%PDF":
-        path = f"/tmp/kap_test_bildirimpdf_{idx}.pdf"
-        with open(path, "wb") as f:
-            f.write(pdf_r.content)
-        print(f"Saved to {path}")
+    # Try member/filter with the fund's own title words / oid, and try
+    # byCriteria scoped to this exact mkkMemberOid over a window covering
+    # the known publish date, to see whether OID-scoped search finds it
+    # (isolating: is search broken in general, or just full-text/fundCode
+    # matching on an unscoped query?).
+    oid = basic.get("mkkMemberOid")
+    if oid:
+        pub = basic.get("publishDate") or ""
+        try:
+            pub_date = date(int(pub[:4]), int(pub[5:7]), int(pub[8:10])) if pub[:4].isdigit() else date.today()
+        except Exception:
+            pub_date = date.today()
+        start = pub_date - timedelta(days=10)
+        end = pub_date + timedelta(days=10)
+        payload = {
+            "fromDate": start.strftime("%Y-%m-%d"),
+            "toDate": end.strftime("%Y-%m-%d"),
+            "mkkMemberOidList": [oid],
+            "subjectList": [],
+        }
+        br = requests.post(BY_CRITERIA_URL, json=payload, timeout=20)
+        log(f"byCriteria scoped to mkkMemberOid={oid} [{start}..{end}]: status={br.status_code}")
+        if br.ok:
+            items = br.json()
+            log(f"  -> {len(items)} disclosures found")
+            for it in items[:10]:
+                log(f"     idx={it.get('disclosureIndex')} kapTitle={it.get('kapTitle')!r} "
+                    f"summary={it.get('summary')!r} subject={it.get('subject')!r} "
+                    f"fundCode={it.get('fundCode')!r} publishDate={it.get('publishDate')!r}")
 
-print(f"\n{'=' * 60}\nInspecting all saved PDFs\n{'=' * 60}")
-for path in sorted(glob.glob("/tmp/kap_test_*.pdf")):
-    print(f"\n--- {path} ---")
-    try:
-        with pdfplumber.open(path) as pdf:
-            print(f"pages: {len(pdf.pages)}")
-            for pi, page in enumerate(pdf.pages):
-                text = page.extract_text() or ""
-                print(f"page {pi} text (first 1200 chars):")
-                print(text[:1200])
-                tables = page.extract_tables() or []
-                print(f"page {pi}: {len(tables)} table(s)")
-                for ti, table in enumerate(tables):
-                    print(f"table {ti} ({len(table)} rows):")
-                    for row in table[:15]:
-                        print(row)
-    except Exception as e:
-        print(f"pdfplumber failed: {e}")
+    # Try member/filter using the fund's companyTitle as a naive guess (KAP's
+    # filter may do substring match on title, not just ticker).
+    company_title = basic.get("companyTitle") or ""
+    first_word = company_title.split()[0] if company_title else ""
+    if first_word:
+        mr = requests.get(MEMBER_FILTER_URL.format(code=first_word), timeout=15)
+        log(f"member/filter({first_word!r}): status={mr.status_code}, body[:300]={mr.text[:300]!r}")
+
+log("\n### SUMMARY (compact, should survive tail truncation) ###")
+for line in summary_lines:
+    print(f"SUMMARY| {line}")
