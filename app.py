@@ -24,6 +24,7 @@ from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard
 from premium_buy_portfolio import render_premium_buy_portfolio
 from tefas_fonlari import render_turk_fonlari
+from backtest import render_backtest
 
 NAV_HOME = "🏠 Özet"
 MODULE_GROUPS = {
@@ -37,6 +38,7 @@ MODULE_GROUPS = {
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
     "🇹🇷 Türk Fonları": ["Türk Fonları"],
     "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
+    "🧪 BackTest": ["BackTest"],
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
 # değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
@@ -45,6 +47,7 @@ MODULE_DISPLAY = {
     "OBO & TOBO Tarayıcı": "📉 OBO & TOBO Tarayıcı",
     "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
     "Türk Fonları": "🇹🇷 Türk Fonları",
+    "BackTest": "🧪 BackTest",
 }
 
 def _save_file(username):
@@ -921,3 +924,11 @@ elif module == "Türk Fonları":
     st.header("🇹🇷 Türk Fonları")
     st.caption("TEFAS'tan günlük çekilen Hisse Senedi Yoğun, Değişken, Mutlak Getiri ve İstatistiksel Arbitraj fonlarının fiyat/hacim değişim tablosu.")
     render_turk_fonlari()
+
+# ==============================================================================
+# 11. MODÜL: BACKTEST
+# ==============================================================================
+elif module == "BackTest":
+    st.header("🧪 BackTest")
+    st.caption("Premium buy-point algoritmalarını ve Alpaca'daki structure-based trailing stop'u seçtiğiniz hisse üzerinde geçmiş veriyle yeniden oynatır.")
+    render_backtest(target_list, username)
