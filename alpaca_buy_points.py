@@ -165,7 +165,16 @@ def run_once(client: AlpacaClient) -> None:
 
     for asset in watchlist["assets"]:
         symbol = asset["symbol"]
-        check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm)
+        try:
+            check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm)
+        except Exception as e:
+            # One symbol's order getting rejected (or any other failure) must
+            # never take the rest of the watchlist down with it - and, since
+            # this script's --once run shares a job with alpaca_trailing_stop.py
+            # (the next step, only reached if this one exits 0), letting an
+            # exception escape here would silently cancel stop-loss management
+            # for every open position too.
+            log(f"{symbol}: check_symbol failed, skipping this symbol this run: {e}")
 
 
 def build_client() -> AlpacaClient:

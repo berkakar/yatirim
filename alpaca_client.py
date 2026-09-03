@@ -33,12 +33,19 @@ class AlpacaClient:
 
     def _post(self, path: str, json: dict) -> dict:
         r = requests.post(f"{self.trading_url}{path}", headers=self.headers, json=json)
-        r.raise_for_status()
+        if not r.ok:
+            # Alpaca's actual rejection reason lives in the response body (e.g.
+            # {"code":..., "message":...}) - raise_for_status() alone discards it,
+            # which made a real 422 (wrong order_class for a stop-only bracket)
+            # show up in GitHub Actions logs as just "Unprocessable Entity" with
+            # no way to tell why.
+            raise requests.HTTPError(f"{r.status_code} {r.reason} for url {r.url}: {r.text}", response=r)
         return r.json()
 
     def _patch(self, path: str, json: dict) -> dict:
         r = requests.patch(f"{self.trading_url}{path}", headers=self.headers, json=json)
-        r.raise_for_status()
+        if not r.ok:
+            raise requests.HTTPError(f"{r.status_code} {r.reason} for url {r.url}: {r.text}", response=r)
         return r.json()
 
     def get_clock(self) -> dict:
@@ -96,11 +103,16 @@ class AlpacaClient:
         if client_order_id is not None:
             payload["client_order_id"] = client_order_id
         if stop_loss_price is not None:
-            # Bracket order: Alpaca attaches the stop-loss leg server-side and
-            # activates it the instant the entry fills - protection exists from
-            # the first tick, independent of how promptly (or not) a polling
-            # script like alpaca_trailing_stop.py next happens to run.
-            payload["order_class"] = "bracket"
+            # "oto" (one-triggers-other): entry + exactly one contingent leg.
+            # Alpaca's "bracket" class requires BOTH take_profit and stop_loss
+            # together and rejects a stop-only order with 422 - we only ever
+            # want the stop leg (this system trails the stop rather than
+            # capping gains with a fixed take-profit). Alpaca attaches the
+            # stop-loss leg server-side and activates it the instant the entry
+            # fills - protection exists from the first tick, independent of
+            # how promptly (or not) a polling script like alpaca_trailing_stop.py
+            # next happens to run.
+            payload["order_class"] = "oto"
             payload["stop_loss"] = {"stop_price": f"{stop_loss_price:.2f}"}
         return self._post("/orders", payload)
 
