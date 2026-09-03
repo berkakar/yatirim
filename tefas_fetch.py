@@ -26,12 +26,15 @@ def run_once() -> None:
     cache = update_cache()
     after_date = (cache.get("meta") or {}).get("last_fetched_date")
 
-    if after_date == before_date:
-        log(f"Yeni veri yok (son çekilen tarih hâlâ {after_date}).")
-        return
-
+    # Her zaman kaydet - "table" güncelleme mantığındaki bir kod değişikliği
+    # yüzünden de değişmiş olabilir, sadece yeni bir TEFAS gününde değil.
+    # Gerçekten hiçbir şey değişmediyse üretilen JSON öncekiyle birebir aynı
+    # olur; workflow'daki git diff adımı bu durumda zaten commit atmaz.
     save_cache(cache)
-    log(f"Önbellek güncellendi: {after_date}, {len(cache.get('table', []))} fon.")
+    if after_date == before_date:
+        log(f"Yeni TEFAS verisi yok (son çekilen tarih hâlâ {after_date}), tablo yine de yeniden hesaplanıp kaydedildi.")
+    else:
+        log(f"Önbellek güncellendi: {after_date}, {len(cache.get('table', []))} fon.")
 
 
 if __name__ == "__main__":
