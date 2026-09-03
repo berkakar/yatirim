@@ -25,7 +25,7 @@ from tefas_client import fetch_fund_info
 
 CACHE_FILE = "tefas_fonlari_cache.json"
 HISTORY_RETENTION_DAYS = 50  # 30 iş günlük pencereye tatil/hafta sonu payı bırakan takvim günü
-LOOKBACK_WINDOWS = (5, 10, 15, 30)
+LOOKBACK_WINDOWS = (1, 5, 10, 15, 30)
 FUND_KIND = "YAT"  # Yatırım Fonları - bu 4 kategori bu şemsiye altında yer alır
 
 FUND_CATEGORIES = {
