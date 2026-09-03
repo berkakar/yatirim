@@ -1,0 +1,36 @@
+name: Türk Fonları (TEFAS)
+
+on:
+  schedule:
+    - cron: "10 16 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python tefas_fetch.py --once
+
+      - name: Commit and push updated cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add tefas_fonlari_cache.json
+          if git diff --cached --quiet; then
+            echo "No cache changes to commit."
+          else
+            git commit -m "Update Türk Fonları cache"
+            git push
+          fi
