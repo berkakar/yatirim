@@ -1,12 +1,20 @@
 name: KAP Test (geçici, manuel)
 
 on:
+  push:
+    branches:
+      - claude/orda-misin-iwl088
+    paths:
+      - ".github/workflows/kap_test.yml"
+      - "kap_fund_holdings_test.py"
+      - "kap_client.py"
+      - "kap_holdings_parser.py"
   workflow_dispatch:
     inputs:
       code:
         description: "Test edilecek fon kodu"
         required: true
-        default: "AAK"
+        default: "THF"
 
 jobs:
   test:
@@ -21,4 +29,4 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: python kap_fund_holdings_test.py --code "${{ github.event.inputs.code }}"
+      - run: python kap_fund_holdings_test.py --code "${{ github.event.inputs.code || 'THF' }}"
