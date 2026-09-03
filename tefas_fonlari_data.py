@@ -144,22 +144,29 @@ def update_cache() -> dict:
         datetime.strptime(last_fetched, "%Y-%m-%d").date() + timedelta(days=1)
         if last_fetched else today - timedelta(days=HISTORY_RETENTION_DAYS)
     )
-    if start > today:
-        return cache
 
-    rows = fetch_fund_info(start, today, kind=FUND_KIND)
-    fetched_dates = {str(r["date"])[:10] for r in rows if r.get("date")}
-    if not fetched_dates:
-        return cache
-
-    _merge_rows(funds, rows)
-    keep_after = (today - timedelta(days=HISTORY_RETENTION_DAYS)).strftime("%Y-%m-%d")
-    _prune_history(funds, keep_after)
+    # TEFAS'a sadece gerçekten eksik gün varsa istek at - API'yi verimli
+    # kullanma burada. Ama "table" (hesaplanmış tablo) her çalıştırmada
+    # zaten çekilmiş "funds" verisinden YENİDEN üretilir (aşağıda,
+    # API isteği yapılsın yapılmasın) - aksi halde _build_table/classify_fund
+    # gibi hesaplama mantığındaki bir kod değişikliği, yeni bir gün verisi
+    # gelene kadar önbelleğe hiç yansımazdı. Bu adım API çağrısı yapmadığı
+    # için ucuz; gerçek bir değişiklik yoksa üretilen JSON öncekiyle birebir
+    # aynı olur ve tefas_fetch.py/workflow zaten "içerik değişmedi" diye
+    # commit atlar.
+    if start <= today:
+        rows = fetch_fund_info(start, today, kind=FUND_KIND)
+        fetched_dates = {str(r["date"])[:10] for r in rows if r.get("date")}
+        if fetched_dates:
+            _merge_rows(funds, rows)
+            keep_after = (today - timedelta(days=HISTORY_RETENTION_DAYS)).strftime("%Y-%m-%d")
+            _prune_history(funds, keep_after)
+            last_fetched = max(fetched_dates)
 
     cache["funds"] = funds
     cache["table"] = _build_table(funds)
     cache["meta"] = {
-        "last_fetched_date": max(fetched_dates),
+        "last_fetched_date": last_fetched,
         "last_updated": datetime.now().isoformat(timespec="seconds"),
         "fund_count": len(cache["table"]),
     }
