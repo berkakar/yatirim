@@ -84,7 +84,7 @@ class AlpacaClient:
         return None
 
     def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float,
-                           client_order_id: str | None = None) -> dict:
+                           client_order_id: str | None = None, stop_loss_price: float | None = None) -> dict:
         payload = {
             "symbol": symbol,
             "qty": qty,
@@ -95,6 +95,13 @@ class AlpacaClient:
         }
         if client_order_id is not None:
             payload["client_order_id"] = client_order_id
+        if stop_loss_price is not None:
+            # Bracket order: Alpaca attaches the stop-loss leg server-side and
+            # activates it the instant the entry fills - protection exists from
+            # the first tick, independent of how promptly (or not) a polling
+            # script like alpaca_trailing_stop.py next happens to run.
+            payload["order_class"] = "bracket"
+            payload["stop_loss"] = {"stop_price": f"{stop_loss_price:.2f}"}
         return self._post("/orders", payload)
 
     def cancel_order(self, order_id: str) -> None:

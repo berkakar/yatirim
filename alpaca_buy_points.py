@@ -15,9 +15,17 @@ order in sync with the current signal, it doesn't need to catch the fill
 itself (unlike a market-order-on-poll approach, which can only react at
 whatever moment it happens to check).
 
+Every entry is submitted as a bracket order with a stop-loss leg at
+INITIAL_STOP_PCT below the limit price (see alpaca_client.place_limit_entry),
+so the protective stop exists on Alpaca's side the instant the entry fills -
+it doesn't wait for alpaca_trailing_stop.py's next scheduled run, which
+GitHub Actions can delay well past its nominal interval. That script's own
+initial-stop placement is now just a fallback for a position that somehow
+has none (e.g. opened outside this system); its structure-based trailing
+still runs on its own schedule to tighten the stop over time.
+
 Run with --once (used by the GitHub Actions workflow, as an earlier step
-than the trailing-stop pass, so a fresh fill gets its initial stop
-placed in the same run).
+than the trailing-stop pass).
 """
 
 import argparse
@@ -29,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
-from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME, log
+from alpaca_trailing_stop import INITIAL_STOP_PCT, get_regular_hours_bars, TIMEFRAME, log
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 
 load_dotenv()
@@ -104,10 +112,17 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
     # alpaca_dashboard.py's history table) - "algo-<id>-<symbol>-<epoch>",
     # dash-separated since algorithm ids use underscores.
     client_order_id = f"algo-{algorithm}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
+    # Bracket stop-loss leg, relative to the limit (expected fill) price - see
+    # alpaca_client.place_limit_entry and the module docstring.
+    stop_loss_price = round(target_price * (1 - INITIAL_STOP_PCT), 2)
 
     if existing_order is None:
-        order = client.place_limit_entry(symbol, target_qty, "long", target_price, client_order_id=client_order_id)
-        log(f"{symbol}: placed buy-limit at {target_price:.2f} ({signal.reason}), qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
+        order = client.place_limit_entry(
+            symbol, target_qty, "long", target_price,
+            client_order_id=client_order_id, stop_loss_price=stop_loss_price,
+        )
+        log(f"{symbol}: placed buy-limit at {target_price:.2f} ({signal.reason}) with bracket stop at "
+            f"{stop_loss_price:.2f}, qty {target_qty} (${dollar_amount:.2f}). order {order['id']}.")
         return
 
     current_price = float(existing_order["limit_price"])
@@ -117,11 +132,17 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
 
     # Alpaca rejects qty changes on fractional-qty orders via replace ("qty
     # must be an integer") - cancel and re-place instead, which works for
-    # both fractional and whole-share quantities.
+    # both fractional and whole-share quantities. Canceling the still-open
+    # bracket parent takes its pending (not yet activated) stop-loss child
+    # leg with it, so the replacement order's own bracket leg is the only
+    # one left standing.
     client.cancel_order(existing_order["id"])
-    order = client.place_limit_entry(symbol, target_qty, "long", target_price, client_order_id=client_order_id)
+    order = client.place_limit_entry(
+        symbol, target_qty, "long", target_price,
+        client_order_id=client_order_id, stop_loss_price=stop_loss_price,
+    )
     log(f"{symbol}: updated buy-limit {current_price:.2f} -> {target_price:.2f} "
-        f"({signal.reason}). new order {order['id']}.")
+        f"(bracket stop -> {stop_loss_price:.2f}, {signal.reason}). new order {order['id']}.")
 
 
 def run_once(client: AlpacaClient) -> None:

@@ -5,7 +5,12 @@ Manages every open position in the account. Each pass, per position:
 
   1. Makes sure a stop order is resting (places an initial fixed-% stop
      if none exists yet - the video trails an existing trade, it doesn't
-     define entry/initial-risk sizing).
+     define entry/initial-risk sizing). In practice this is now a fallback:
+     alpaca_buy_points.py submits entries as bracket orders with this same
+     stop already attached, so it activates the instant the entry fills
+     instead of waiting on this script's next (GitHub Actions-scheduled,
+     and not always promptly delivered) run. This still covers a position
+     that ends up with no stop some other way (opened outside this system).
   2. Structure is evaluated only from bars since we started managing this
      position (its first stop order's timestamp), not an arbitrary fixed
      lookback - otherwise "reference" swing points from market phases
@@ -152,7 +157,8 @@ def manage_position(client: AlpacaClient, pos: dict) -> None:
         else:
             initial_stop = entry_price * (1 + INITIAL_STOP_PCT)
         stop_order = client.place_stop_order(symbol, qty, side, initial_stop)
-        log(f"{symbol}: no resting stop found, placed initial stop at {initial_stop:.2f} (entry {entry_price:.2f}).")
+        log(f"{symbol}: no resting stop found (not opened as a bracket order here), "
+            f"placed fallback initial stop at {initial_stop:.2f} (entry {entry_price:.2f}).")
 
     current_stop_price = float(stop_order["stop_price"])
     stop_order_id = stop_order["id"]
