@@ -18,7 +18,11 @@ from ui_style import zebra_style
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
-_PCT_COLUMNS = [f"{w}G Fiyat Değişim %" for w in LOOKBACK_WINDOWS] + [f"{w}G Hacim Değişim %" for w in LOOKBACK_WINDOWS]
+_SIGNED_COLUMNS = (
+    [f"{w}G Fiyat Değişim %" for w in LOOKBACK_WINDOWS]
+    + [f"{w}G Hacim Değişim %" for w in LOOKBACK_WINDOWS]
+    + ["Net Para Girişi/Çıkışı"]
+)
 
 # valuation.py'deki style_valuation_df ile aynı palet (uygulama genelinde
 # tutarlılık için): kırmızı = olumsuz, teal/yeşil = olumlu.
@@ -31,7 +35,7 @@ def _style_turk_fonlari(df):
     üzerine zebra_style'ın satır bandını uygular."""
     def apply_styles(val_df):
         style_df = pd.DataFrame("", index=val_df.index, columns=val_df.columns)
-        for col in _PCT_COLUMNS:
+        for col in _SIGNED_COLUMNS:
             if col not in val_df.columns:
                 continue
             for idx in val_df.index:
@@ -51,6 +55,11 @@ def _build_column_config() -> dict:
         "Tarih": st.column_config.TextColumn("Tarih", help="Son fiyatın ait olduğu tarih", width="small"),
         "Önceki Gün Fiyat": st.column_config.NumberColumn("Önceki Gün Fiyat", format="%.4f"),
         "Bugünkü Fiyat": st.column_config.NumberColumn("Bugünkü Fiyat", format="%.4f"),
+        "Net Para Girişi/Çıkışı": st.column_config.NumberColumn(
+            "Net Para Girişi/Çıkışı (TL)",
+            help="(Bugünkü Tedavüldeki Pay Sayısı - Dünkü Tedavüldeki Pay Sayısı) × Bugünkü Fiyat",
+            format="localized",
+        ),
     }
     for w in LOOKBACK_WINDOWS:
         config[f"{w}G Fiyat Değişim %"] = st.column_config.NumberColumn(
