@@ -1,52 +1,49 @@
-"""Geçici doğrulama - bulunan iki kritik uç nokta doğrulanıyor:
-  1) kap.org.tr/tr/fon-bilgileri/ozet/<KOD> (sadece kod, slug yok) yönlendirme
-     yapıyor mu - yapıyorsa slug tahmin etmeye hiç gerek kalmaz.
-  2) /tr/api/batch-news/file-by-year/<fundOid>/<yıl> gerçekten o fonun kendi
-     bildirimlerini (Portföy Dağılım Raporu dahil) listeliyor mu - hem KYA
-     hem TPR için (iki farklı fon/şirket) doğrulanıyor.
+"""Geçici doğrulama - fon-bildirimleri sayfasının ham HTML'inde
+/tr/Bildirim/<id> linkleri var mı (varsa, private API tahmin etmeye hiç
+gerek kalmadan doğrudan bu sayfadan fonun bildirim listesi kazınabilir).
+Ayrıca fon-bilgileri/ozet sayfasının TAM içeriğinde "Portföy Dağılım
+Raporu" ifadesi geçen bir tablo/bölüm var mı kontrol ediliyor.
 """
-import json
+import re
 
 import requests
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
 
-# (kod, bilinen fundOid, bilinen rapor yılı)
-FUNDS = [
-    ("TPR", "33E5FED7ECE300EAE0530A4A622B2AEA", 2024),
-    ("KYA", "33E5FED7E5D300EAE0530A4A622B2AEA", 2025),
-]
+PAGES = {
+    "TPR bildirimleri (tam slug)": "https://www.kap.org.tr/tr/fon-bildirimleri/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
+    "TPR ozet (tam slug)": "https://www.kap.org.tr/tr/fon-bilgileri/ozet/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
+    "TPR genel (tam slug)": "https://www.kap.org.tr/tr/fon-bilgileri/genel/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
+}
 
-print("### Bare-code redirect test ###")
-for code, _, _ in FUNDS:
-    for path in [f"https://www.kap.org.tr/tr/fon-bilgileri/ozet/{code}",
-                 f"https://www.kap.org.tr/tr/fon-bilgileri/ozet/{code.lower()}"]:
-        r = requests.get(path, headers=HEADERS, timeout=20, allow_redirects=True)
-        print(f"{path} -> status={r.status_code}, final_url={r.url}, len={len(r.text)}")
-        r2 = requests.get(path, headers=HEADERS, timeout=20, allow_redirects=False)
-        print(f"  no-redirect: status={r2.status_code}, Location={r2.headers.get('Location')}")
 
-print("\n### batch-news/file-by-year test ###")
-for code, fund_oid, year in FUNDS:
-    for y in (year, year + 1 if year < 2026 else year):
-        url = f"https://www.kap.org.tr/tr/api/batch-news/file-by-year/{fund_oid}/{y}"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        print(f"\n{code} year={y}: status={r.status_code}, len={len(r.text)}")
-        if r.ok:
-            try:
-                data = r.json()
-            except Exception as e:
-                print(f"  not JSON ({e}), first 500 chars: {r.text[:500]}")
-                continue
-            if isinstance(data, list):
-                print(f"  {len(data)} items")
-                for item in data[:5]:
-                    print(f"    {json.dumps(item, ensure_ascii=False)[:400]}")
-                # Look specifically for Portföy Dağılım Raporu.
-                for item in data:
-                    blob = json.dumps(item, ensure_ascii=False).lower()
-                    if "portföy dağılım" in blob or "portfoy dagilim" in blob:
-                        print(f"  MATCH: {json.dumps(item, ensure_ascii=False)}")
-            else:
-                print(f"  shape: {type(data)}, keys: {list(data.keys()) if isinstance(data, dict) else '?'}")
-                print(f"  {json.dumps(data, ensure_ascii=False)[:1500]}")
+def strip_tags(html: str) -> str:
+    html = re.sub(r"<script.*?</script>", " ", html, flags=re.S)
+    html = re.sub(r"<style.*?</style>", " ", html, flags=re.S)
+    html = re.sub(r"<[^>]+>", " ", html)
+    html = re.sub(r"\s+", " ", html)
+    return html
+
+
+for label, url in PAGES.items():
+    print(f"\n### {label}: {url} ###")
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    print(f"status={r.status_code}, len={len(r.text)}")
+    if not r.ok:
+        continue
+
+    bildirim_links = sorted(set(re.findall(r'/tr/Bildirim/(\d+)', r.text)))
+    print(f"/tr/Bildirim/<id> links found: {len(bildirim_links)} -> {bildirim_links[:30]}")
+
+    text = strip_tags(r.text)
+    idxs = [m.start() for m in re.finditer(r"[Pp]ortf[öo]y [Dd]a[ğg][ıi]l[ıi]m", text)]
+    print(f"'portföy dağılım' occurrences in stripped text: {len(idxs)}")
+    for i in idxs[:10]:
+        print(f"  ...{text[max(0, i-150):i+250]}...")
+
+    # Also check for date-like patterns near bildirim links (context for the
+    # first few links, from raw HTML around each match).
+    for bid in bildirim_links[:5]:
+        pos = r.text.find(f"/tr/Bildirim/{bid}")
+        snippet = strip_tags(r.text[max(0, pos - 300):pos + 300])
+        print(f"  context for Bildirim/{bid}: ...{snippet}...")
