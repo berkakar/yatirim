@@ -20,8 +20,8 @@ from buy_algorithms import ALGORITHMS
 from structure import Bar
 from ui_style import zebra_style
 
-TIMEFRAMES = ["30Min", "1Hour", "1Day"]
-TIMEFRAME_LABELS = {"30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
+TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
+TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
 
