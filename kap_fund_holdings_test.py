@@ -1,39 +1,39 @@
-"""Geçici son doğrulama - fon kodu -> fundOid zincirinin SON halkası:
-TEFAS "Fon Adı" alanından KAP slug'ını (kod-transliterated-isim biçiminde)
-üretip, bu slug'lı sayfanın gerçekten doğru fundOid'i içerdiğini KYA için
-de (TPR dışında, farklı bir fon/yönetici) doğruluyoruz - üretim kodunda
-kullanılacak transliterasyon fonksiyonunun genellenebilir olduğunu
-kanıtlamak için.
+"""SON uçtan uca doğrulama - artık gerçek üretim modüllerini (kap_client.py,
+kap_holdings_parser.py) doğrudan kullanıyor, tahmini/keşif kodu değil.
+İki farklı fon (TPR/İş Portföy, KYA/Kare Portföy) için tam akışı test
+ediyor: kod+isim -> fundOid -> en güncel Portföy Dağılım Raporu -> PDF
+indir -> en yüksek 6 hisse. Bu geçtiyse özellik tamamen doğrulanmış olur
+ve bu geçici test dosyaları kaldırılabilir.
 """
-import re
+from kap_client import download_portfolio_pdf, find_latest_portfolio_report, resolve_fund_oid
+from kap_holdings_parser import parse_top_holdings
 
-import requests
-
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
-
-TR_MAP = str.maketrans({
-    "İ": "i", "I": "i", "ı": "i", "Ş": "s", "ş": "s", "Ğ": "g", "ğ": "g",
-    "Ü": "u", "ü": "u", "Ö": "o", "ö": "o", "Ç": "c", "ç": "c",
-})
-
-
-def slugify(code: str, fund_name: str) -> str:
-    name = fund_name.translate(TR_MAP).lower()
-    name = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
-    return f"{code.lower()}-{name}"
-
-
-# Gerçek KAP companyTitle'ları (disclosure JSON'undan doğrulanmış):
 CASES = [
-    ("TPR", "İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)", "33E5FED7ECE300EAE0530A4A622B2AEA"),
-    ("KYA", "KARE PORTFÖY HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)", "33E5FED7E5D300EAE0530A4A622B2AEA"),
+    ("TPR", "İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)"),
+    ("KYA", "KARE PORTFÖY HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)"),
 ]
 
-for code, name, known_oid in CASES:
-    slug = slugify(code, name)
-    url = f"https://www.kap.org.tr/tr/fon-bilgileri/genel/{slug}"
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    found = known_oid in r.text
-    print(f"{code}: slug={slug!r}")
-    print(f"  -> {url}")
-    print(f"  status={r.status_code}, len={len(r.text)}, correct_fundOid_present={found}")
+for code, name in CASES:
+    print(f"\n{'=' * 60}\n{code}\n{'=' * 60}")
+    fund_oid = resolve_fund_oid(code, name)
+    print(f"fund_oid = {fund_oid}")
+
+    latest = find_latest_portfolio_report(fund_oid)
+    print(f"latest report = {latest}")
+    if not latest:
+        print("No report found - FAIL")
+        continue
+
+    pdf_bytes = download_portfolio_pdf(latest["disclosure_index"])
+    print(f"PDF downloaded: {len(pdf_bytes)} bytes, starts with {pdf_bytes[:8]!r}")
+
+    holdings = parse_top_holdings(pdf_bytes)
+    print(f"Top holdings ({len(holdings)}):")
+    for h in holdings:
+        print(f"  {h}")
+
+    if not holdings:
+        print("NO HOLDINGS PARSED - FAIL")
+    else:
+        total = sum(h["Oran %"] for h in holdings)
+        print(f"Sum of top-{len(holdings)} percentages: {total:.2f}% (sanity check, should be a plausible slice of 100%)")

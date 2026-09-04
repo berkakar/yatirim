@@ -1,82 +1,58 @@
 """KAP "Portföy Dağılım Raporu" PDF'lerinden en yüksek ağırlıklı hisse
 senedi pozisyonlarını çıkarır.
 
-Raporun tam tablo düzeni fon yönetim şirketine göre değişebildiği için
-sezgisel bir yaklaşım kullanılıyor: PDF'teki tüm tablolar taranır, başlık
-satırında hem bir "hisse/pay" hem de bir "%/oran/ağırlık" ifadesi geçen
-tablo(lar) aday olarak işaretlenir, sayısal bir yüzde değeri ayrıştırılabilen
-satırlar tutulur ve en yüksek N tanesi döndürülür.
+Rapor tablosunun sütun başlıkları pdfplumber'ın extract_tables()'ında tek
+bir karışık blok halinde geliyor (çok satırlı, sarmalanmış başlıklar) -
+bu yüzden başlık/sütun eşleştirmesi yerine ham metin üzerinde satır bazlı
+bir düzenli ifade kullanılıyor. Gerçek rapor satırları gözlemlenen biçimde
+her zaman "<HİSSE KODU> TL <İhraçcı adı...> <ISIN> <sayısal alanlar...>"
+şeklinde tek satırda başlıyor (ihraçcı adı sonraki satırlara taşabilir,
+ama o taşan kısımlar yeni bir satır regex'iyle eşleşmediği için otomatik
+atlanıyor). Satırdaki son sayısal değer "(FTD'YE GÖRE)" yüzdesi - fonun
+TOPLAM değerine göre ağırlık, en standart/karşılaştırılabilir ölçüt. Bu
+düzen İş Portföy ve Kare Portföy'ün gerçek raporlarında (iki farklı
+yönetici) doğrulandı - SPK'nın standart aylık rapor şablonu olduğu için
+diğer yöneticilerde de aynı olması bekleniyor.
 """
 import io
+import re
 
 import pdfplumber
 
-_NAME_HEADER_MARKERS = ("hisse", "pay adı", "menkul kıymet", "varlık")
-_PCT_HEADER_MARKERS = ("%", "oran", "ağırlık")
-_TOTAL_ROW_MARKERS = ("toplam", "genel toplam", "ara toplam")
+_ROW_RE = re.compile(
+    r"^(?P<ticker>[A-ZÇĞİÖŞÜ0-9]{2,6})\s+[A-Z]{2,4}\s+.*?\s(?P<isin>TR[A-Z0-9]{10})\s+(?P<rest>[\d.,\-\s/]+)$"
+)
 
 
-def _tr_lower(s: str) -> str:
-    return (s or "").replace("İ", "i").replace("I", "ı").lower()
-
-
-def _parse_percent(raw) -> float | None:
-    text = str(raw or "").strip().replace("%", "").strip()
-    if not text:
+def _parse_tr_number(token: str) -> float | None:
+    token = token.strip()
+    if not token or "/" in token:
         return None
-    if "," in text:
-        text = text.replace(".", "").replace(",", ".")
+    token = token.replace(".", "").replace(",", ".")
     try:
-        value = float(text)
+        return float(token)
     except ValueError:
         return None
-    return value if 0 < value <= 100 else None
-
-
-def _find_header_columns(header_row: list) -> tuple[int, int] | None:
-    name_col = pct_col = None
-    for i, cell in enumerate(header_row):
-        text = _tr_lower(str(cell or ""))
-        if name_col is None and any(m in text for m in _NAME_HEADER_MARKERS):
-            name_col = i
-        if pct_col is None and any(m in text for m in _PCT_HEADER_MARKERS):
-            pct_col = i
-    if name_col is not None and pct_col is not None and name_col != pct_col:
-        return name_col, pct_col
-    return None
 
 
 def parse_top_holdings(pdf_bytes: bytes, top_n: int = 6) -> list[dict]:
-    rows: list[tuple[str, float]] = []
+    best: dict[str, float] = {}
     with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
-            for table in page.extract_tables() or []:
-                if not table or len(table) < 2:
+            text = page.extract_text() or ""
+            for line in text.split("\n"):
+                m = _ROW_RE.match(line.strip())
+                if not m:
                     continue
-                cols = _find_header_columns(table[0])
-                if not cols:
+                numbers = [n for t in m.group("rest").split() if (n := _parse_tr_number(t)) is not None]
+                if len(numbers) < 3:
                     continue
-                name_col, pct_col = cols
-                for data_row in table[1:]:
-                    if name_col >= len(data_row) or pct_col >= len(data_row):
-                        continue
-                    name = str(data_row[name_col] or "").strip()
-                    pct = _parse_percent(data_row[pct_col])
-                    if not name or pct is None:
-                        continue
-                    if _tr_lower(name).startswith(_TOTAL_ROW_MARKERS):
-                        continue
-                    rows.append((name, pct))
-
-    if not rows:
-        return []
-
-    # Aynı hisse birden fazla tabloda/sayfada çıkabilir (ör. özet + detay) -
-    # en yüksek oranı tutulur.
-    best: dict[str, float] = {}
-    for name, pct in rows:
-        if name not in best or pct > best[name]:
-            best[name] = pct
+                pct = numbers[-1]
+                if not (0 < abs(pct) <= 100):
+                    continue
+                ticker = m.group("ticker")
+                if ticker not in best or pct > best[ticker]:
+                    best[ticker] = pct
 
     ranked = sorted(best.items(), key=lambda kv: kv[1], reverse=True)
     return [{"Hisse": name, "Oran %": round(pct, 2)} for name, pct in ranked[:top_n]]

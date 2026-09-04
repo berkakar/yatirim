@@ -1,6 +1,13 @@
 """Kullanıcının "sahip olduğum fonlar" listesinin ve bu fonlar için KAP'tan
 parse edilmiş en yüksek 6 hisse pozisyonunun kalıcı saklanması.
 
+Her fon için fund_oid ilk kontrolde çözülüp (kap_client.resolve_fund_oid)
+kaydedilir - sonraki kontroller doğrudan bu OID'i kullanır, sayfa
+scrape'ini tekrarlamaz. last_disclosure_index, en son parse edilen
+"Portföy Dağılım Raporu" bildiriminin KAP disclosureIndex'i - "Kontrol
+Et" bu değeri KAP'taki en güncel bildirimle karşılaştırıp farklıysa
+yeniden parse eder.
+
 backtest_data.py'deki desenle aynı: GitHub Contents API üzerinden kalıcı
 (Streamlit Cloud restart'larında kaybolmayan) kopyayı önceliklendirir, yoksa
 yerel dosyaya düşer, her ikisine de yazar.
@@ -12,7 +19,7 @@ from datetime import datetime, timezone
 import streamlit as st
 
 from github_config import read_json_from_github, write_json_to_github
-from kap_client import download_pdf, find_latest_portfolio_report
+from kap_client import download_portfolio_pdf, find_latest_portfolio_report, resolve_fund_oid
 from kap_holdings_parser import parse_top_holdings
 
 GITHUB_REPO = "berkakar/yatirim"
@@ -82,7 +89,11 @@ def refresh_fund(username: str, code: str) -> dict:
     entry["last_checked"] = now
 
     try:
-        latest = find_latest_portfolio_report(code)
+        fund_oid = entry.get("fund_oid")
+        if not fund_oid:
+            fund_oid = resolve_fund_oid(code, entry.get("fund_name", ""))
+            entry["fund_oid"] = fund_oid
+        latest = find_latest_portfolio_report(fund_oid)
     except Exception as e:
         entry["last_error"] = str(e)
         save_data(username, data)
@@ -94,19 +105,19 @@ def refresh_fund(username: str, code: str) -> dict:
         return entry
 
     entry["last_error"] = None
-    if latest["disclosure_id"] == entry.get("last_disclosure_id"):
+    if latest["disclosure_index"] == entry.get("last_disclosure_index"):
         save_data(username, data)  # sadece last_checked güncellendi
         return entry
 
     try:
-        pdf_bytes = download_pdf(latest["disclosure_id"])
+        pdf_bytes = download_portfolio_pdf(latest["disclosure_index"])
         holdings = parse_top_holdings(pdf_bytes)
     except Exception as e:
         entry["last_error"] = f"Rapor indirilemedi/parse edilemedi: {e}"
         save_data(username, data)
         return entry
 
-    entry["last_disclosure_id"] = latest["disclosure_id"]
+    entry["last_disclosure_index"] = latest["disclosure_index"]
     entry["report_title"] = latest["title"]
     entry["report_publish_date"] = latest["publish_date"]
     entry["last_parsed"] = now

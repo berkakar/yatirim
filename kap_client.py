@@ -1,108 +1,116 @@
-"""KAP (Kamuyu Aydınlatma Platformu) API istemcisi - kullanıcının sahip olduğu
-fonların "Portföy Dağılım Raporu" bildirimini bulup PDF'ini indirir.
+"""KAP (Kamuyu Aydınlatma Platformu) API istemcisi - kullanıcının sahip
+olduğu fonların "Portföy Dağılım Raporu" bildirimini bulup gerçek hisse
+dağılım tablosunu içeren PDF ekini indirir.
 
-Resmi/dokümante bir API değil - KAP'ın kendi web sitesinin kullandığı, kimlik
-doğrulama gerektirmeyen uçlar (açık kaynak enciyo/kap-tr-sdk projesinin
-kaynak kodundan doğrulandı):
-  - GET  /tr/api/member/filter/<kod>        -> fon/şirket kodunu KAP üye
-    OID'sine çözer (fon kısa kodu da TEFAS koduyla aynı, bir KAP üye kodu).
-  - POST /tr/api/disclosure/list/main       -> bir üyenin bildirimlerini
-    tarih aralığına göre listeler.
-  - GET  /en/api/BildirimPdf/<disclosureId> -> bir bildirimin PDF'i.
+Resmi/dokümante bir API değil - kap.org.tr'nin kendi sitesinin kullandığı
+uçlar, canlı olarak (gerçek fon verileriyle, iki farklı fon/yönetici
+üzerinde) doğrulandı:
 
-"Portföy Dağılım Raporu" ayrı bir disclosureType koduyla filtrelenemiyor -
-KAP bunu genel bildirim akışı içinde, başlıkla ayırt edilecek şekilde
-yayınlıyor - bu yüzden bildirim listesi çekilip başlıkta bu ifade aranarak
-süzülüyor.
+  1) Fon kodu + adı -> "<kod>-<transliterasyonlu-isim>" biçiminde bir
+     slug (slugify()) -> kap.org.tr/tr/fon-bilgileri/genel/<slug> sayfası
+     -> sayfa HTML'inde gömülü /tr/api/batch-news/file-by-year/<fundOid>/...
+     örüntüsünden fonun kendi OID'i çıkarılıyor. (Fonun kısa kodunu doğrudan
+     bir arama/filtre uç noktasına vermenin bir yolu yok - KAP'ın "Fon
+     Arama" arayüzü sunucu tarafında ayrı bir mekanizma kullanıyor; bu
+     slug + gömülü OID yaklaşımı, tarayıcı ile keşfedilen gerçek akışın
+     düz HTTP isteğiyle yeniden üretilebilir hali.)
+  2) GET /tr/api/disclosure/filter/FILTERYFBF/<fundOid>/<PDR tip OID>/<gün>
+     -> bu fonun "Portföy Dağılım Raporu" bildirimlerinin listesi, en
+     yeniden eskiye sıralı. PDR tip OID'i (PORTFOLIO_REPORT_TYPE_OID)
+     platform genelinde sabit - iki farklı fon için de aynı değerle
+     doğrulandı (KAP'ın fon-bildirimleri sayfasındaki "Bildirim Tipi"
+     açılır menüsünden tespit edildi).
+  3) En yeni disclosureIndex -> GET /tr/api/notification/attachment-detail/
+     <disclosureIndex> -> attachments[0].objId.
+  4) GET /tr/api/file/download/<objId> -> Java-serialized bir byte[]
+     (ham PDF değil) - gerçek PDF bu sarmalayıcının içinde.
+
+ÖNEMLİ: /en/api/BildirimPdf/<id> uç noktası SADECE bir kapak/özet sayfası
+döner (gerçek hisse tablosu YOK) - bu yüzden 3-4. adımlardaki gerçek ek
+kullanılıyor, ilk denemede kullanılan bu daha basit ama YANLIŞ uç nokta
+değil.
 """
-import sys
-from datetime import date, timedelta
-
-if sys.platform == "win32":
-    import truststore
-    truststore.inject_into_ssl()
+import re
+import struct
 
 import requests
 
-MEMBER_FILTER_URL = "https://www.kap.org.tr/tr/api/member/filter/{code}"
-DISCLOSURE_LIST_URL = "https://www.kap.org.tr/tr/api/disclosure/list/main"
-PDF_URL = "https://www.kap.org.tr/en/api/BildirimPdf/{disclosure_id}"
+TR_TRANSLITERATE = str.maketrans({
+    "İ": "i", "I": "i", "ı": "i", "Ş": "s", "ş": "s", "Ğ": "g", "ğ": "g",
+    "Ü": "u", "ü": "u", "Ö": "o", "ö": "o", "Ç": "c", "ç": "c",
+})
 
-REPORT_TITLE_MARKER = "portföy dağılım raporu"
-# Raporlar aylık, ayın ilk haftasında bir önceki ay için yayınlanır (SPK
-# düzenlemesi) - gecikme/tatil payı bırakan geniş bir arama penceresi.
-SEARCH_WINDOW_DAYS = 130
+FUND_PAGE_URL = "https://www.kap.org.tr/tr/fon-bilgileri/genel/{slug}"
+FILTER_URL = "https://www.kap.org.tr/tr/api/disclosure/filter/FILTERYFBF/{fund_oid}/{type_oid}/{days}"
+DETAIL_URL = "https://www.kap.org.tr/tr/api/notification/attachment-detail/{idx}"
+FILE_DOWNLOAD_URL = "https://www.kap.org.tr/tr/api/file/download/{obj_id}"
 
-# KAP'ın kendi arama filtresindeki tüm fon/üye tipleri - mkkMemberOid zaten
-# tek bir üyeye özel olduğu için bunlar sonucu daraltmasın diye tam liste
-# gönderiliyor.
-_ALL_FUND_TYPES = ["BYF", "YF", "EYF", "OKS", "YYF", "VFF", "KFF", "GMF", "GSF", "PFF"]
-_ALL_MEMBER_TYPES = ["IGS", "YK", "PYS", "DDK", "DG"]
+# "Portföy Dağılım Raporu" bildirim tipinin KAP genelinde sabit OID'i.
+PORTFOLIO_REPORT_TYPE_OID = "8aca490d502e34b801502e380044002b"
+SEARCH_DAYS = 365
 
-
-def _tr_lower(s: str) -> str:
-    return (s or "").replace("İ", "i").replace("I", "ı").lower()
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; yatirim-app/1.0)"}
 
 
-def resolve_member_oid(fund_code: str) -> str | None:
-    r = requests.get(MEMBER_FILTER_URL.format(code=fund_code), timeout=15)
+def slugify(code: str, fund_name: str) -> str:
+    """KAP'ın fon sayfası URL biçimi: <kod>-<transliterasyonlu-isim>."""
+    name = (fund_name or "").translate(TR_TRANSLITERATE).lower()
+    name = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+    return f"{code.lower()}-{name}"
+
+
+def resolve_fund_oid(code: str, fund_name: str) -> str:
+    """Fonun kendi kap.org.tr sayfasından fundOid'i çıkarır - bu OID
+    disclosure/filter uç noktasında kullanılıyor."""
+    slug = slugify(code, fund_name)
+    r = requests.get(FUND_PAGE_URL.format(slug=slug), headers=HEADERS, timeout=20)
     r.raise_for_status()
-    results = r.json()
-    if not results:
+    m = re.search(r"/tr/api/batch-news/file-by-year/([0-9A-Fa-f]{32})/", r.text)
+    if not m:
+        raise ValueError(f"'{code}' için KAP fon sayfasında fundOid bulunamadı (slug: {slug}).")
+    return m.group(1)
+
+
+def find_latest_portfolio_report(fund_oid: str) -> dict | None:
+    """Bu fon için en güncel "Portföy Dağılım Raporu" bildirimini döner:
+    {"disclosure_index", "publish_date", "title"} ya da bulunamazsa None."""
+    url = FILTER_URL.format(fund_oid=fund_oid, type_oid=PORTFOLIO_REPORT_TYPE_OID, days=SEARCH_DAYS)
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    r.raise_for_status()
+    items = r.json()
+    if not items:
         return None
-    return results[0].get("mkkMemberOid")
-
-
-def fetch_disclosures(oid: str, from_date: date, to_date: date) -> list[dict]:
-    payload = {
-        "fromDate": from_date.strftime("%d.%m.%Y"),
-        "toDate": to_date.strftime("%d.%m.%Y"),
-        "disclosureType": None,
-        "fundTypes": _ALL_FUND_TYPES,
-        "memberTypes": _ALL_MEMBER_TYPES,
-        "mkkMemberOid": oid,
+    basic = items[0]["disclosureBasic"]
+    return {
+        "disclosure_index": basic["disclosureIndex"],
+        "publish_date": basic.get("publishDate"),
+        "title": basic.get("summary") or basic.get("title"),
     }
-    r = requests.post(DISCLOSURE_LIST_URL, json=payload, timeout=20)
+
+
+def _unwrap_java_bytes(raw: bytes) -> bytes:
+    """/tr/api/file/download/<objId> yanıtı Java-serialized bir byte[] -
+    gerçek PDF bu sarmalayıcının içinde."""
+    if raw[:4] == b"%PDF":
+        return raw
+    idx = raw.index(b"\x78\x70", 10)
+    arr_len = struct.unpack(">I", raw[idx + 2:idx + 6])[0]
+    return raw[idx + 6:idx + 6 + arr_len]
+
+
+def download_portfolio_pdf(disclosure_index: int) -> bytes:
+    """Bildirimin gerçek ekini (asıl hisse dağılım tablosunu içeren PDF)
+    indirir."""
+    r = requests.get(DETAIL_URL.format(idx=disclosure_index), headers=HEADERS, timeout=20)
     r.raise_for_status()
-    return r.json()
+    detail = r.json()
+    if not (isinstance(detail, list) and detail):
+        raise ValueError(f"Bildirim {disclosure_index} için detay alınamadı.")
+    attachments = detail[0].get("attachments") or []
+    if not attachments:
+        raise ValueError(f"Bildirim {disclosure_index} için ek bulunamadı.")
+    obj_id = attachments[0]["objId"]
 
-
-def find_latest_portfolio_report(fund_code: str) -> dict | None:
-    """Fon kodu için en güncel "Portföy Dağılım Raporu" bildirimini bulur.
-    Dönüş: {"disclosure_id", "title", "publish_date"} ya da bulunamazsa None."""
-    oid = resolve_member_oid(fund_code)
-    if not oid:
-        raise ValueError(f"KAP'ta '{fund_code}' koduna ait bir üye bulunamadı.")
-
-    today = date.today()
-    disclosures = fetch_disclosures(oid, today - timedelta(days=SEARCH_WINDOW_DAYS), today)
-
-    candidates = []
-    for item in disclosures:
-        basic = item.get("disclosureBasic") or {}
-        title = basic.get("title") or ""
-        if REPORT_TITLE_MARKER not in _tr_lower(title):
-            continue
-        disclosure_id = basic.get("disclosureId")
-        if not disclosure_id:
-            continue
-        candidates.append({
-            "disclosure_id": str(disclosure_id),
-            "title": title,
-            "publish_date": basic.get("publishDate"),
-        })
-
-    if not candidates:
-        return None
-
-    # disclosureId, KAP genelinde monoton artan bir sayı - en yüksek olan en
-    # güncel bildirimdir (publishDate'in kesin biçimi doğrulanamadığından
-    # sıralama için kullanılmıyor, sadece gösterim amaçlı saklanıyor).
-    candidates.sort(key=lambda c: int(c["disclosure_id"]) if c["disclosure_id"].isdigit() else -1)
-    return candidates[-1]
-
-
-def download_pdf(disclosure_id: str) -> bytes:
-    r = requests.get(PDF_URL.format(disclosure_id=disclosure_id), timeout=30)
-    r.raise_for_status()
-    return r.content
+    file_r = requests.get(FILE_DOWNLOAD_URL.format(obj_id=obj_id), headers=HEADERS, timeout=30)
+    file_r.raise_for_status()
+    return _unwrap_java_bytes(file_r.content)
