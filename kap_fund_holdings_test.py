@@ -1,13 +1,20 @@
-"""Hata ayıklama - resolve_fund_oid iki art arda çalıştırmada başarısız
-oldu (önceki, neredeyse birebir aynı istekle başarılı olmuştu). Bu script
-ham isteği (durum kodu, uzunluk, regex eşleşmesi) doğrudan yazdırıp
-gerçek nedeni (WAF/oran sınırlama mı, kod hatası mı) ayırt ediyor.
+"""Hata ayıklama turu 2 - önceki tur, sayfa uzunluğunun ÖNCEKİ başarılı
+denemeyle birebir aynı (301267) olduğunu ama regex'in artık eşleşmediğini
+gösterdi. Bu, sayfa içeriğinin GERÇEKTEN değiştiğini (ör. bot/tekrar
+isteği tespit edilip daha sade bir sürüm servis edilmesi) düşündürüyor.
+Bu turda: "batch-news" alt dizesinin sayfada hiç geçip geçmediğini,
+toplam kaç tane 32-hex OID bulunduğunu ve iki farklı User-Agent ile
+(hiç UA vermeden ve tarayıcı benzeri tam bir UA ile) sonucun değişip
+değişmediğini kontrol ediyoruz.
 """
 import re
 
 import requests
 
-from kap_client import HEADERS, FUND_PAGE_URL, slugify
+from kap_client import FUND_PAGE_URL, slugify
+
+FULL_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
 
 CASES = [
     ("TPR", "İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)"),
@@ -17,14 +24,17 @@ CASES = [
 for code, name in CASES:
     slug = slugify(code, name)
     url = FUND_PAGE_URL.format(slug=slug)
-    print(f"\n{code}: {url}")
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        print(f"  status={r.status_code}, len={len(r.text)}, headers_sent={HEADERS}")
+    print(f"\n{'=' * 60}\n{code}: {url}")
+
+    for label, headers in [
+        ("no UA", {}),
+        ("simple UA", {"User-Agent": "Mozilla/5.0 (compatible; yatirim-app/1.0)"}),
+        ("full browser UA", {"User-Agent": FULL_UA, "Accept-Language": "tr-TR,tr;q=0.9"}),
+    ]:
+        r = requests.get(url, headers=headers, timeout=20)
+        has_batch_news = "batch-news" in r.text
+        oids = re.findall(r"[0-9A-Fa-f]{32}", r.text)
         m = re.search(r"/tr/api/batch-news/file-by-year/([0-9A-Fa-f]{32})/", r.text)
-        print(f"  regex match: {m.group(1) if m else None}")
-        if not m:
-            print(f"  first 500 chars: {r.text[:500]!r}")
-            print(f"  response headers: {dict(r.headers)}")
-    except Exception as e:
-        print(f"  request failed: {e!r}")
+        print(f"  [{label}] status={r.status_code} len={len(r.text)} "
+              f"has_batch_news_substr={has_batch_news} total_hex32={len(oids)} "
+              f"regex_match={m.group(1) if m else None}")
