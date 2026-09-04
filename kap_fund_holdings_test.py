@@ -1,66 +1,61 @@
-"""Geçici doğrulama - önceki tur, "all-search" kutusunun site geneli arama
-kutusu olduğunu (tabloyla ilgisiz - Google Analytics form_start olayı
-tetikledi, tablo verisi çekmedi) ve ayrı bir "Filtrele" (aria-label)
-düğmesi ile "custom-select" alanları olduğunu gösterdi. Zaten bu fonun
-kendi sayfasındayız (/tr/fon-bildirimleri/<TPR-slug>) - muhtemelen tablo
-bu fona zaten scoped, sadece "Filtrele"ye basmak (varsayılan tarih
-aralığıyla) gerçek veriyi tetikleyecektir.
+"""Geçici doğrulama - Filtrele düğmesine basınca tablo hâlâ boş kaldı.
+Bu son turda: iki "custom-select" alanının (muhtemelen Yıl/Periyot ya da
+tarih aralığı) yakın çevresindeki etiket metnini ve olası <option>
+değerlerini çıkarıyoruz, ayrıca Filtrele sonrası herhangi bir doğrulama/
+hata mesajı belirip belirmediğine bakıyoruz - tarih alanları boş
+bırakıldığı için sorgunun sessizce reddedilmiş olması ihtimaline karşı.
 """
 from playwright.sync_api import sync_playwright
 
 URL = "https://www.kap.org.tr/tr/fon-bildirimleri/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon"
 
-captured = []
-
 with sync_playwright() as p:
     browser = p.chromium.launch()
     page = browser.new_page()
-
-    def on_response(response):
-        captured.append({"url": response.url, "status": response.status, "method": response.request.method})
-
-    page.on("response", on_response)
-
     print(f"Navigating to {URL} ...")
     page.goto(URL, wait_until="networkidle", timeout=60000)
     page.wait_for_timeout(3000)
-    before = len(captured)
-    print(f"Before clicking Filtrele: {before} responses captured.")
 
+    # Dump the full filter-area HTML (a reasonably sized chunk around the
+    # custom-select elements) so we can see labels, option lists, and any
+    # surrounding structure without guessing selectors blindly.
     try:
-        filtrele = page.get_by_label("Filtrele", exact=False)
-        if filtrele.count() == 0:
-            filtrele = page.locator("[aria-label='Filtrele']")
-        filtrele.first.click(timeout=10000)
-        print("Clicked the 'Filtrele' button.")
+        filter_area = page.locator("#custom-select").first
+        container_html = filter_area.evaluate(
+            "el => { let n = el; for (let i = 0; i < 5 && n.parentElement; i++) n = n.parentElement; return n.outerHTML; }"
+        )
+        print(f"Filter area HTML (~{len(container_html)} chars):")
+        print(container_html[:6000])
     except Exception as e:
-        print(f"Could not click Filtrele: {e}")
+        print(f"Could not extract filter area HTML: {e}")
 
-    page.wait_for_timeout(6000)
-    print(f"\nResponses after clicking Filtrele: {len(captured)} (was {before})")
-    for c in captured[before:]:
-        if "google-analytics" not in c["url"] and "gifload" not in c["url"]:
-            print(f"  {c['method']} {c['status']} {c['url']}")
-
-    hrefs = page.eval_on_selector_all(
-        "a[href*='Bildirim']", "els => els.map(e => ({href: e.getAttribute('href'), text: e.innerText}))"
+    # Any <select> elements and their options.
+    selects = page.eval_on_selector_all(
+        "select",
+        "els => els.map(e => ({id: e.id, name: e.name, options: Array.from(e.options).map(o => o.text + '=' + o.value)}))",
     )
-    print(f"\nRendered <a href*=Bildirim> links after Filtrele: {len(hrefs)}")
-    for h in hrefs[:40]:
-        print(f"  {h}")
+    print(f"\n<select> elements: {len(selects)}")
+    for s in selects:
+        print(f"  {s}")
 
-    # Dump any <table> rows now visible.
-    rows = page.eval_on_selector_all(
-        "table tr", "els => els.slice(0, 40).map(e => e.innerText.replace(/\\s+/g, ' ').trim())"
-    )
-    print(f"\n<table tr> rows found: {len(rows)}")
-    for row in rows:
-        print(f"  {row}")
+    # Click Filtrele and look for any error/validation text appearing.
+    try:
+        page.locator("[aria-label='Filtrele']").first.click(timeout=10000)
+        page.wait_for_timeout(3000)
+    except Exception as e:
+        print(f"Filtrele click failed: {e}")
 
     body_text = page.evaluate("document.body.innerText")
-    idx = body_text.lower().find("portföy dağılım")
-    print(f"\n'Portföy Dağılım' found in final rendered text: {idx != -1}")
-    if idx != -1:
-        print(body_text[max(0, idx - 200):idx + 1000])
+    for kw in ["zorunlu", "seçiniz", "hata", "gerekli", "lütfen", "sonuç bulunamadı", "kayıt bulunamadı"]:
+        if kw in body_text.lower():
+            idx = body_text.lower().find(kw)
+            print(f"\nFound keyword {kw!r} in body text near: ...{body_text[max(0,idx-100):idx+200]}...")
+
+    rows = page.eval_on_selector_all(
+        "table tr", "els => els.map(e => e.innerText.replace(/\\s+/g, ' ').trim())"
+    )
+    print(f"\n<table tr> rows after Filtrele: {len(rows)}")
+    for row in rows:
+        print(f"  {row!r}")
 
     browser.close()
