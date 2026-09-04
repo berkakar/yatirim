@@ -1,12 +1,9 @@
-"""Geçici son doğrulama - tam çözüm zinciri artık biliniyor:
-  1) fon kodu -> fundOid (bu adımı doğruluyoruz: bare-code sayfası
-     düz HTTP isteğiyle fundOid içeriyor mu?)
-  2) GET /tr/api/disclosure/filter/FILTERYFBF/<fundOid>/<PDR type OID>/365
-     -> "Portföy Dağılım Raporu" bildirim listesi (en yeniden eskiye)
-  3) en yeni disclosureIndex -> attachment-detail -> file/download
-     (Java-wrapped) -> pdfplumber ile parse (zaten kanıtlanmıştı)
-Bu script sadece adım 1'i (bare-code sayfasından fundOid çıkarımı) hem
-ozet hem genel sayfası için, hem TPR hem KYA için test ediyor.
+"""Geçici son doğrulama - fon kodu -> fundOid zincirinin SON halkası:
+TEFAS "Fon Adı" alanından KAP slug'ını (kod-transliterated-isim biçiminde)
+üretip, bu slug'lı sayfanın gerçekten doğru fundOid'i içerdiğini KYA için
+de (TPR dışında, farklı bir fon/yönetici) doğruluyoruz - üretim kodunda
+kullanılacak transliterasyon fonksiyonunun genellenebilir olduğunu
+kanıtlamak için.
 """
 import re
 
@@ -14,21 +11,29 @@ import requests
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
 
-# (kod, bilinen doğru fundOid)
-FUNDS = [
-    ("TPR", "33E5FED7ECE300EAE0530A4A622B2AEA"),
-    ("KYA", "33E5FED7E5D300EAE0530A4A622B2AEA"),
+TR_MAP = str.maketrans({
+    "İ": "i", "I": "i", "ı": "i", "Ş": "s", "ş": "s", "Ğ": "g", "ğ": "g",
+    "Ü": "u", "ü": "u", "Ö": "o", "ö": "o", "Ç": "c", "ç": "c",
+})
+
+
+def slugify(code: str, fund_name: str) -> str:
+    name = fund_name.translate(TR_MAP).lower()
+    name = re.sub(r"[^a-z0-9]+", "-", name).strip("-")
+    return f"{code.lower()}-{name}"
+
+
+# Gerçek KAP companyTitle'ları (disclosure JSON'undan doğrulanmış):
+CASES = [
+    ("TPR", "İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)", "33E5FED7ECE300EAE0530A4A622B2AEA"),
+    ("KYA", "KARE PORTFÖY HİSSE SENEDİ FONU (HİSSE SENEDİ YOĞUN FON)", "33E5FED7E5D300EAE0530A4A622B2AEA"),
 ]
 
-for code, known_oid in FUNDS:
-    for page_type in ["ozet", "genel"]:
-        url = f"https://www.kap.org.tr/tr/fon-bilgileri/{page_type}/{code}"
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        found = known_oid in r.text
-        all_oids = set(re.findall(r'[0-9A-Fa-f]{32}', r.text))
-        print(f"{code} {page_type} (bare code): status={r.status_code}, len={len(r.text)}, "
-              f"known_oid_present={found}, total_hex_oids_on_page={len(all_oids)}")
-        if found:
-            # Show a snippet of context around the OID to see how it's embedded.
-            idx = r.text.find(known_oid)
-            print(f"  context: ...{r.text[max(0,idx-150):idx+50]}...")
+for code, name, known_oid in CASES:
+    slug = slugify(code, name)
+    url = f"https://www.kap.org.tr/tr/fon-bilgileri/genel/{slug}"
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    found = known_oid in r.text
+    print(f"{code}: slug={slug!r}")
+    print(f"  -> {url}")
+    print(f"  status={r.status_code}, len={len(r.text)}, correct_fundOid_present={found}")
