@@ -22,7 +22,4 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: pip install playwright
-      - run: playwright install --with-deps chromium
-
       - run: python kap_fund_holdings_test.py

@@ -1,83 +1,43 @@
-"""Geçici doğrulama - SORUN BULUNDU: "Bildirim tipi için seçim yapınız"
-(disclosure type) alanı boş bırakıldığı için "Lütfen bildirim tipi
-seçimini yapınız..." doğrulama hatası veriyordu. Tarih aralığı zaten
-"Son 1 yıl" (365 gün) varsayılanına sahip. Bu turda bildirim tipi
-dropdown'ını açıp gerçek seçenekleri listeliyoruz, "Portföy Dağılım
-Raporu" (veya en yakın eşleşen) varsa seçip Filtrele'ye basıyoruz ve
-sonuç tablosunu okuyoruz.
+"""Geçici doğrulama - SON adım: gerçek uç nokta bulundu:
+GET /tr/api/disclosure/filter/FILTERYFBF/<fundOid>/<disclosureTypeOid>/<gün>
+Bu turda düz requests ile (tarayıcısız) çağırıp:
+  1) JSON şeklini (disclosureIndex/disclosureId alan adları) doğruluyoruz,
+  2) "Portföy Dağılım Raporu" tip OID'inin (8aca490d502e34b801502e380044002b)
+     BAŞKA bir fon (KYA) için de aynı/evrensel olup olmadığını kontrol
+     ediyoruz - eğer öyleyse, sabit bir sabit olarak kullanılabilir.
 """
-from playwright.sync_api import sync_playwright
+import json
 
-URL = "https://www.kap.org.tr/tr/fon-bildirimleri/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon"
+import requests
 
-captured = []
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
+FILTER_URL = "https://www.kap.org.tr/tr/api/disclosure/filter/FILTERYFBF/{fund_oid}/{type_oid}/{days}"
+PDR_TYPE_OID = "8aca490d502e34b801502e380044002b"
 
-with sync_playwright() as p:
-    browser = p.chromium.launch()
-    page = browser.new_page()
+FUNDS = [
+    ("TPR", "33E5FED7ECE300EAE0530A4A622B2AEA"),
+    ("KYA", "33E5FED7E5D300EAE0530A4A622B2AEA"),
+]
 
-    def on_response(response):
-        if "/tr/api/" in response.url:
-            captured.append({"url": response.url, "status": response.status})
-
-    page.on("response", on_response)
-
-    print(f"Navigating to {URL} ...")
-    page.goto(URL, wait_until="networkidle", timeout=60000)
-    page.wait_for_timeout(2000)
-
-    # Click the "Bildirim tipi için seçim yapınız" combobox to open the MUI dropdown.
-    type_combo = page.locator("[aria-label='Bildirim tipi için seçim yapınız']").first
-    type_combo.click(timeout=10000)
-    page.wait_for_timeout(1000)
-
-    # MUI renders options in a portal - look for any listbox/option elements anywhere.
-    options = page.eval_on_selector_all(
-        "[role='option'], li[role='option'], ul[role='listbox'] li",
-        "els => els.map(e => e.innerText.trim())",
-    )
-    print(f"Dropdown options found: {len(options)}")
-    for o in options:
-        print(f"  {o!r}")
-
-    # Try to click an option matching "Portföy Dağılım" (case-insensitive), else the first non-empty one.
-    target = None
-    for o in options:
-        if "portföy dağılım" in o.lower() or "portfoy dagilim" in o.lower():
-            target = o
-            break
-    if not target and options:
-        target = options[0]
-    print(f"\nSelecting option: {target!r}")
-
-    if target:
-        try:
-            page.get_by_role("option", name=target, exact=True).click(timeout=5000)
-        except Exception as e:
-            print(f"Exact role click failed ({e}), trying text click...")
-            page.get_by_text(target, exact=True).last.click(timeout=5000)
-        page.wait_for_timeout(1500)
-
-    before = len(captured)
-    page.locator("[aria-label='Filtrele']").first.click(timeout=10000)
-    page.wait_for_timeout(6000)
-
-    print(f"\n/tr/api/ calls after Filtrele: {len(captured) - before}")
-    for c in captured[before:]:
-        print(f"  {c}")
-
-    rows = page.eval_on_selector_all(
-        "table tr", "els => els.map(e => e.innerText.replace(/\\s+/g, ' ').trim())"
-    )
-    print(f"\n<table tr> rows: {len(rows)}")
-    for row in rows[:30]:
-        print(f"  {row!r}")
-
-    hrefs = page.eval_on_selector_all(
-        "a[href*='Bildirim']", "els => els.map(e => ({href: e.getAttribute('href'), text: e.innerText}))"
-    )
-    print(f"\n<a href*=Bildirim> links: {len(hrefs)}")
-    for h in hrefs[:30]:
-        print(f"  {h}")
-
-    browser.close()
+for code, fund_oid in FUNDS:
+    url = FILTER_URL.format(fund_oid=fund_oid, type_oid=PDR_TYPE_OID, days=365)
+    r = requests.get(url, headers=HEADERS, timeout=20)
+    print(f"\n### {code}: {url} ###")
+    print(f"status={r.status_code}")
+    if not r.ok:
+        print(r.text[:500])
+        continue
+    data = r.json()
+    print(f"Response type: {type(data)}")
+    if isinstance(data, dict):
+        print(f"Top-level keys: {list(data.keys())}")
+        items = data.get("data") or data.get("items") or data.get("results") or data.get("list")
+    else:
+        items = data
+    print(f"items type: {type(items)}, count: {len(items) if hasattr(items, '__len__') else '?'}")
+    if items:
+        print("First 3 raw items:")
+        for it in items[:3]:
+            print(f"  {json.dumps(it, ensure_ascii=False)}")
+    else:
+        print(f"Full raw response (first 2000 chars): {json.dumps(data, ensure_ascii=False)[:2000]}")
