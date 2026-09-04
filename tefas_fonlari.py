@@ -21,7 +21,7 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 _SIGNED_COLUMNS = (
     [f"{w}G Fiyat Değişim %" for w in LOOKBACK_WINDOWS]
     + [f"{w}G Hacim Değişim %" for w in LOOKBACK_WINDOWS]
-    + ["Net Para Girişi/Çıkışı"]
+    + ["Net Para Girişi/Çıkışı", "Tümüne Oranı"]
 )
 
 # valuation.py'deki style_valuation_df ile aynı palet (uygulama genelinde
@@ -59,6 +59,12 @@ def _build_column_config() -> dict:
             "Net Para Girişi/Çıkışı (TL)",
             help="(Bugünkü Tedavüldeki Pay Sayısı - Dünkü Tedavüldeki Pay Sayısı) × Bugünkü Fiyat",
             format="localized",
+        ),
+        "Tümüne Oranı": st.column_config.NumberColumn(
+            "Tümüne Oranı",
+            help="Bu fonun Net Para Girişi/Çıkışı değerinin, tablodaki tüm fonların "
+            "Net Para Girişi/Çıkışı toplamına oranı",
+            format="%.2f%%",
         ),
     }
     for w in LOOKBACK_WINDOWS:
