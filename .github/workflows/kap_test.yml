@@ -1,0 +1,25 @@
+name: KAP Test (geçici, manuel)
+
+on:
+  push:
+    branches:
+      - claude/orda-misin-iwl088
+    paths:
+      - ".github/workflows/kap_test.yml"
+      - "kap_fund_holdings_test.py"
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python kap_fund_holdings_test.py
