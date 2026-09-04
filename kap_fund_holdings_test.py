@@ -1,49 +1,44 @@
-"""Geçici doğrulama - fon-bildirimleri sayfasının ham HTML'inde
-/tr/Bildirim/<id> linkleri var mı (varsa, private API tahmin etmeye hiç
-gerek kalmadan doğrudan bu sayfadan fonun bildirim listesi kazınabilir).
-Ayrıca fon-bilgileri/ozet sayfasının TAM içeriğinde "Portföy Dağılım
-Raporu" ifadesi geçen bir tablo/bölüm var mı kontrol ediliyor.
+"""Geçici doğrulama - 'genel' sayfasının RSC payload'ında /tr/Bildirim/<id>
+linkleri bulundu (gerçek ama sadece 2 tanesi - küçük bir 'son bildirimler'
+widget'ı olabilir). Bu turda: (1) tüm /tr/api/... yollarını (query string
+dahil) daha geniş bir regex ile arıyoruz - "bildirim"/"disclosure"/
+"notification"/"duyuru" geçenleri özellikle işaretliyoruz, (2) sayfadaki
+TÜM Bildirim linklerini (sadece 2 değil, gerçekten kaç tane varsa) ve
+etraflarındaki başlık/tarih bağlamını çıkarıyoruz - belki fazlası var ama
+ilk regex'te encoding/tekrar sorunuyla kaçmıştır.
 """
 import re
 
 import requests
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
+URL = "https://www.kap.org.tr/tr/fon-bilgileri/genel/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon"
 
-PAGES = {
-    "TPR bildirimleri (tam slug)": "https://www.kap.org.tr/tr/fon-bildirimleri/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
-    "TPR ozet (tam slug)": "https://www.kap.org.tr/tr/fon-bilgileri/ozet/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
-    "TPR genel (tam slug)": "https://www.kap.org.tr/tr/fon-bilgileri/genel/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon",
-}
+r = requests.get(URL, headers=HEADERS, timeout=20)
+print(f"status={r.status_code}, len={len(r.text)}")
+html = r.text
 
+# Broad API path capture (incl. query strings), excluding quotes/backslashes.
+api_paths = set(re.findall(r'/tr/api/[^"\'\\\s]+', html))
+print(f"\nAll /tr/api/ paths found ({len(api_paths)}):")
+for p in sorted(api_paths):
+    print(f"  {p}")
 
-def strip_tags(html: str) -> str:
-    html = re.sub(r"<script.*?</script>", " ", html, flags=re.S)
-    html = re.sub(r"<style.*?</style>", " ", html, flags=re.S)
-    html = re.sub(r"<[^>]+>", " ", html)
-    html = re.sub(r"\s+", " ", html)
-    return html
+keyword_hits = [p for p in api_paths if re.search(r'bildirim|disclosure|notif|duyuru', p, re.I)]
+print(f"\nPaths matching bildirim/disclosure/notif/duyuru: {keyword_hits}")
 
+# All /tr/Bildirim/<id> occurrences (dedup) with a title guess from nearby
+# "children":"..." text (RSC payload pattern seen: ...children":"<title>"...href":"/tr/Bildirim/<id>"...)
+all_ids = re.findall(r'/tr/Bildirim/(\d+)', html)
+print(f"\nAll /tr/Bildirim/<id> occurrences (with dupes): {len(all_ids)} -> {sorted(set(all_ids))}")
 
-for label, url in PAGES.items():
-    print(f"\n### {label}: {url} ###")
-    r = requests.get(url, headers=HEADERS, timeout=20)
-    print(f"status={r.status_code}, len={len(r.text)}")
-    if not r.ok:
-        continue
+for m in re.finditer(r'"children\\?":\\?"([^"\\]{3,150})\\?"[^}]*?"href\\?":\\?"/tr/Bildirim/(\d+)', html):
+    print(f"  title guess: {m.group(1)!r} -> id={m.group(2)}")
 
-    bildirim_links = sorted(set(re.findall(r'/tr/Bildirim/(\d+)', r.text)))
-    print(f"/tr/Bildirim/<id> links found: {len(bildirim_links)} -> {bildirim_links[:30]}")
+# Reverse order too (href appears before children in some component orders).
+for m in re.finditer(r'/tr/Bildirim/(\d+)\\?"[^{]*?"children\\?":\\?"([^"\\]{3,150})\\?"', html):
+    print(f"  (reverse) id={m.group(1)} -> title guess: {m.group(2)!r}")
 
-    text = strip_tags(r.text)
-    idxs = [m.start() for m in re.finditer(r"[Pp]ortf[öo]y [Dd]a[ğg][ıi]l[ıi]m", text)]
-    print(f"'portföy dağılım' occurrences in stripped text: {len(idxs)}")
-    for i in idxs[:10]:
-        print(f"  ...{text[max(0, i-150):i+250]}...")
-
-    # Also check for date-like patterns near bildirim links (context for the
-    # first few links, from raw HTML around each match).
-    for bid in bildirim_links[:5]:
-        pos = r.text.find(f"/tr/Bildirim/{bid}")
-        snippet = strip_tags(r.text[max(0, pos - 300):pos + 300])
-        print(f"  context for Bildirim/{bid}: ...{snippet}...")
+# Also check for a distinct "tümünü gör" / "see all" / pagination link pattern.
+see_all = set(re.findall(r'"(/tr/[a-zA-Z0-9\-/]*[Bb]ildirim[a-zA-Z0-9\-/]*)"', html))
+print(f"\n'Bildirim' page-link patterns (non-api): {see_all}")
