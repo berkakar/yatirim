@@ -24,6 +24,7 @@ from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard
 from premium_buy_portfolio import render_premium_buy_portfolio
 from tefas_fonlari import render_turk_fonlari
+from hisse_patern import render_hisse_patern
 from backtest import render_backtest
 
 NAV_HOME = "🏠 Özet"
@@ -37,6 +38,7 @@ MODULE_GROUPS = {
     ],
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
     "🇹🇷 Türk Fonları": ["Türk Fonları"],
+    "📐 Hisse Patern": ["📐 Hisse Patern Analizi"],
     "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
     "🧪 BackTest": ["BackTest"],
 }
@@ -926,7 +928,15 @@ elif module == "Türk Fonları":
     render_turk_fonlari()
 
 # ==============================================================================
-# 11. MODÜL: BACKTEST
+# 11. MODÜL: HİSSE PATERN ANALİZİ
+# ==============================================================================
+elif module == "📐 Hisse Patern Analizi":
+    st.header("📐 Hisse Patern Analizi")
+    st.caption("Seçilen hisselerin yıllık (3 yıllık), 3 aylık (son 2 yıl) ve aylık (son 12 ay) periyotlar arasındaki tekrarlayan fiyat paterni benzerliğini DTW ile ölçer.")
+    render_hisse_patern(target_list)
+
+# ==============================================================================
+# 12. MODÜL: BACKTEST
 # ==============================================================================
 elif module == "BackTest":
     st.header("🧪 BackTest")
