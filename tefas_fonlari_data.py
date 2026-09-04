@@ -106,8 +106,20 @@ def _net_flow(today_shares: float | None, prev_shares: float | None, today_price
     return round((today_shares - prev_shares) * today_price, 2)
 
 
+def _total_ratio(net_flow: float | None, today_shares: float | None, today_price: float | None) -> float | None:
+    """Tümüne Oranı = Net Para Girişi/Çıkışı / (Bugünkü Tedavüldeki Pay Sayısı
+    × Bugünkü Fiyat) - fonun net para giriş/çıkışının, kendi bugünkü toplam
+    büyüklüğüne oranı (%)."""
+    if net_flow is None or today_shares is None or today_price is None:
+        return None
+    denom = today_shares * today_price
+    if denom == 0:
+        return None
+    return round(net_flow / denom * 100, 2)
+
+
 def _build_table(funds: dict) -> list[dict]:
-    entries = []
+    rows = []
     for code, entry in funds.items():
         category_id = classify_fund(entry.get("fund_name", ""))
         if category_id is None:
@@ -119,27 +131,16 @@ def _build_table(funds: dict) -> list[dict]:
         series = [entry["history"][d] for d in dates]
         today, prev = series[-1], series[-2]
         net_flow = _net_flow(today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"])
-        entries.append((code, category_id, dates, series, today, prev, net_flow))
 
-    # Tümüne Oranı: bu fonun Net Para Girişi/Çıkışı'nın, tablodaki tüm
-    # fonların Net Para Girişi/Çıkışı toplamına oranı.
-    total_net_flow = sum(e[6] for e in entries if e[6] is not None)
-
-    rows = []
-    for code, category_id, dates, series, today, prev, net_flow in entries:
         row = {
             "Fon Kodu": code,
-            "Fon Adı": funds[code].get("fund_name", ""),
+            "Fon Adı": entry.get("fund_name", ""),
             "Kategori": FUND_CATEGORIES[category_id][0],
             "Tarih": dates[-1],
             "Önceki Gün Fiyat": round(prev["price"], 4),
             "Bugünkü Fiyat": round(today["price"], 4),
             "Net Para Girişi/Çıkışı": net_flow,
-            "Tümüne Oranı": (
-                round(net_flow / total_net_flow * 100, 2)
-                if net_flow is not None and total_net_flow
-                else None
-            ),
+            "Tümüne Oranı": _total_ratio(net_flow, today.get("shares_outstanding"), today["price"]),
         }
         for window in LOOKBACK_WINDOWS:
             if len(series) > window:
