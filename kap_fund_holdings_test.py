@@ -1,44 +1,67 @@
-"""Geçici doğrulama - 'genel' sayfasının RSC payload'ında /tr/Bildirim/<id>
-linkleri bulundu (gerçek ama sadece 2 tanesi - küçük bir 'son bildirimler'
-widget'ı olabilir). Bu turda: (1) tüm /tr/api/... yollarını (query string
-dahil) daha geniş bir regex ile arıyoruz - "bildirim"/"disclosure"/
-"notification"/"duyuru" geçenleri özellikle işaretliyoruz, (2) sayfadaki
-TÜM Bildirim linklerini (sadece 2 değil, gerçekten kaç tane varsa) ve
-etraflarındaki başlık/tarih bağlamını çıkarıyoruz - belki fazlası var ama
-ilk regex'te encoding/tekrar sorunuyla kaçmıştır.
+"""Geçici doğrulama - gerçek tarayıcı (Playwright/Chromium) ile KAP fon
+özet sayfasını açıp "Bildirimler" sekmesine tıklayarak, sayfanın o an
+gerçekten hangi API'yi çağırdığını ağ trafiğinden yakalıyoruz. Önceki
+turlarda düz requests.get() ile denenen her uç nokta (member/filter,
+byCriteria + çeşitli OID kombinasyonları, batch-news, fon-bildirimleri
+sayfası) ya yanlış veri döndürdü ya da boş kaldı - bu, gerçek listenin
+sayfa yüklendikten SONRA istemci tarafı JS ile çekildiğini düşündürüyor,
+ki bu düz HTTP isteğiyle hiç görülemez.
 """
-import re
+import json
 
-import requests
+from playwright.sync_api import sync_playwright
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; research-bot/1.0)"}
-URL = "https://www.kap.org.tr/tr/fon-bilgileri/genel/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon"
+URL = "https://www.kap.org.tr/tr/fon-bilgileri/ozet/tpr-is-portfoy-py-hisse-senedi-tl-ozel-fonu-hisse-senedi-yogun-fon"
 
-r = requests.get(URL, headers=HEADERS, timeout=20)
-print(f"status={r.status_code}, len={len(r.text)}")
-html = r.text
+captured = []
 
-# Broad API path capture (incl. query strings), excluding quotes/backslashes.
-api_paths = set(re.findall(r'/tr/api/[^"\'\\\s]+', html))
-print(f"\nAll /tr/api/ paths found ({len(api_paths)}):")
-for p in sorted(api_paths):
-    print(f"  {p}")
+with sync_playwright() as p:
+    browser = p.chromium.launch()
+    page = browser.new_page()
 
-keyword_hits = [p for p in api_paths if re.search(r'bildirim|disclosure|notif|duyuru', p, re.I)]
-print(f"\nPaths matching bildirim/disclosure/notif/duyuru: {keyword_hits}")
+    def on_response(response):
+        url = response.url
+        if "/tr/api/" in url:
+            captured.append({"url": url, "status": response.status, "method": response.request.method})
 
-# All /tr/Bildirim/<id> occurrences (dedup) with a title guess from nearby
-# "children":"..." text (RSC payload pattern seen: ...children":"<title>"...href":"/tr/Bildirim/<id>"...)
-all_ids = re.findall(r'/tr/Bildirim/(\d+)', html)
-print(f"\nAll /tr/Bildirim/<id> occurrences (with dupes): {len(all_ids)} -> {sorted(set(all_ids))}")
+    page.on("response", on_response)
 
-for m in re.finditer(r'"children\\?":\\?"([^"\\]{3,150})\\?"[^}]*?"href\\?":\\?"/tr/Bildirim/(\d+)', html):
-    print(f"  title guess: {m.group(1)!r} -> id={m.group(2)}")
+    print(f"Navigating to {URL} ...")
+    page.goto(URL, wait_until="networkidle", timeout=60000)
+    print(f"Initial load captured {len(captured)} /tr/api/ calls.")
 
-# Reverse order too (href appears before children in some component orders).
-for m in re.finditer(r'/tr/Bildirim/(\d+)\\?"[^{]*?"children\\?":\\?"([^"\\]{3,150})\\?"', html):
-    print(f"  (reverse) id={m.group(1)} -> title guess: {m.group(2)!r}")
+    # Try to find and click a "Bildirimler" tab/link.
+    clicked = False
+    for text in ["Bildirimler", "Bildirim", "Duyurular"]:
+        try:
+            locator = page.get_by_text(text, exact=False).first
+            if locator.count() > 0:
+                locator.click(timeout=5000)
+                clicked = True
+                print(f"Clicked element with text matching {text!r}.")
+                page.wait_for_timeout(4000)
+                break
+        except Exception as e:
+            print(f"Could not click {text!r}: {e}")
 
-# Also check for a distinct "tümünü gör" / "see all" / pagination link pattern.
-see_all = set(re.findall(r'"(/tr/[a-zA-Z0-9\-/]*[Bb]ildirim[a-zA-Z0-9\-/]*)"', html))
-print(f"\n'Bildirim' page-link patterns (non-api): {see_all}")
+    if not clicked:
+        print("No 'Bildirimler'-like tab found to click - scrolling instead.")
+        page.mouse.wheel(0, 3000)
+        page.wait_for_timeout(3000)
+
+    print(f"\nTotal /tr/api/ calls captured: {len(captured)}")
+    for c in captured:
+        print(f"  {c['method']} {c['status']} {c['url']}")
+
+    # For any call whose URL looks disclosure/fund-related, fetch and print its body.
+    for c in captured:
+        if any(k in c["url"].lower() for k in ["bildirim", "disclosure", "notification", "fund", "fon"]):
+            try:
+                resp = page.request.get(c["url"])
+                body = resp.text()
+                print(f"\n--- Body of {c['url']} (first 2000 chars) ---")
+                print(body[:2000])
+            except Exception as e:
+                print(f"Could not refetch {c['url']}: {e}")
+
+    browser.close()
