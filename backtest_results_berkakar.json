@@ -1189,5 +1189,3922 @@
         "reason": "test_end_close"
       }
     ]
+  },
+  {
+    "run_id": "BE-demand_zone-30Min-20260904T085643",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "demand_zone",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10262.08,
+    "pnl": 262.08,
+    "pnl_pct": 2.62,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-10T16:30:00Z",
+        "price": 157.0,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-10T18:30:00Z",
+        "price": 154.65,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-12T19:30:00Z",
+        "price": 159.5,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-13T14:00:00Z",
+        "price": 159.5,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-13T17:30:00Z",
+        "price": 154.97,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-13T19:00:00Z",
+        "price": 152.65,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-16T14:30:00Z",
+        "price": 153.84,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-16T16:00:00Z",
+        "price": 151.53,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-17T13:30:00Z",
+        "price": 152.42,
+        "qty": 62,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-19T13:30:00Z",
+        "price": 151.365,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-20T14:00:00Z",
+        "price": 161.21,
+        "qty": 58,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T14:30:00Z",
+        "price": 158.79,
+        "qty": 58,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-20T17:00:00Z",
+        "price": 158.39,
+        "qty": 59,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T17:30:00Z",
+        "price": 155.98,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-23T14:00:00Z",
+        "price": 154.12,
+        "qty": 59,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T15:30:00Z",
+        "price": 151.81,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-23T18:30:00Z",
+        "price": 143.57,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T19:30:00Z",
+        "price": 141.42,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-24T17:00:00Z",
+        "price": 140.53,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-26T14:30:00Z",
+        "price": 140.53,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T13:30:00Z",
+        "price": 129.95,
+        "qty": 68,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T14:00:00Z",
+        "price": 122.83,
+        "qty": 68,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-01T16:00:00Z",
+        "price": 136.97,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-01T18:00:00Z",
+        "price": 134.92,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-02T13:30:00Z",
+        "price": 127.95,
+        "qty": 65,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T13:30:00Z",
+        "price": 208.1048,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-16T16:00:00Z",
+        "price": 208.94,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-17T13:30:00Z",
+        "price": 205.81,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-20T13:30:00Z",
+        "price": 203.38,
+        "qty": 65,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T13:30:00Z",
+        "price": 226.7788,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-27T16:00:00Z",
+        "price": 234.53,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T19:30:00Z",
+        "price": 234.53,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T14:30:00Z",
+        "price": 219.29,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T19:00:00Z",
+        "price": 276.4461,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-01T14:30:00Z",
+        "price": 277.99,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T15:00:00Z",
+        "price": 283.0916,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-04T19:30:00Z",
+        "price": 284.06,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-06T14:00:00Z",
+        "price": 284.06,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T13:30:00Z",
+        "price": 277.99,
+        "qty": 68,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T14:30:00Z",
+        "price": 277.99,
+        "qty": 68,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T15:30:00Z",
+        "price": 270.89,
+        "qty": 70,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T16:00:00Z",
+        "price": 266.83,
+        "qty": 70,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-08T19:00:00Z",
+        "price": 262.76,
+        "qty": 71,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T13:30:00Z",
+        "price": 281.867,
+        "qty": 71,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-15T19:00:00Z",
+        "price": 285.32,
+        "qty": 70,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T19:30:00Z",
+        "price": 281.04,
+        "qty": 70,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-18T14:30:00Z",
+        "price": 263.16,
+        "qty": 75,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-18T15:00:00Z",
+        "price": 257.94,
+        "qty": 75,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-18T17:00:00Z",
+        "price": 254.56,
+        "qty": 76,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-18T18:00:00Z",
+        "price": 250.74,
+        "qty": 76,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T13:30:00Z",
+        "price": 253.35,
+        "qty": 75,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-19T14:00:00Z",
+        "price": 249.55,
+        "qty": 75,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-20T16:30:00Z",
+        "price": 283.63,
+        "qty": 66,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-20T18:30:00Z",
+        "price": 283.63,
+        "qty": 66,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-22T14:00:00Z",
+        "price": 311.58,
+        "qty": 60,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-22T15:00:00Z",
+        "price": 311.58,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-22T16:00:00Z",
+        "price": 309.83,
+        "qty": 60,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-22T17:00:00Z",
+        "price": 305.18,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-26T15:00:00Z",
+        "price": 304.98,
+        "qty": 60,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-26T18:30:00Z",
+        "price": 304.98,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-27T19:00:00Z",
+        "price": 295.68,
+        "qty": 62,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T13:30:00Z",
+        "price": 291.24,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-28T19:30:00Z",
+        "price": 297.11,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T13:30:00Z",
+        "price": 279.285,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T13:30:00Z",
+        "price": 275.85,
+        "qty": 62,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T14:30:00Z",
+        "price": 271.71,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T19:30:00Z",
+        "price": 277.11,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-03T13:30:00Z",
+        "price": 294.705,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-04T13:30:00Z",
+        "price": 278.47,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-04T14:30:00Z",
+        "price": 278.47,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T13:30:00Z",
+        "price": 278.47,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T14:00:00Z",
+        "price": 269,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T16:30:00Z",
+        "price": 263.85,
+        "qty": 65,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T18:00:00Z",
+        "price": 259.89,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-08T15:30:00Z",
+        "price": 255.93,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-08T16:00:00Z",
+        "price": 252.09,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T15:30:00Z",
+        "price": 253.96,
+        "qty": 66,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T16:00:00Z",
+        "price": 250.15,
+        "qty": 66,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T17:00:00Z",
+        "price": 247,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T13:30:00Z",
+        "price": 247,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-10T14:30:00Z",
+        "price": 248.2,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T15:00:00Z",
+        "price": 241.545,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-17T15:30:00Z",
+        "price": 284.88,
+        "qty": 56,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-17T18:00:00Z",
+        "price": 284.88,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T13:30:00Z",
+        "price": 324.58,
+        "qty": 49,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T14:00:00Z",
+        "price": 315.99,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T17:30:00Z",
+        "price": 323.04,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T18:30:00Z",
+        "price": 318.19,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-24T16:30:00Z",
+        "price": 337.05,
+        "qty": 46,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T17:00:00Z",
+        "price": 329.73,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T14:30:00Z",
+        "price": 321.7,
+        "qty": 47,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T15:00:00Z",
+        "price": 316.87,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T13:30:00Z",
+        "price": 289.07,
+        "qty": 51,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T14:00:00Z",
+        "price": 280.83,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T19:30:00Z",
+        "price": 271.28,
+        "qty": 53,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-29T14:00:00Z",
+        "price": 267.21,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-29T16:00:00Z",
+        "price": 273.4,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-29T19:00:00Z",
+        "price": 273.4,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-01T13:30:00Z",
+        "price": 294.12,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-01T18:00:00Z",
+        "price": 294.12,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-02T14:00:00Z",
+        "price": 294.28,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T14:30:00Z",
+        "price": 288.8,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-02T16:00:00Z",
+        "price": 268.83,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T16:30:00Z",
+        "price": 263.95,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-07T14:30:00Z",
+        "price": 266.64,
+        "qty": 51,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-07T15:30:00Z",
+        "price": 262.64,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-07T16:30:00Z",
+        "price": 266.64,
+        "qty": 51,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-07T18:30:00Z",
+        "price": 266.64,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T13:30:00Z",
+        "price": 260.91,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-08T14:30:00Z",
+        "price": 257.0,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T19:00:00Z",
+        "price": 249.86,
+        "qty": 53,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-10T13:30:00Z",
+        "price": 249.86,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T13:30:00Z",
+        "price": 234.91,
+        "qty": 57,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-13T16:00:00Z",
+        "price": 234.91,
+        "qty": 57,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-14T18:00:00Z",
+        "price": 235.53,
+        "qty": 56,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T13:30:00Z",
+        "price": 235.53,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T13:30:00Z",
+        "price": 228.48,
+        "qty": 58,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T14:00:00Z",
+        "price": 221.48,
+        "qty": 58,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T18:30:00Z",
+        "price": 214.53,
+        "qty": 60,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-17T19:30:00Z",
+        "price": 211.31,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-20T16:30:00Z",
+        "price": 201.22,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 201.22,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-22T13:30:00Z",
+        "price": 222.14,
+        "qty": 57,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-22T17:30:00Z",
+        "price": 222.14,
+        "qty": 57,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-23T18:00:00Z",
+        "price": 220.57,
+        "qty": 58,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-23T19:30:00Z",
+        "price": 217.26,
+        "qty": 58,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T14:30:00Z",
+        "price": 201.93,
+        "qty": 62,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T15:00:00Z",
+        "price": 198.9,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T16:00:00Z",
+        "price": 201.93,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T17:30:00Z",
+        "price": 198.9,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-28T13:30:00Z",
+        "price": 182.28,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-28T14:00:00Z",
+        "price": 164.21,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T14:30:00Z",
+        "price": 160.33,
+        "qty": 68,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T15:30:00Z",
+        "price": 160.33,
+        "qty": 68,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 171.47,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T19:30:00Z",
+        "price": 167.91,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T15:00:00Z",
+        "price": 210.73,
+        "qty": 51,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-31T15:30:00Z",
+        "price": 207.57,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T19:00:00Z",
+        "price": 210.73,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-31T19:30:00Z",
+        "price": 207.57,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-04T16:30:00Z",
+        "price": 231.75,
+        "qty": 45,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-04T18:00:00Z",
+        "price": 228.27,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-05T14:30:00Z",
+        "price": 231.75,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-06T13:30:00Z",
+        "price": 222.88,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-06T16:00:00Z",
+        "price": 237.92,
+        "qty": 41,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-06T18:00:00Z",
+        "price": 234.35,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-06T19:30:00Z",
+        "price": 230.61,
+        "qty": 42,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-07T13:30:00Z",
+        "price": 227.15,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-07T19:30:00Z",
+        "price": 218.09,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-10T13:30:00Z",
+        "price": 214.82,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-10T14:30:00Z",
+        "price": 215.84,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-10T19:00:00Z",
+        "price": 212.6,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-11T15:30:00Z",
+        "price": 213.02,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-14T18:00:00Z",
+        "price": 230.3504,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-17T18:00:00Z",
+        "price": 231.9,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T13:30:00Z",
+        "price": 220.765,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T15:00:00Z",
+        "price": 206.28,
+        "qty": 46,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T18:00:00Z",
+        "price": 206.28,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-19T13:30:00Z",
+        "price": 204.93,
+        "qty": 47,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-19T14:00:00Z",
+        "price": 201.86,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-21T14:00:00Z",
+        "price": 200.44,
+        "qty": 47,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-21T14:30:00Z",
+        "price": 197.43,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-26T14:00:00Z",
+        "price": 217.21,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-26T15:30:00Z",
+        "price": 213.95,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-31T13:30:00Z",
+        "price": 206.6,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-31T14:00:00Z",
+        "price": 203.5,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-02T14:00:00Z",
+        "price": 207.58,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-03T19:30:00Z",
+        "price": 235.16,
+        "qty": 43,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-demand_zone-1Hour-20260904T085644",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "demand_zone",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 7722.48,
+    "pnl": -2277.52,
+    "pnl_pct": -22.78,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-12T14:00:00Z",
+        "price": 156.01,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-12T19:00:00Z",
+        "price": 156.01,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-18T14:00:00Z",
+        "price": 157.13,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-18T19:00:00Z",
+        "price": 157.13,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-20T16:00:00Z",
+        "price": 160.47,
+        "qty": 62,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T17:00:00Z",
+        "price": 158.06,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-23T15:00:00Z",
+        "price": 153.05,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T16:00:00Z",
+        "price": 145.63,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-26T14:00:00Z",
+        "price": 146.62,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-26T15:00:00Z",
+        "price": 138.31,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-01T18:00:00Z",
+        "price": 134.67,
+        "qty": 65,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-01T19:00:00Z",
+        "price": 132.65,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-02T16:00:00Z",
+        "price": 135.22,
+        "qty": 64,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-07T14:00:00Z",
+        "price": 133.19,
+        "qty": 64,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-07T18:00:00Z",
+        "price": 135.5,
+        "qty": 63,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-07T19:00:00Z",
+        "price": 133.01,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-15T18:00:00Z",
+        "price": 213.76,
+        "qty": 39,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T14:00:00Z",
+        "price": 206.85,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-21T19:00:00Z",
+        "price": 220.6,
+        "qty": 37,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-28T14:00:00Z",
+        "price": 220.6,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:00:00Z",
+        "price": 280.2,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T15:00:00Z",
+        "price": 276.0,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T19:00:00Z",
+        "price": 276.4,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-06T14:00:00Z",
+        "price": 282.5612,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T14:00:00Z",
+        "price": 281.78,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T15:00:00Z",
+        "price": 277.55,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-12T16:00:00Z",
+        "price": 268.39,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T18:00:00Z",
+        "price": 284.4638,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-18T14:00:00Z",
+        "price": 275.27,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-18T15:00:00Z",
+        "price": 257.94,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-20T19:00:00Z",
+        "price": 283.63,
+        "qty": 28,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-22T19:00:00Z",
+        "price": 304.7649,
+        "qty": 28,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-28T17:00:00Z",
+        "price": 298.7,
+        "qty": 28,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T19:00:00Z",
+        "price": 298.7,
+        "qty": 28,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T14:00:00Z",
+        "price": 283.63,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T15:00:00Z",
+        "price": 271.81,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T19:00:00Z",
+        "price": 278.19,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-04T14:00:00Z",
+        "price": 278.19,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T14:00:00Z",
+        "price": 284.42,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T15:00:00Z",
+        "price": 273.86,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-08T14:00:00Z",
+        "price": 252.19,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-08T17:00:00Z",
+        "price": 252.19,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T15:00:00Z",
+        "price": 254.94,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T16:00:00Z",
+        "price": 251.12,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-10T14:00:00Z",
+        "price": 254.85,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T15:00:00Z",
+        "price": 241.545,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-11T18:00:00Z",
+        "price": 247.61,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T15:00:00Z",
+        "price": 306.644,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T14:00:00Z",
+        "price": 294.55,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T15:00:00Z",
+        "price": 269.2,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T19:00:00Z",
+        "price": 263.21,
+        "qty": 32,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-29T15:00:00Z",
+        "price": 263.21,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-29T19:00:00Z",
+        "price": 274.03,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T15:00:00Z",
+        "price": 274.03,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-07T14:00:00Z",
+        "price": 272.43,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-07T15:00:00Z",
+        "price": 265.52,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T14:00:00Z",
+        "price": 268.7,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-08T15:00:00Z",
+        "price": 250.77,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T17:00:00Z",
+        "price": 245.11,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-10T14:00:00Z",
+        "price": 238.42,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T16:00:00Z",
+        "price": 235.84,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-13T17:00:00Z",
+        "price": 232.3,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-14T18:00:00Z",
+        "price": 235.53,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T14:00:00Z",
+        "price": 235.53,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T14:00:00Z",
+        "price": 228.48,
+        "qty": 32,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T15:00:00Z",
+        "price": 220.88,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T18:00:00Z",
+        "price": 215.97,
+        "qty": 33,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-17T19:00:00Z",
+        "price": 212.73,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-22T17:00:00Z",
+        "price": 222.14,
+        "qty": 31,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-22T19:00:00Z",
+        "price": 218.81,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T16:00:00Z",
+        "price": 202.09,
+        "qty": 34,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T17:00:00Z",
+        "price": 199.06,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-28T14:00:00Z",
+        "price": 185.52,
+        "qty": 36,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-28T15:00:00Z",
+        "price": 163.84,
+        "qty": 36,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 164.68,
+        "qty": 36,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T14:00:00Z",
+        "price": 214.525,
+        "qty": 36,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-31T14:00:00Z",
+        "price": 207.41,
+        "qty": 37,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-31T15:00:00Z",
+        "price": 204.3,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-01T16:00:00Z",
+        "price": 207.41,
+        "qty": 37,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-02T14:00:00Z",
+        "price": 207.41,
+        "qty": 37,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-demand_zone-1Day-20260904T085644",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "demand_zone",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 15829.65,
+    "pnl": 5829.65,
+    "pnl_pct": 58.3,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-20T04:00:00Z",
+        "price": 162.27,
+        "qty": 61,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T04:00:00Z",
+        "price": 153.61,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-07T04:00:00Z",
+        "price": 132.03,
+        "qty": 71,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T04:00:00Z",
+        "price": 242.1576,
+        "qty": 71,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T04:00:00Z",
+        "price": 295.7,
+        "qty": 58,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-29T04:00:00Z",
+        "price": 272.45,
+        "qty": 58,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-07T04:00:00Z",
+        "price": 283.43,
+        "qty": 56,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-08T04:00:00Z",
+        "price": 262.595,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T04:00:00Z",
+        "price": 219.01,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-19T04:00:00Z",
+        "price": 212.55,
+        "qty": 67,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-28T04:00:00Z",
+        "price": 209.77,
+        "qty": 68,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-31T04:00:00Z",
+        "price": 206.62,
+        "qty": 68,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-02T04:00:00Z",
+        "price": 209.77,
+        "qty": 67,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-03T04:00:00Z",
+        "price": 235.16,
+        "qty": 67,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-trend_pullback-30Min-20260904T085644",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "trend_pullback",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9445.79,
+    "pnl": -554.21,
+    "pnl_pct": -5.54,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-10T17:30:00Z",
+        "price": 157.19,
+        "qty": 63,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-10T18:30:00Z",
+        "price": 154.83,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-11T17:00:00Z",
+        "price": 161.03,
+        "qty": 61,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-11T17:30:00Z",
+        "price": 158.61,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-12T13:30:00Z",
+        "price": 159.06,
+        "qty": 61,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-12T14:30:00Z",
+        "price": 156.67,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-12T15:30:00Z",
+        "price": 161.41,
+        "qty": 59,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-12T17:30:00Z",
+        "price": 161.41,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-25T17:00:00Z",
+        "price": 150.57,
+        "qty": 63,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-25T19:30:00Z",
+        "price": 148.31,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-02T15:00:00Z",
+        "price": 136.66,
+        "qty": 68,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-02T16:00:00Z",
+        "price": 134.61,
+        "qty": 68,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-14T14:00:00Z",
+        "price": 206.81,
+        "qty": 44,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T13:30:00Z",
+        "price": 208.1048,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-16T18:30:00Z",
+        "price": 208.76,
+        "qty": 44,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-17T13:30:00Z",
+        "price": 205.63,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-17T19:00:00Z",
+        "price": 207.35,
+        "qty": 44,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-20T13:30:00Z",
+        "price": 204.24,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-01T13:30:00Z",
+        "price": 283.21,
+        "qty": 31,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-01T14:00:00Z",
+        "price": 278.96,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-04T17:00:00Z",
+        "price": 286.45,
+        "qty": 31,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T19:00:00Z",
+        "price": 286.45,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-05T13:30:00Z",
+        "price": 288.62,
+        "qty": 30,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-05T14:30:00Z",
+        "price": 288.62,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-11T14:00:00Z",
+        "price": 282.32,
+        "qty": 31,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-12T13:30:00Z",
+        "price": 275.6,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-14T14:30:00Z",
+        "price": 289.95,
+        "qty": 30,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T13:30:00Z",
+        "price": 285.32,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-02T14:00:00Z",
+        "price": 293.51,
+        "qty": 29,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-03T13:30:00Z",
+        "price": 294.705,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T19:00:00Z",
+        "price": 260.65,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T19:30:00Z",
+        "price": 256.74,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-11T15:30:00Z",
+        "price": 242.97,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T13:30:00Z",
+        "price": 307,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-20T18:00:00Z",
+        "price": 205.01,
+        "qty": 52,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 201.93,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-23T16:30:00Z",
+        "price": 226.32,
+        "qty": 46,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-23T17:00:00Z",
+        "price": 222.93,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-27T16:30:00Z",
+        "price": 183.44,
+        "qty": 56,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T17:00:00Z",
+        "price": 180.69,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T17:30:00Z",
+        "price": 215.26,
+        "qty": 47,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-31T19:00:00Z",
+        "price": 212.03,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-04T19:00:00Z",
+        "price": 230.47,
+        "qty": 43,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-05T13:30:00Z",
+        "price": 223.31,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-10T16:00:00Z",
+        "price": 217.72,
+        "qty": 44,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-10T17:30:00Z",
+        "price": 214.45,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-28T14:30:00Z",
+        "price": 221.32,
+        "qty": 43,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-28T15:00:00Z",
+        "price": 218.0,
+        "qty": 43,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-trend_pullback-1Hour-20260904T085644",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "trend_pullback",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9622.35,
+    "pnl": -377.65,
+    "pnl_pct": -3.78,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-25T17:00:00Z",
+        "price": 150.57,
+        "qty": 66,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-25T19:00:00Z",
+        "price": 148.31,
+        "qty": 66,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T14:00:00Z",
+        "price": 133.35,
+        "qty": 73,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T15:00:00Z",
+        "price": 119.725,
+        "qty": 73,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-01T15:00:00Z",
+        "price": 138.85,
+        "qty": 63,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-01T16:00:00Z",
+        "price": 136.77,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-02T15:00:00Z",
+        "price": 136.66,
+        "qty": 63,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-02T16:00:00Z",
+        "price": 134.61,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-09T16:00:00Z",
+        "price": 162.47,
+        "qty": 52,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-09T17:00:00Z",
+        "price": 157.66,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-15T14:00:00Z",
+        "price": 219.0,
+        "qty": 38,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-15T16:00:00Z",
+        "price": 219.0,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-17T19:00:00Z",
+        "price": 207.35,
+        "qty": 40,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-28T14:00:00Z",
+        "price": 226.5602,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T16:00:00Z",
+        "price": 223.56,
+        "qty": 40,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T16:00:00Z",
+        "price": 272.555,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-01T14:00:00Z",
+        "price": 283.21,
+        "qty": 39,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T15:00:00Z",
+        "price": 283.21,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-04T17:00:00Z",
+        "price": 286.45,
+        "qty": 38,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-06T14:00:00Z",
+        "price": 286.45,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-27T16:00:00Z",
+        "price": 297.32,
+        "qty": 37,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T14:00:00Z",
+        "price": 290.44,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T19:00:00Z",
+        "price": 260.65,
+        "qty": 41,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T14:00:00Z",
+        "price": 250.24,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-20T18:00:00Z",
+        "price": 205.01,
+        "qty": 50,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 201.93,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T14:00:00Z",
+        "price": 167.03,
+        "qty": 61,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T15:00:00Z",
+        "price": 163.145,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-10T16:00:00Z",
+        "price": 217.72,
+        "qty": 45,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-10T17:00:00Z",
+        "price": 214.45,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-21T16:00:00Z",
+        "price": 199.13,
+        "qty": 49,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T14:00:00Z",
+        "price": 194.39,
+        "qty": 49,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-trend_pullback-1Day-20260904T085644",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "trend_pullback",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9162.59,
+    "pnl": -837.41,
+    "pnl_pct": -8.37,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-15T04:00:00Z",
+        "price": 219.0,
+        "qty": 45,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T04:00:00Z",
+        "price": 213,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-24T04:00:00Z",
+        "price": 321.82,
+        "qty": 30,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T04:00:00Z",
+        "price": 316.99,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T04:00:00Z",
+        "price": 207.01,
+        "qty": 46,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-03T04:00:00Z",
+        "price": 197.825,
+        "qty": 46,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-volatility_support-30Min-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "volatility_support",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 8950.65,
+    "pnl": -1049.35,
+    "pnl_pct": -10.49,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-13T19:00:00Z",
+        "price": 153.53,
+        "qty": 65,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-16T14:30:00Z",
+        "price": 153.53,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-23T13:30:00Z",
+        "price": 150.12,
+        "qty": 66,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T15:30:00Z",
+        "price": 150.12,
+        "qty": 66,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-27T13:30:00Z",
+        "price": 133.69,
+        "qty": 74,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-27T14:00:00Z",
+        "price": 131.68,
+        "qty": 74,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T14:30:00Z",
+        "price": 120.19,
+        "qty": 81,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T15:00:00Z",
+        "price": 118.39,
+        "qty": 81,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-16T14:30:00Z",
+        "price": 205.28,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-17T13:30:00Z",
+        "price": 205.28,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T16:00:00Z",
+        "price": 223.56,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T19:00:00Z",
+        "price": 276.4461,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T17:00:00Z",
+        "price": 266.64,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T17:30:00Z",
+        "price": 262.64,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-22T19:30:00Z",
+        "price": 303.21,
+        "qty": 38,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-26T15:00:00Z",
+        "price": 303.21,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-27T14:30:00Z",
+        "price": 290.5,
+        "qty": 40,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T13:30:00Z",
+        "price": 290.5,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-29T15:00:00Z",
+        "price": 271.62,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T13:30:00Z",
+        "price": 271.62,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-03T17:00:00Z",
+        "price": 286.96,
+        "qty": 41,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-04T13:30:00Z",
+        "price": 278.065,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T17:00:00Z",
+        "price": 247.16,
+        "qty": 46,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T13:30:00Z",
+        "price": 247.16,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T17:30:00Z",
+        "price": 304.45,
+        "qty": 37,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T19:00:00Z",
+        "price": 299.88,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T16:30:00Z",
+        "price": 265.63,
+        "qty": 42,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T18:00:00Z",
+        "price": 265.63,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T15:00:00Z",
+        "price": 250.72,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-08T15:30:00Z",
+        "price": 244.61,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-15T15:30:00Z",
+        "price": 230.82,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T16:00:00Z",
+        "price": 227.36,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T15:30:00Z",
+        "price": 216.69,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T16:00:00Z",
+        "price": 213.44,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-20T14:00:00Z",
+        "price": 201.63,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T14:30:00Z",
+        "price": 198.61,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T15:30:00Z",
+        "price": 202.35,
+        "qty": 51,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T17:00:00Z",
+        "price": 199.31,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T18:30:00Z",
+        "price": 190.63,
+        "qty": 54,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T19:00:00Z",
+        "price": 187.77,
+        "qty": 54,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-27T16:30:00Z",
+        "price": 183.44,
+        "qty": 55,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T17:00:00Z",
+        "price": 180.69,
+        "qty": 55,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-28T18:00:00Z",
+        "price": 159.6,
+        "qty": 63,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T14:30:00Z",
+        "price": 159.6,
+        "qty": 63,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-14T16:30:00Z",
+        "price": 233.76,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-14T18:00:00Z",
+        "price": 230.25,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-14T19:30:00Z",
+        "price": 228.72,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T13:30:00Z",
+        "price": 220.765,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-19T17:30:00Z",
+        "price": 202.41,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-20T13:30:00Z",
+        "price": 202.41,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-21T16:00:00Z",
+        "price": 199.13,
+        "qty": 48,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T13:30:00Z",
+        "price": 191.98,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-28T14:30:00Z",
+        "price": 221.32,
+        "qty": 41,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-28T15:00:00Z",
+        "price": 218.0,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-31T15:00:00Z",
+        "price": 204.82,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-01T13:30:00Z",
+        "price": 201.75,
+        "qty": 44,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-volatility_support-1Hour-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "volatility_support",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 12430.44,
+    "pnl": 2430.44,
+    "pnl_pct": 24.3,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-27T14:00:00Z",
+        "price": 133.69,
+        "qty": 74,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-27T15:00:00Z",
+        "price": 131.68,
+        "qty": 74,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T14:00:00Z",
+        "price": 133.35,
+        "qty": 73,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T15:00:00Z",
+        "price": 119.725,
+        "qty": 73,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T16:00:00Z",
+        "price": 223.56,
+        "qty": 39,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T16:00:00Z",
+        "price": 272.555,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T17:00:00Z",
+        "price": 266.64,
+        "qty": 40,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T18:00:00Z",
+        "price": 262.64,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-27T16:00:00Z",
+        "price": 297.32,
+        "qty": 35,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T14:00:00Z",
+        "price": 290.44,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-29T15:00:00Z",
+        "price": 271.62,
+        "qty": 38,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T14:00:00Z",
+        "price": 271.62,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-08T19:00:00Z",
+        "price": 252.62,
+        "qty": 41,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T16:00:00Z",
+        "price": 252.6,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T18:00:00Z",
+        "price": 304.33,
+        "qty": 34,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T19:00:00Z",
+        "price": 299.77,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T17:00:00Z",
+        "price": 269.13,
+        "qty": 37,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T18:00:00Z",
+        "price": 265.09,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T15:00:00Z",
+        "price": 250.72,
+        "qty": 40,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-08T16:00:00Z",
+        "price": 246.455,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T17:00:00Z",
+        "price": 200.06,
+        "qty": 49,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T18:00:00Z",
+        "price": 197.06,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-28T18:00:00Z",
+        "price": 159.6,
+        "qty": 61,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T14:00:00Z",
+        "price": 159.6,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T16:00:00Z",
+        "price": 160.28,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T14:00:00Z",
+        "price": 214.525,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-21T16:00:00Z",
+        "price": 199.13,
+        "qty": 65,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T14:00:00Z",
+        "price": 194.39,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-31T15:00:00Z",
+        "price": 204.82,
+        "qty": 61,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-01T14:00:00Z",
+        "price": 200.56,
+        "qty": 61,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-volatility_support-1Day-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "volatility_support",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10000.0,
+    "pnl": 0.0,
+    "pnl_pct": 0.0,
+    "trades": []
+  },
+  {
+    "run_id": "BE-breakout_volume-30Min-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "breakout_volume",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10949.21,
+    "pnl": 949.21,
+    "pnl_pct": 9.49,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-18T14:00:00Z",
+        "price": 161.46,
+        "qty": 61,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %241'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-18T14:30:00Z",
+        "price": 157.14,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-19T19:30:00Z",
+        "price": 165.01,
+        "qty": 59,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %420'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T14:00:00Z",
+        "price": 162.53,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-01T13:30:00Z",
+        "price": 135.56,
+        "qty": 70,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %287'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-01T17:00:00Z",
+        "price": 135.56,
+        "qty": 70,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-08T14:00:00Z",
+        "price": 152.71,
+        "qty": 62,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %1025'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-08T14:30:00Z",
+        "price": 150.42,
+        "qty": 62,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-09T14:00:00Z",
+        "price": 156.82,
+        "qty": 60,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %174'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-09T14:30:00Z",
+        "price": 154.21,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-10T14:00:00Z",
+        "price": 167.32,
+        "qty": 55,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %196'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-10T16:30:00Z",
+        "price": 167.32,
+        "qty": 55,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-14T14:00:00Z",
+        "price": 206.81,
+        "qty": 44,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %1000'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T13:30:00Z",
+        "price": 208.1048,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-21T14:00:00Z",
+        "price": 227.14,
+        "qty": 41,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %325'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-21T15:00:00Z",
+        "price": 227.14,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-23T15:30:00Z",
+        "price": 240.84,
+        "qty": 38,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %280'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-23T16:00:00Z",
+        "price": 237.23,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T14:00:00Z",
+        "price": 231.89,
+        "qty": 39,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %471'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-28T14:30:00Z",
+        "price": 223.595,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-29T14:00:00Z",
+        "price": 275.61,
+        "qty": 32,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %555'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-29T15:00:00Z",
+        "price": 275.61,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:00:00Z",
+        "price": 269.84,
+        "qty": 32,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %217'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T15:00:00Z",
+        "price": 282.0065,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-13T18:30:00Z",
+        "price": 296.25,
+        "qty": 31,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %201'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-13T19:30:00Z",
+        "price": 291.81,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-20T14:00:00Z",
+        "price": 273.26,
+        "qty": 33,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %360'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-22T19:00:00Z",
+        "price": 303.9352,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-02T14:00:00Z",
+        "price": 293.51,
+        "qty": 34,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %206'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-03T13:30:00Z",
+        "price": 294.705,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T14:00:00Z",
+        "price": 275.76,
+        "qty": 36,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %300'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T14:30:00Z",
+        "price": 269.26,
+        "qty": 36,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-12T13:30:00Z",
+        "price": 248.74,
+        "qty": 40,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %213'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T13:30:00Z",
+        "price": 307,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T14:00:00Z",
+        "price": 321.88,
+        "qty": 38,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %222'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T14:30:00Z",
+        "price": 317.05,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-01T14:00:00Z",
+        "price": 309.99,
+        "qty": 39,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %426'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-01T14:30:00Z",
+        "price": 305.34,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-30T14:00:00Z",
+        "price": 210.9,
+        "qty": 56,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %274'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-30T14:30:00Z",
+        "price": 207.74,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T14:00:00Z",
+        "price": 213.4,
+        "qty": 55,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %189'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-31T14:30:00Z",
+        "price": 210.2,
+        "qty": 55,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-04T14:00:00Z",
+        "price": 222.63,
+        "qty": 51,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %229'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-05T13:30:00Z",
+        "price": 222.63,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-06T14:30:00Z",
+        "price": 243.4,
+        "qty": 47,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %176'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-06T16:00:00Z",
+        "price": 239.75,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-12T14:00:00Z",
+        "price": 237.49,
+        "qty": 47,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %706'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-12T14:30:00Z",
+        "price": 233.93,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-13T14:00:00Z",
+        "price": 245.64,
+        "qty": 45,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %215'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-13T15:00:00Z",
+        "price": 241.96,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-21T14:00:00Z",
+        "price": 204.5,
+        "qty": 54,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %196'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-21T14:30:00Z",
+        "price": 200.665,
+        "qty": 54,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-24T16:00:00Z",
+        "price": 205.42,
+        "qty": 52,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %197'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T19:00:00Z",
+        "price": 205.42,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-25T14:00:00Z",
+        "price": 213.04,
+        "qty": 50,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %485'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-25T14:30:00Z",
+        "price": 209.07,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-26T14:00:00Z",
+        "price": 223.25,
+        "qty": 47,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %243'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-26T14:30:00Z",
+        "price": 218.275,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-27T14:00:00Z",
+        "price": 216.87,
+        "qty": 48,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %328'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-28T13:30:00Z",
+        "price": 215.705,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-02T13:30:00Z",
+        "price": 213.57,
+        "qty": 48,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %343'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-02T14:00:00Z",
+        "price": 208.055,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-03T13:30:00Z",
+        "price": 216.84,
+        "qty": 46,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %267'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-03T19:30:00Z",
+        "price": 235.16,
+        "qty": 46,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-breakout_volume-1Hour-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "breakout_volume",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 8780.04,
+    "pnl": -1219.96,
+    "pnl_pct": -12.2,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-20T14:00:00Z",
+        "price": 166.9,
+        "qty": 59,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %391'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T15:00:00Z",
+        "price": 160.91,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-01T14:00:00Z",
+        "price": 135.56,
+        "qty": 71,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %172'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-01T17:00:00Z",
+        "price": 135.56,
+        "qty": 71,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-08T15:00:00Z",
+        "price": 147.53,
+        "qty": 65,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %346'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-08T17:00:00Z",
+        "price": 147.53,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-09T15:00:00Z",
+        "price": 159.3,
+        "qty": 60,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %163'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-09T18:00:00Z",
+        "price": 156.91,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-14T15:00:00Z",
+        "price": 213.98,
+        "qty": 44,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %346'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-14T18:00:00Z",
+        "price": 210.77,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-15T14:00:00Z",
+        "price": 219.0,
+        "qty": 42,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %216'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-15T16:00:00Z",
+        "price": 219.0,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-21T15:00:00Z",
+        "price": 229.8,
+        "qty": 40,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %233'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-21T18:00:00Z",
+        "price": 226.35,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-23T16:00:00Z",
+        "price": 238.27,
+        "qty": 38,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %156'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-23T17:00:00Z",
+        "price": 234.7,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-29T15:00:00Z",
+        "price": 280,
+        "qty": 32,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %278'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-29T16:00:00Z",
+        "price": 275.8,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:00:00Z",
+        "price": 287.26,
+        "qty": 31,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %219'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T15:00:00Z",
+        "price": 276.35,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-04T15:00:00Z",
+        "price": 283.93,
+        "qty": 30,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %152'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T16:00:00Z",
+        "price": 279.67,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-21T15:00:00Z",
+        "price": 317.8,
+        "qty": 26,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %237'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-21T16:00:00Z",
+        "price": 312.29,
+        "qty": 26,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-16T15:00:00Z",
+        "price": 289.18,
+        "qty": 28,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %181'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-16T19:00:00Z",
+        "price": 284.84,
+        "qty": 28,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-18T15:00:00Z",
+        "price": 312.3,
+        "qty": 26,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %172'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T15:00:00Z",
+        "price": 312.3,
+        "qty": 26,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-30T15:00:00Z",
+        "price": 206.98,
+        "qty": 39,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %194'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-30T18:00:00Z",
+        "price": 203.88,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-12T15:00:00Z",
+        "price": 232.89,
+        "qty": 34,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %254'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-14T15:00:00Z",
+        "price": 232.89,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-03T14:00:00Z",
+        "price": 216.84,
+        "qty": 37,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %171'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-03T19:00:00Z",
+        "price": 235.16,
+        "qty": 37,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "BE-breakout_volume-1Day-20260904T085645",
+    "run_at": "2026-09-04T08:56:43+00:00",
+    "symbol": "BE",
+    "algorithm": "breakout_volume",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9730.0,
+    "pnl": -270.0,
+    "pnl_pct": -2.7,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-15T04:00:00Z",
+        "price": 219.0,
+        "qty": 45,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %253'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-16T04:00:00Z",
+        "price": 213,
+        "qty": 45,
+        "reason": "stop"
+      }
+    ]
   }
 ]
