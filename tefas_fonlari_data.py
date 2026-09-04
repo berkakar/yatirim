@@ -107,7 +107,7 @@ def _net_flow(today_shares: float | None, prev_shares: float | None, today_price
 
 
 def _build_table(funds: dict) -> list[dict]:
-    rows = []
+    entries = []
     for code, entry in funds.items():
         category_id = classify_fund(entry.get("fund_name", ""))
         if category_id is None:
@@ -118,16 +118,27 @@ def _build_table(funds: dict) -> list[dict]:
             continue
         series = [entry["history"][d] for d in dates]
         today, prev = series[-1], series[-2]
+        net_flow = _net_flow(today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"])
+        entries.append((code, category_id, dates, series, today, prev, net_flow))
 
+    # Tümüne Oranı: bu fonun Net Para Girişi/Çıkışı'nın, tablodaki tüm
+    # fonların Net Para Girişi/Çıkışı toplamına oranı.
+    total_net_flow = sum(e[6] for e in entries if e[6] is not None)
+
+    rows = []
+    for code, category_id, dates, series, today, prev, net_flow in entries:
         row = {
             "Fon Kodu": code,
-            "Fon Adı": entry.get("fund_name", ""),
+            "Fon Adı": funds[code].get("fund_name", ""),
             "Kategori": FUND_CATEGORIES[category_id][0],
             "Tarih": dates[-1],
             "Önceki Gün Fiyat": round(prev["price"], 4),
             "Bugünkü Fiyat": round(today["price"], 4),
-            "Net Para Girişi/Çıkışı": _net_flow(
-                today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"],
+            "Net Para Girişi/Çıkışı": net_flow,
+            "Tümüne Oranı": (
+                round(net_flow / total_net_flow * 100, 2)
+                if net_flow is not None and total_net_flow
+                else None
             ),
         }
         for window in LOOKBACK_WINDOWS:
