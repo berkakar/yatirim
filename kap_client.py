@@ -32,6 +32,8 @@ değil.
 """
 import re
 import struct
+import time
+from datetime import datetime, timezone
 
 import requests
 
@@ -59,16 +61,34 @@ def slugify(code: str, fund_name: str) -> str:
     return f"{code.lower()}-{name}"
 
 
-def resolve_fund_oid(code: str, fund_name: str) -> str:
+def resolve_fund_oid(code: str, fund_name: str, attempts: int = 4) -> str:
     """Fonun kendi kap.org.tr sayfasından fundOid'i çıkarır - bu OID
-    disclosure/filter uç noktasında kullanılıyor."""
+    disclosure/filter uç noktasında kullanılıyor.
+
+    Sayfa kap.org.tr'nin CDN'i tarafından "Cache-Control: max-age=1800,
+    public" ile önbelleklendiği için, aynı istek zaman zaman içinde
+    fundOid'in gömülü olduğu bölümü içermeyen bayat/eksik bir önbellek
+    kopyası döndürebiliyor (aynı içerik uzunluğuna sahip ama farklı
+    içerikte iki yanıt canlı olarak gözlemlendi). Her denemede
+    önbelleği atlatmak için farklı bir cache-busting sorgu parametresi
+    kullanılarak birkaç kez tekrar deneniyor."""
     slug = slugify(code, fund_name)
-    r = requests.get(FUND_PAGE_URL.format(slug=slug), headers=HEADERS, timeout=20)
-    r.raise_for_status()
-    m = re.search(r"/tr/api/batch-news/file-by-year/([0-9A-Fa-f]{32})/", r.text)
-    if not m:
-        raise ValueError(f"'{code}' için KAP fon sayfasında fundOid bulunamadı (slug: {slug}).")
-    return m.group(1)
+    last_error = None
+    for attempt in range(attempts):
+        cache_bust = int(datetime.now(timezone.utc).timestamp() * 1000) + attempt
+        url = f"{FUND_PAGE_URL.format(slug=slug)}?_={cache_bust}"
+        try:
+            r = requests.get(url, headers=HEADERS, timeout=20)
+            r.raise_for_status()
+            m = re.search(r"/tr/api/batch-news/file-by-year/([0-9A-Fa-f]{32})/", r.text)
+            if m:
+                return m.group(1)
+            last_error = f"fundOid bulunamadı (deneme {attempt + 1}/{attempts})"
+        except requests.RequestException as e:
+            last_error = str(e)
+        if attempt < attempts - 1:
+            time.sleep(1.5)
+    raise ValueError(f"'{code}' için KAP fon sayfasında fundOid bulunamadı (slug: {slug}): {last_error}")
 
 
 def find_latest_portfolio_report(fund_oid: str) -> dict | None:

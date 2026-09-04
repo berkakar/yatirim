@@ -1,20 +1,11 @@
-"""Hata ayıklama turu 2 - önceki tur, sayfa uzunluğunun ÖNCEKİ başarılı
-denemeyle birebir aynı (301267) olduğunu ama regex'in artık eşleşmediğini
-gösterdi. Bu, sayfa içeriğinin GERÇEKTEN değiştiğini (ör. bot/tekrar
-isteği tespit edilip daha sade bir sürüm servis edilmesi) düşündürüyor.
-Bu turda: "batch-news" alt dizesinin sayfada hiç geçip geçmediğini,
-toplam kaç tane 32-hex OID bulunduğunu ve iki farklı User-Agent ile
-(hiç UA vermeden ve tarayıcı benzeri tam bir UA ile) sonucun değişip
-değişmediğini kontrol ediyoruz.
+"""SON uçtan uca doğrulama (2. deneme) - kap_client.resolve_fund_oid'e
+cache-busting + retry eklendi (KAP'ın CDN önbelleği zaman zaman fundOid'in
+gömülü olduğu bölümü içermeyen bir kopya döndürüyordu - iki canlı denemede
+gözlemlendi, aynı uzunlukta ama farklı içerikte). Bu artık gerçek üretim
+modüllerini uçtan uca test ediyor.
 """
-import re
-
-import requests
-
-from kap_client import FUND_PAGE_URL, slugify
-
-FULL_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+from kap_client import download_portfolio_pdf, find_latest_portfolio_report, resolve_fund_oid
+from kap_holdings_parser import parse_top_holdings
 
 CASES = [
     ("TPR", "İŞ PORTFÖY PY HİSSE SENEDİ (TL) ÖZEL FONU (HİSSE SENEDİ YOĞUN FON)"),
@@ -22,19 +13,26 @@ CASES = [
 ]
 
 for code, name in CASES:
-    slug = slugify(code, name)
-    url = FUND_PAGE_URL.format(slug=slug)
-    print(f"\n{'=' * 60}\n{code}: {url}")
+    print(f"\n{'=' * 60}\n{code}\n{'=' * 60}")
+    fund_oid = resolve_fund_oid(code, name)
+    print(f"fund_oid = {fund_oid}")
 
-    for label, headers in [
-        ("no UA", {}),
-        ("simple UA", {"User-Agent": "Mozilla/5.0 (compatible; yatirim-app/1.0)"}),
-        ("full browser UA", {"User-Agent": FULL_UA, "Accept-Language": "tr-TR,tr;q=0.9"}),
-    ]:
-        r = requests.get(url, headers=headers, timeout=20)
-        has_batch_news = "batch-news" in r.text
-        oids = re.findall(r"[0-9A-Fa-f]{32}", r.text)
-        m = re.search(r"/tr/api/batch-news/file-by-year/([0-9A-Fa-f]{32})/", r.text)
-        print(f"  [{label}] status={r.status_code} len={len(r.text)} "
-              f"has_batch_news_substr={has_batch_news} total_hex32={len(oids)} "
-              f"regex_match={m.group(1) if m else None}")
+    latest = find_latest_portfolio_report(fund_oid)
+    print(f"latest report = {latest}")
+    if not latest:
+        print("No report found - FAIL")
+        continue
+
+    pdf_bytes = download_portfolio_pdf(latest["disclosure_index"])
+    print(f"PDF downloaded: {len(pdf_bytes)} bytes, starts with {pdf_bytes[:8]!r}")
+
+    holdings = parse_top_holdings(pdf_bytes)
+    print(f"Top holdings ({len(holdings)}):")
+    for h in holdings:
+        print(f"  {h}")
+
+    if not holdings:
+        print("NO HOLDINGS PARSED - FAIL")
+    else:
+        total = sum(h["Oran %"] for h in holdings)
+        print(f"Sum of top-{len(holdings)} percentages: {total:.2f}%")
