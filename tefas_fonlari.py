@@ -62,8 +62,8 @@ def _build_column_config() -> dict:
         ),
         "Tümüne Oranı": st.column_config.NumberColumn(
             "Tümüne Oranı",
-            help="Bu fonun Net Para Girişi/Çıkışı değerinin, tablodaki tüm fonların "
-            "Net Para Girişi/Çıkışı toplamına oranı",
+            help="Net Para Girişi/Çıkışı / (Bugünkü Tedavüldeki Pay Sayısı × Bugünkü Fiyat) - "
+            "fonun net para giriş/çıkışının kendi bugünkü toplam büyüklüğüne oranı",
             format="%.2f%%",
         ),
     }
