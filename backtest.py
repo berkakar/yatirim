@@ -24,6 +24,55 @@ TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
+# valuation.py / tefas_fonlari.py ile aynı palet (uygulama genelinde tutarlılık için).
+_POSITIVE_COLOR = "color: #2ec4b6; font-weight: bold;"
+_NEGATIVE_COLOR = "color: #e63946; font-weight: bold;"
+_SIDE_COLORS = {"Alış": "color: #2ec4b6; font-weight: bold;", "Satış": "color: #e63946; font-weight: bold;"}
+
+_SUMMARY_COLUMN_CONFIG = {
+    "Başlangıç Bütçe": st.column_config.NumberColumn(format="localized"),
+    "Bitiş Değeri": st.column_config.NumberColumn(format="localized"),
+    "K/Z": st.column_config.NumberColumn(format="localized"),
+    "K/Z %": st.column_config.NumberColumn(format="%.2f%%"),
+    "Veri (gün)": st.column_config.NumberColumn(format="%d"),
+    "İşlem Başlangıcı (gün)": st.column_config.NumberColumn(format="%d"),
+    "İşlem Sayısı": st.column_config.NumberColumn(format="%d"),
+}
+_TRADES_COLUMN_CONFIG = {
+    "Fiyat": st.column_config.NumberColumn(format="%.4f"),
+    "Adet": st.column_config.NumberColumn(format="localized"),
+}
+
+
+def _style_summary(df: pd.DataFrame):
+    """K/Z ve K/Z % sütunlarını işaretine göre renklendirir, üzerine
+    zebra_style'ın satır bandını uygular."""
+    def apply_styles(data):
+        style_df = pd.DataFrame("", index=data.index, columns=data.columns)
+        for col in ("K/Z", "K/Z %"):
+            if col not in data.columns:
+                continue
+            for idx in data.index:
+                v = data.loc[idx, col]
+                if pd.notna(v):
+                    style_df.loc[idx, col] = _POSITIVE_COLOR if v > 0 else (_NEGATIVE_COLOR if v < 0 else "")
+        return style_df
+
+    return zebra_style(df, extra_style_fn=apply_styles)
+
+
+def _style_trades(df: pd.DataFrame):
+    """'Yön' sütununu alış/satışa göre renklendirir, üzerine zebra_style'ın
+    satır bandını uygular."""
+    def apply_styles(data):
+        style_df = pd.DataFrame("", index=data.index, columns=data.columns)
+        if "Yön" in data.columns:
+            for idx in data.index:
+                style_df.loc[idx, "Yön"] = _SIDE_COLORS.get(data.loc[idx, "Yön"], "")
+        return style_df
+
+    return zebra_style(df, extra_style_fn=apply_styles)
+
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
     # Günlük barlar için get_regular_hours_bars kullanılmaz - "regular hours"
@@ -131,7 +180,7 @@ def _render_settings():
     )
     days_before_trading = c2.number_input(
         "Kaç günden sonraki veri ile işlem yapılacak", min_value=0, max_value=max(int(days_of_data) - 1, 0),
-        value=min(30, max(int(days_of_data) - 1, 0)), step=5,
+        value=0, step=5,
         help="Çekilen verinin başındaki bu kadar gün, sadece algoritmanın geçmiş bağlamı için kullanılır - alım/satım bu günden sonra başlar.",
     )
     budget = c3.number_input("Portföy büyüklüğü ($)", min_value=0.0, value=10000.0, step=100.0)
@@ -211,14 +260,27 @@ def _render_results(all_results: list[dict]):
                 "K/Z %": r.get("pnl_pct"),
                 "İşlem Sayısı": len(r.get("trades") or []),
             } for r in runs]
-            st.dataframe(zebra_style(pd.DataFrame(summary_rows)), use_container_width=True, hide_index=True)
+            st.dataframe(
+                _style_summary(pd.DataFrame(summary_rows)), column_config=_SUMMARY_COLUMN_CONFIG,
+                use_container_width=True, hide_index=True,
+            )
 
             options = [f"{r.get('run_at')} · {r.get('symbol')} · {TIMEFRAME_LABELS.get(r.get('timeframe'), r.get('timeframe'))}" for r in runs]
             picked = st.selectbox("İşlem detayı için bir çalıştırma seç", options, key=f"bt_detail_pick_{algo_id}")
             picked_run = runs[options.index(picked)]
             trades = picked_run.get("trades") or []
             if trades:
-                st.dataframe(zebra_style(pd.DataFrame(trades)), use_container_width=True, hide_index=True)
+                trade_rows = [{
+                    "Yön": "Alış" if t.get("side") == "buy" else "Satış",
+                    "Zaman (UTC)": t.get("time"),
+                    "Fiyat": t.get("price"),
+                    "Adet": t.get("qty"),
+                    "Sebep": t.get("reason"),
+                } for t in trades]
+                st.dataframe(
+                    _style_trades(pd.DataFrame(trade_rows)), column_config=_TRADES_COLUMN_CONFIG,
+                    use_container_width=True, hide_index=True,
+                )
             else:
                 st.caption("Bu çalıştırmada hiç işlem gerçekleşmedi.")
 
