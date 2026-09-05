@@ -106,6 +106,18 @@ def _net_flow(today_shares: float | None, prev_shares: float | None, today_price
     return round((today_shares - prev_shares) * today_price, 2)
 
 
+def _total_ratio(net_flow: float | None, today_shares: float | None, today_price: float | None) -> float | None:
+    """Tümüne Oranı = Net Para Girişi/Çıkışı / (Bugünkü Tedavüldeki Pay Sayısı
+    × Bugünkü Fiyat) - fonun net para giriş/çıkışının, kendi bugünkü toplam
+    büyüklüğüne oranı (%)."""
+    if net_flow is None or today_shares is None or today_price is None:
+        return None
+    denom = today_shares * today_price
+    if denom == 0:
+        return None
+    return round(net_flow / denom * 100, 2)
+
+
 def _build_table(funds: dict) -> list[dict]:
     rows = []
     for code, entry in funds.items():
@@ -118,6 +130,7 @@ def _build_table(funds: dict) -> list[dict]:
             continue
         series = [entry["history"][d] for d in dates]
         today, prev = series[-1], series[-2]
+        net_flow = _net_flow(today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"])
 
         row = {
             "Fon Kodu": code,
@@ -126,9 +139,8 @@ def _build_table(funds: dict) -> list[dict]:
             "Tarih": dates[-1],
             "Önceki Gün Fiyat": round(prev["price"], 4),
             "Bugünkü Fiyat": round(today["price"], 4),
-            "Net Para Girişi/Çıkışı": _net_flow(
-                today.get("shares_outstanding"), prev.get("shares_outstanding"), today["price"],
-            ),
+            "Net Para Girişi/Çıkışı": net_flow,
+            "Tümüne Oranı": _total_ratio(net_flow, today.get("shares_outstanding"), today["price"]),
         }
         for window in LOOKBACK_WINDOWS:
             if len(series) > window:
