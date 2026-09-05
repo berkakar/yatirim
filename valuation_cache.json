@@ -654,9 +654,9 @@
       "Hisse": "GUBRF.IS",
       "Alt Sektör (İş Modeli)": "Agricultural Inputs",
       "Ana Sektör": "Basic Materials",
-      "F/K": 23.83,
-      "PD/DD": 4.7,
-      "FD/FAVÖK": 12.46,
+      "F/K": 22.46,
+      "PD/DD": 4.52,
+      "FD/FAVÖK": 11.99,
       "PEG": 0.6,
       "EPS Büyümesi %": 278.0,
       "Gelir Büyümesi %": 23.3,
@@ -672,7 +672,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-03-31"
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-05"
   },
   "MAVI.IS": {
     "raw": {
