@@ -44,8 +44,17 @@ _TRADES_COLUMN_CONFIG = {
 }
 
 
+def _format_stop_loss(r: dict) -> str:
+    if not r.get("stop_loss_enabled"):
+        return "Kapalı"
+    limit = r.get("max_loss_pct")
+    if r.get("stop_loss_triggered"):
+        return f"Tetiklendi (%{limit:g}) · {r.get('stop_loss_triggered_at') or ''}"
+    return f"Açık (%{limit:g})"
+
+
 def _style_summary(df: pd.DataFrame):
-    """K/Z ve K/Z % sütunlarını işaretine göre renklendirir, üzerine
+    """K/Z, K/Z % ve Zarar Kes sütunlarını renklendirir, üzerine
     zebra_style'ın satır bandını uygular."""
     def apply_styles(data):
         style_df = pd.DataFrame("", index=data.index, columns=data.columns)
@@ -56,6 +65,10 @@ def _style_summary(df: pd.DataFrame):
                 v = data.loc[idx, col]
                 if pd.notna(v):
                     style_df.loc[idx, col] = _POSITIVE_COLOR if v > 0 else (_NEGATIVE_COLOR if v < 0 else "")
+        if "Zarar Kes" in data.columns:
+            for idx in data.index:
+                if str(data.loc[idx, "Zarar Kes"]).startswith("Tetiklendi"):
+                    style_df.loc[idx, "Zarar Kes"] = _NEGATIVE_COLOR
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
@@ -185,10 +198,24 @@ def _render_settings():
     )
     budget = c3.number_input("Portföy büyüklüğü ($)", min_value=0.0, value=10000.0, step=100.0)
 
-    return selected_algorithms, selected_timeframes, int(days_of_data), int(days_before_trading), float(budget)
+    st.subheader("🛑 Risk Yönetimi")
+    sl1, sl2 = st.columns([1, 2])
+    stop_loss_enabled = sl1.checkbox(
+        "Zarar Kes", key="bt_stop_loss_enabled",
+        help="Etkinleştirilirse, çalıştırma boyunca gerçekleşen toplam zarar başlangıç bütçesine göre girilen yüzdeye ulaştığında, o çalıştırma için yeni alım/satım işlemi yapılmaz.",
+    )
+    max_loss_pct = sl2.number_input(
+        "Maksimum zarar yüzdesi", min_value=0.1, max_value=100.0, value=10.0, step=0.5,
+        disabled=not stop_loss_enabled, key="bt_max_loss_pct",
+        help="Başlangıç bütçesine göre toplam zarar bu yüzdeye ulaştığında, o çalıştırma için yeni alım/satım işlemleri durdurulur.",
+    )
+
+    return (selected_algorithms, selected_timeframes, int(days_of_data), int(days_before_trading), float(budget),
+            bool(stop_loss_enabled), float(max_loss_pct))
 
 
-def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_before_trading, budget, username):
+def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_before_trading, budget,
+                    stop_loss_enabled, max_loss_pct, username):
     start = datetime.now(timezone.utc) - timedelta(days=days_of_data)
     bars_by_tf = {}
     for tf in timeframes:
@@ -205,6 +232,7 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
         daily_pairs = []
 
     run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    effective_max_loss_pct = max_loss_pct if stop_loss_enabled else None
     new_runs = []
     progress = st.progress(0.0)
     combos = [(a, tf) for a in algorithms for tf in timeframes]
@@ -212,7 +240,7 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
         result = run_backtest(
             symbol=symbol, algorithm=algo_id, timeframe=tf, bars=bars_by_tf.get(tf, []),
             daily_pairs=daily_pairs, days_of_data=days_of_data, days_before_trading=days_before_trading,
-            starting_budget=budget,
+            starting_budget=budget, max_loss_pct=effective_max_loss_pct,
         )
         new_runs.append({
             "run_id": new_run_id(symbol, algo_id, tf),
@@ -226,6 +254,10 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
             "final_value": result.final_value,
             "pnl": result.pnl,
             "pnl_pct": result.pnl_pct,
+            "stop_loss_enabled": stop_loss_enabled,
+            "max_loss_pct": effective_max_loss_pct,
+            "stop_loss_triggered": result.stop_loss_triggered,
+            "stop_loss_triggered_at": result.stop_loss_triggered_at,
             "trades": [vars(t) for t in result.trades],
         })
         progress.progress((i + 1) / len(combos))
@@ -259,6 +291,7 @@ def _render_results(all_results: list[dict]):
                 "K/Z": r.get("pnl"),
                 "K/Z %": r.get("pnl_pct"),
                 "İşlem Sayısı": len(r.get("trades") or []),
+                "Zarar Kes": _format_stop_loss(r),
             } for r in runs]
             st.dataframe(
                 _style_summary(pd.DataFrame(summary_rows)), column_config=_SUMMARY_COLUMN_CONFIG,
@@ -297,7 +330,8 @@ def render_backtest(target_list: list[str], username: str):
 
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()
-    selected_algorithms, selected_timeframes, days_of_data, days_before_trading, budget = _render_settings()
+    (selected_algorithms, selected_timeframes, days_of_data, days_before_trading, budget,
+     stop_loss_enabled, max_loss_pct) = _render_settings()
 
     st.divider()
     can_run = bool(selected_symbol and selected_algorithms and selected_timeframes)
@@ -305,7 +339,7 @@ def render_backtest(target_list: list[str], username: str):
         with st.spinner(f"{selected_symbol} için {len(selected_algorithms)} algoritma × {len(selected_timeframes)} mum periyodu çalıştırılıyor..."):
             all_results = _run_backtests(
                 client, selected_symbol, selected_algorithms, selected_timeframes,
-                days_of_data, days_before_trading, budget, username,
+                days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct, username,
             )
         st.success("Backtest tamamlandı ve sonuçlar kaydedildi.")
     else:

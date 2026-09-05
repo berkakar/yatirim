@@ -93,6 +93,8 @@ class BacktestResult:
     starting_budget: float
     trades: list = field(default_factory=list)
     final_value: float = 0.0
+    stop_loss_triggered: bool = False
+    stop_loss_triggered_at: str | None = None
 
     @property
     def pnl(self) -> float:
@@ -105,11 +107,17 @@ class BacktestResult:
 
 def run_backtest(
     symbol: str, algorithm: str, timeframe: str, bars: list[Bar], daily_pairs: list[tuple],
-    days_of_data: int, days_before_trading: int, starting_budget: float,
+    days_of_data: int, days_before_trading: int, starting_budget: float, max_loss_pct: float | None = None,
 ) -> BacktestResult:
     """daily_pairs: [(date, close), ...] sorted ascending, spanning at least
     from (bars[0] - ~400 days) to bars[-1] so SMA200-style daily gates have
-    enough history at every simulated point."""
+    enough history at every simulated point.
+
+    max_loss_pct ("zarar kes"): verildiğinde, başlangıç bütçesine göre
+    gerçekleşmiş (kapanmış işlemlerdeki) toplam zarar bu yüzdeye ulaştığı
+    anda yeni alım/satım durdurulur - o ana kadar açık kalan pozisyon
+    kendi stop'uyla (veya test sonunda kapanışla) yönetilmeye devam eder,
+    sadece yeni giriş sinyalleri artık işleme alınmaz."""
     result = BacktestResult(symbol, algorithm, timeframe, days_of_data, days_before_trading, starting_budget)
     result.final_value = starting_budget
     if not bars:
@@ -137,6 +145,12 @@ def run_backtest(
                 cash += position["qty"] * fill
                 result.trades.append(Trade("sell", bar.t, round(fill, 4), position["qty"], "stop"))
                 position = None
+                if max_loss_pct and not result.stop_loss_triggered and starting_budget:
+                    loss_pct = (starting_budget - cash) / starting_budget * 100
+                    if loss_pct >= max_loss_pct:
+                        result.stop_loss_triggered = True
+                        result.stop_loss_triggered_at = bar.t
+                        result.trades[-1].reason += f" · zarar kes tetiklendi (toplam zarar %{loss_pct:.2f})"
                 continue
 
             struct_bars = _window(bars, i, TRAIL_LOOKBACK_DAYS, floor_idx=position["entry_idx"])
@@ -167,6 +181,10 @@ def run_backtest(
                 best_price, _reason = max(candidates, key=lambda c: c[0])
                 if best_price > position["stop_price"]:
                     position["stop_price"] = best_price
+            continue
+
+        if result.stop_loss_triggered:
+            resting = None
             continue
 
         # No open position - check the resting entry order (if any) for a fill first,
