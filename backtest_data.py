@@ -75,3 +75,19 @@ def group_by_algorithm(results: list[dict]) -> dict[str, list[dict]]:
     for runs in grouped.values():
         runs.sort(key=lambda r: r.get("run_at", ""), reverse=True)
     return grouped
+
+
+def best_per_symbol_combo(results: list[dict], symbol: str) -> list[dict]:
+    """Bir hisseye ait tüm BackTest çalıştırmalarından, her (algoritma, mum
+    periyodu) kombinasyonu için en yüksek K/Z %'ye sahip çalıştırmayı seçer ve
+    K/Z %'ye göre azalan sırada döner. premium_buy_portfolio.py'de hisse
+    başına en kârlı kombinasyonu ilk sırada göstermek için kullanılır."""
+    best: dict[tuple, dict] = {}
+    for r in results:
+        if r.get("symbol") != symbol:
+            continue
+        key = (r.get("algorithm"), r.get("timeframe"))
+        pnl = r.get("pnl_pct") or 0
+        if key not in best or pnl > (best[key].get("pnl_pct") or 0):
+            best[key] = r
+    return sorted(best.values(), key=lambda r: r.get("pnl_pct") or 0, reverse=True)

@@ -6,6 +6,8 @@ import streamlit as st
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import format_order_row, TR_TZ
 from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME
+from backtest import TIMEFRAME_LABELS
+from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
 from ui_style import zebra_style
@@ -17,12 +19,18 @@ PRICE_REFRESH_SECONDS = 30
 
 
 @st.fragment(run_every=PRICE_REFRESH_SECONDS)
-def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str], active_algorithm: str):
-    start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
+def _render_buy_point_table(
+    client: AlpacaClient, current_symbols: list[str], symbol_settings: dict[str, dict], default_algorithm: str,
+):
     daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
     rows = []
     for symbol in current_symbols:
-        bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start, exclude_forming=True)
+        settings = symbol_settings.get(symbol) or {}
+        active_algorithm = settings.get("algorithm") or default_algorithm
+        timeframe = settings.get("timeframe") or TIMEFRAME
+
+        start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
+        bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
         if not bars:
             continue
         try:
@@ -41,10 +49,11 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str], ac
         active_signal = signals.get(active_algorithm)
         has_position = client.get_position(symbol) is not None
 
-        row = {"Hisse": symbol, "Güncel Fiyat": round(current_price, 2)}
+        row = {"Hisse": symbol, "Güncel Fiyat": round(current_price, 2), "Mum Periyodu": TIMEFRAME_LABELS.get(timeframe, timeframe)}
         for algo_id, (label, _) in ALGORITHMS.items():
             sig = signals.get(algo_id)
             row[label] = sig.price if sig else "—"
+        row["Kullanılan Algoritma"] = ALGORITHMS[active_algorithm][0]
         row["Kullanılacak Fiyat"] = active_signal.price if active_signal else "—"
         row["Durum"] = "Pozisyon Açık" if has_position else ("Bekleniyor" if active_signal else "Sinyal Yok")
         rows.append(row)
@@ -53,9 +62,10 @@ def _render_buy_point_table(client: AlpacaClient, current_symbols: list[str], ac
     st.caption(
         f"Son güncelleme: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT "
         f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
-        f"Her sütun ilgili algoritmanın ürettiği fiyatı gösterir (\"—\" = sinyal yok). "
-        f"'Kullanılacak Fiyat', aşağıda seçtiğiniz algoritmanın ({ALGORITHMS[active_algorithm][0]}) sonucudur - "
-        "gerçek alım GitHub Action tarafından 5 dakikalık taramada bu fiyat/algoritma ile yapılır."
+        "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
+        "(\"—\" = sinyal yok). 'Kullanılan Algoritma' ve 'Kullanılacak Fiyat', o hisse için aşağıda seçtiğiniz "
+        "(veya BackTest sonucu yoksa varsayılan) algoritma/mum periyoduna göredir - gerçek alım GitHub Action "
+        "tarafından 5 dakikalık taramada bu fiyat/algoritma/periyot ile yapılır."
     )
 
 
@@ -120,15 +130,51 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     else:
         st.info("Portföye en az bir hisse seçin.")
 
-    st.subheader("🧠 Emir Algoritması")
-    st.caption("Aşağıdaki tabloda tüm algoritmaların sonucu karşılaştırmalı gösterilir; burada seçtiğiniz ise "
-               "**tüm hisseler için ortak olarak** Alpaca'ya gerçek emir olarak geçirilir.")
+    st.subheader("🧠 Hisse Bazlı Algoritma Seçimi")
+    st.caption(
+        "Her hisse için, o hissede daha önce BackTest modülünde çalıştırılmış algoritma + mum periyodu "
+        "kombinasyonları K/Z %'ye göre en yüksekten başlayarak listelenir. Seçtiğiniz kombinasyon, o hisse "
+        "için otomatik alım/satımda kullanılır. BackTest sonucu olmayan hisseler, aşağıdaki varsayılan "
+        "algoritma ve mum periyoduyla (30 Dakika) taranır."
+    )
+    existing_symbol_settings = config.get("symbol_settings") or {}
+    symbol_settings: dict[str, dict] = {}
+    if selected_symbols:
+        all_backtest_results = load_results(username)
+        for symbol in selected_symbols:
+            combos = best_per_symbol_combo(all_backtest_results, symbol)
+            col_sym, col_combo = st.columns([1, 3])
+            col_sym.markdown(f"**{symbol}**")
+            if not combos:
+                col_combo.caption("BackTest sonucu yok — varsayılan algoritma kullanılacak.")
+                continue
+
+            options = [
+                f"{ALGORITHMS[c['algorithm']][0]} · {TIMEFRAME_LABELS.get(c['timeframe'], c['timeframe'])} · "
+                f"K/Z %{(c.get('pnl_pct') or 0):.2f}"
+                for c in combos
+            ]
+            saved = existing_symbol_settings.get(symbol) or {}
+            default_idx = 0
+            for i, c in enumerate(combos):
+                if c["algorithm"] == saved.get("algorithm") and c["timeframe"] == saved.get("timeframe"):
+                    default_idx = i
+                    break
+            picked_label = col_combo.selectbox(
+                f"{symbol} için algoritma seçimi", options, index=default_idx,
+                key=f"symbol_algo_{symbol}", label_visibility="collapsed",
+            )
+            picked = combos[options.index(picked_label)]
+            symbol_settings[symbol] = {"algorithm": picked["algorithm"], "timeframe": picked["timeframe"]}
+
+    st.subheader("⚙️ Varsayılan Algoritma")
+    st.caption("BackTest sonucu olmayan hisseler için kullanılan varsayılan algoritmadır.")
     algorithm_ids = list(ALGORITHMS.keys())
     current_algorithm = config.get("algorithm", DEFAULT_ALGORITHM)
     if current_algorithm not in algorithm_ids:
         current_algorithm = DEFAULT_ALGORITHM
     selected_algorithm = st.selectbox(
-        "Emir için kullanılacak algoritma:",
+        "Varsayılan algoritma:",
         algorithm_ids,
         index=algorithm_ids.index(current_algorithm),
         format_func=lambda k: ALGORITHMS[k][0],
@@ -140,6 +186,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             "budget": float(budget),
             "weights": {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()},
             "algorithm": selected_algorithm,
+            "symbol_settings": symbol_settings,
         }
         write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
         st.success("Portföy kaydedildi.")
@@ -149,7 +196,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         return
 
     st.subheader("📍 Premium Buy Point Karşılaştırması")
-    _render_buy_point_table(client, current_symbols, selected_algorithm)
+    _render_buy_point_table(client, current_symbols, symbol_settings, selected_algorithm)
 
     st.subheader("📜 Son 30 Gün Alım/Satım Emirleri")
     history_rows = [

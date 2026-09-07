@@ -1,9 +1,9 @@
 """
 Alpaca "premium buy point" hesaplaması için birden fazla, birbirinden bağımsız
 algoritma. Her algoritma ortak bir BuySignal döner, böylece hepsi aynı arayüzde
-(karşılaştırma tablosu + tek, tüm hisseler için ortak bir "aktif algoritma"
-seçimi) kullanılabilir - bkz. premium_buy_portfolio.py (görüntüleme) ve
-alpaca_buy_points.py (gerçek emri veren GitHub Action).
+(karşılaştırma tablosu + hisse başına, o hissenin BackTest sonuçlarına göre
+seçilen bir "aktif algoritma") kullanılabilir - bkz. premium_buy_portfolio.py
+(görüntüleme) ve alpaca_buy_points.py (gerçek emri veren GitHub Action).
 """
 
 from dataclasses import dataclass

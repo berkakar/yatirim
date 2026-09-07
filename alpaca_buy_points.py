@@ -4,11 +4,15 @@ Premium buy-point scanner for the user's watchlist portfolio.
 Reads the "premium-buy-portfolio" Alpaca watchlist for symbols and
 portfolio_config.json (committed to this repo by the Streamlit page - see
 github_config.py) for the total budget, each symbol's weight, and which
-buy-point algorithm (see buy_algorithms.py) is active - the same single
-choice applies to every symbol. For every watchlisted symbol without an
-already-open position, runs that algorithm and keeps a resting GTC limit
-buy order at its price - placing it if none exists, updating it if the
-signal has moved, canceling it if there's no longer a valid signal. The
+buy-point algorithm (see buy_algorithms.py) + bar timeframe is active for
+each symbol - config["symbol_settings"][symbol] picks the combination the
+user chose (in premium_buy_portfolio.py, informed by that symbol's own
+BackTest results); a symbol without an entry there falls back to the
+portfolio-wide config["algorithm"] / alpaca_trailing_stop.TIMEFRAME. For
+every watchlisted symbol without an already-open position, runs that
+symbol's algorithm on bars at its own timeframe and keeps a resting GTC
+limit buy order at its price - placing it if none exists, updating it if
+the signal has moved, canceling it if there's no longer a valid signal. The
 actual fill happens on Alpaca's side whenever price reaches the order,
 independent of how often this script runs - polling here only keeps the
 order in sync with the current signal, it doesn't need to catch the fill
@@ -59,7 +63,7 @@ def load_local_config() -> dict:
         return json.load(f)
 
 
-def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str) -> None:
+def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str) -> None:
     existing_order = client.get_open_limit_buy_order(symbol)
 
     if client.get_position(symbol) is not None:
@@ -69,7 +73,7 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
         return
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, start, exclude_forming=True)
+    bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
     if not bars:
         return
 
@@ -159,14 +163,20 @@ def run_once(client: AlpacaClient) -> None:
     config = load_local_config()
     budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
-    algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
-    if algorithm not in ALGORITHMS:
-        algorithm = DEFAULT_ALGORITHM
+    default_algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
+    if default_algorithm not in ALGORITHMS:
+        default_algorithm = DEFAULT_ALGORITHM
+    symbol_settings = config.get("symbol_settings") or {}
 
     for asset in watchlist["assets"]:
         symbol = asset["symbol"]
+        settings = symbol_settings.get(symbol) or {}
+        algorithm = settings.get("algorithm") or default_algorithm
+        if algorithm not in ALGORITHMS:
+            algorithm = default_algorithm
+        timeframe = settings.get("timeframe") or TIMEFRAME
         try:
-            check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm)
+            check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe)
         except Exception as e:
             # One symbol's order getting rejected (or any other failure) must
             # never take the rest of the watchlist down with it - and, since
