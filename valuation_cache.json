@@ -652,27 +652,27 @@
   "GUBRF.IS": {
     "raw": {
       "Hisse": "GUBRF.IS",
-      "Alt Sektör (İş Modeli)": "Agricultural Inputs",
-      "Ana Sektör": "Basic Materials",
-      "F/K": 22.46,
-      "PD/DD": 4.52,
-      "FD/FAVÖK": 11.99,
-      "PEG": 0.6,
-      "EPS Büyümesi %": 278.0,
-      "Gelir Büyümesi %": 23.3,
-      "Öz Sermaye Getirisi (ROE) %": 20.67,
-      "Net Kar Marjı %": 13.28,
-      "Brüt Kar Marjı %": 26.11,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 12.37,
-      "Borç / Özsermaye": 0.23,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.62,
-      "Likidite Oranı": 0.77,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-09-05"
+    "cached_at": "2026-09-07"
   },
   "MAVI.IS": {
     "raw": {
@@ -5273,5 +5273,30 @@
       "_most_recent_quarter": "2026-06-30"
     },
     "cached_at": "2026-08-31"
+  },
+  "ADESE.IS": {
+    "raw": {
+      "Hisse": "ADESE.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
   }
 }
