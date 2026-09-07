@@ -10,6 +10,7 @@ her yeni çalıştırma eklenir, öncekiler hiç silinmez.
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 from alpaca_client import AlpacaClient
@@ -25,9 +26,13 @@ TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
 # valuation.py / tefas_fonlari.py ile aynı palet (uygulama genelinde tutarlılık için).
-_POSITIVE_COLOR = "color: #2ec4b6; font-weight: bold;"
-_NEGATIVE_COLOR = "color: #e63946; font-weight: bold;"
-_SIDE_COLORS = {"Alış": "color: #2ec4b6; font-weight: bold;", "Satış": "color: #e63946; font-weight: bold;"}
+_POSITIVE_HEX = "#2ec4b6"
+_NEGATIVE_HEX = "#e63946"
+_POSITIVE_COLOR = f"color: {_POSITIVE_HEX}; font-weight: bold;"
+_NEGATIVE_COLOR = f"color: {_NEGATIVE_HEX}; font-weight: bold;"
+_SIDE_COLORS = {"Alış": _POSITIVE_COLOR, "Satış": _NEGATIVE_COLOR}
+_BUY_MARKER_COLOR = "#FFFFFF"   # işlem detay grafiğinde alım zamanı
+_SELL_MARKER_COLOR = "#800000"  # işlem detay grafiğinde satım zamanı (bordo)
 
 _SUMMARY_COLUMN_CONFIG = {
     "Başlangıç Bütçe": st.column_config.NumberColumn(format="localized"),
@@ -97,6 +102,55 @@ def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str,
         raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
         return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
     return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+
+
+def _parse_ts(ts: str) -> datetime:
+    return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _fetch_chart_bars(key_id: str, secret_key: str, symbol: str, timeframe: str, start_date: str) -> list[Bar]:
+    """İşlem detay grafiği için mum verisi çeker. start_date (YYYY-MM-DD) günlük
+    çözünürlükte önbelleklenir, böylece grafik açıkken sayfa her yeniden
+    çalıştığında Alpaca'ya tekrar istek atılmaz."""
+    client = AlpacaClient(key_id, secret_key)
+    start = datetime.fromisoformat(start_date).replace(tzinfo=timezone.utc)
+    return _fetch_bars_for_timeframe(client, symbol, timeframe, start)
+
+
+def _render_trade_detail_chart(bars: list[Bar], trades: list[dict], symbol: str, timeframe_label: str):
+    if not bars:
+        st.warning("Grafik için mum verisi bulunamadı.")
+        return
+
+    times = [pd.to_datetime(b.t) for b in bars]
+    fig = go.Figure(data=[go.Candlestick(
+        x=times, open=[b.o for b in bars], high=[b.h for b in bars],
+        low=[b.l for b in bars], close=[b.c for b in bars], name="Fiyat",
+        increasing=dict(line=dict(color=_POSITIVE_HEX), fillcolor=_POSITIVE_HEX),
+        decreasing=dict(line=dict(color=_NEGATIVE_HEX), fillcolor=_NEGATIVE_HEX),
+    )])
+
+    buys = [t for t in trades if t.get("side") == "buy"]
+    sells = [t for t in trades if t.get("side") == "sell"]
+    if buys:
+        fig.add_trace(go.Scatter(
+            x=[pd.to_datetime(t["time"]) for t in buys], y=[t["price"] for t in buys],
+            mode="markers", name="Alım",
+            marker=dict(symbol="triangle-up", size=14, color=_BUY_MARKER_COLOR, line=dict(color="#000000", width=1)),
+        ))
+    if sells:
+        fig.add_trace(go.Scatter(
+            x=[pd.to_datetime(t["time"]) for t in sells], y=[t["price"] for t in sells],
+            mode="markers", name="Satım",
+            marker=dict(symbol="triangle-down", size=14, color=_SELL_MARKER_COLOR, line=dict(color="#000000", width=1)),
+        ))
+
+    fig.update_layout(
+        title=f"{symbol} - İşlem Detay Grafiği ({timeframe_label})",
+        template="plotly_dark", height=600, xaxis_rangeslider_visible=False,
+    )
+    st.plotly_chart(fig, use_container_width=True)
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
@@ -266,7 +320,7 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
     return append_results(username, new_runs)
 
 
-def _render_results(all_results: list[dict]):
+def _render_results(all_results: list[dict], key_id: str, secret_key: str):
     st.subheader("📊 Sonuçlar")
     if not all_results:
         st.info("Henüz kaydedilmiş bir backtest çalıştırması yok.")
@@ -314,6 +368,30 @@ def _render_results(all_results: list[dict]):
                     _style_trades(pd.DataFrame(trade_rows)), column_config=_TRADES_COLUMN_CONFIG,
                     use_container_width=True, hide_index=True,
                 )
+
+                chart_state_key = f"bt_show_chart_{algo_id}"
+                if chart_state_key not in st.session_state:
+                    st.session_state[chart_state_key] = False
+                if st.button("İşlem Detay Grafiği", key=f"bt_chart_btn_{algo_id}"):
+                    st.session_state[chart_state_key] = not st.session_state[chart_state_key]
+
+                if st.session_state[chart_state_key]:
+                    trade_times = [_parse_ts(t["time"]) for t in trades if t.get("time")]
+                    fallback_start = datetime.now(timezone.utc) - timedelta(days=picked_run.get("days_of_data") or 180)
+                    start_dt = min(trade_times + [fallback_start]) - timedelta(days=2)
+                    with st.spinner("Grafik için mum verileri çekiliyor..."):
+                        try:
+                            bars = _fetch_chart_bars(
+                                key_id, secret_key, picked_run.get("symbol"), picked_run.get("timeframe"),
+                                start_dt.date().isoformat(),
+                            )
+                        except Exception as e:
+                            st.error(f"Mum verileri çekilemedi: {e}")
+                            bars = []
+                    _render_trade_detail_chart(
+                        bars, trades, picked_run.get("symbol"),
+                        TIMEFRAME_LABELS.get(picked_run.get("timeframe"), picked_run.get("timeframe")),
+                    )
             else:
                 st.caption("Bu çalıştırmada hiç işlem gerçekleşmedi.")
 
@@ -348,4 +426,4 @@ def render_backtest(target_list: list[str], username: str):
         all_results = load_results(username)
 
     st.divider()
-    _render_results(all_results)
+    _render_results(all_results, key_id, secret_key)
