@@ -6,6 +6,7 @@ import streamlit as st
 
 from alpaca_client import AlpacaClient
 from buy_algorithms import ALGORITHMS
+from config import load_initial_capital, save_initial_capital
 from ui_style import zebra_style
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -78,6 +79,53 @@ def format_order_row(order: dict) -> dict:
     }
 
 
+def render_account_summary(client: AlpacaClient, username: str, positions: list[dict]):
+    """Nakit/toplam hesap değeri özeti ve ilk sermayeye göre anlık kâr -
+    Genel Bakış (app.py) ve Alpaca Canlı Pozisyonlar sayfalarında ortak
+    gösterilir, tek bir yerden hesaplanır."""
+    account = client.get_account()
+    cash = float(account["cash"])
+    equity = float(account["equity"])  # nakit + tüm pozisyonların güncel piyasa değeri
+
+    if 'initial_capital' not in st.session_state:
+        st.session_state.initial_capital = load_initial_capital(username)
+
+    with st.expander(
+        "💵 İlk Sermaye Ayarı",
+        expanded=st.session_state.initial_capital is None,
+    ):
+        st.caption(
+            "Alım/satım sayısı arttıkça 'açık pozisyonların gerçekleşmemiş K/Z toplamı' kavramı "
+            "portföyün gerçek performansını yansıtmaz hale gelir. Bunun yerine, hesaba ilk "
+            "yatırdığınız sermayeyi bir kez girin - kâr, o andaki toplam hesap değeri (nakit + "
+            "pozisyonlar) ile bu sermaye karşılaştırılarak hesaplanır; yapılan tüm alım/satımların "
+            "net etkisini (gerçekleşmiş ve gerçekleşmemiş birlikte) kapsar."
+        )
+        new_capital = st.number_input(
+            "İlk yatırılan sermaye ($)", min_value=0.0,
+            value=float(st.session_state.initial_capital or 0.0), step=100.0,
+            key="initial_capital_input",
+        )
+        if st.button("Kaydet", key="save_initial_capital_btn"):
+            save_initial_capital(new_capital, username)
+            st.session_state.initial_capital = new_capital
+            st.success("İlk sermaye kaydedildi.")
+            st.rerun()
+
+    initial_capital = st.session_state.initial_capital
+
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Açık Pozisyon", len(positions))
+    c2.metric("Nakit", f"${cash:,.2f}")
+    c3.metric("Toplam Portföy Değeri", f"${equity:,.2f}")
+    if initial_capital:
+        total_pl = equity - initial_capital
+        total_pl_pct = total_pl / initial_capital * 100
+        c4.metric("Portföyün Anlık Kârı", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
+    else:
+        c4.metric("Portföyün Anlık Kârı", "—")
+
+
 def render_alpaca_dashboard(username):
     user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
     key_id = user_alpaca.get("key_id")
@@ -87,7 +135,13 @@ def render_alpaca_dashboard(username):
         return
 
     client = AlpacaClient(key_id, secret_key)
-    positions = client.get_all_positions()
+    try:
+        positions = client.get_all_positions()
+        render_account_summary(client, username, positions)
+    except Exception as e:
+        st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
+        return
+    st.divider()
 
     if not positions:
         st.info("Açık pozisyon yok.")
