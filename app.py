@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import json
 import os
 
-from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100
+from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import get_scanner_data
@@ -39,7 +39,7 @@ MODULE_GROUPS = {
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
     "🇹🇷 Türk Fonları": ["Türk Fonları"],
     "📐 Hisse Patern": ["📐 Hisse Patern Analizi"],
-    "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet"],
+    "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
     "🧪 BackTest": ["BackTest"],
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
@@ -128,10 +128,32 @@ authenticator.logout("🚪 Çıkış Yap", "sidebar")
 if 'ticker_lists' not in st.session_state:
     st.session_state.ticker_lists = load_ticker_lists(username)
 
+if 'stock_groups' not in st.session_state:
+    st.session_state.stock_groups = load_stock_groups(username)
+
+# Bir grup silindiğinde, o gruba ait widget zaten bu run'da oluşturulmuş olabileceği
+# için session_state'i doğrudan değiştiremeyiz (StreamlitWidgetAlreadyInstantiatedError).
+# Bu yüzden silme isteğini burada, multiselect widget'ı oluşturulmadan önce uygularız.
+removed_group = st.session_state.pop("_pending_group_removal", None)
+if removed_group and "selected_stock_groups" in st.session_state:
+    st.session_state.selected_stock_groups = [
+        g for g in st.session_state.selected_stock_groups if g != removed_group
+    ]
+
 # ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
 # ------------------------------------------------------------------------------
 market = st.sidebar.selectbox("Piyasa Seçimi", ["NASDAQ 100", "NYSE", "BIST 100"])
+
+selected_groups = []
+if st.session_state.stock_groups:
+    selected_groups = st.sidebar.multiselect(
+        "🗂️ Hisse Grubu (seçilirse piyasa yerine kullanılır)",
+        list(st.session_state.stock_groups.keys()),
+        key="selected_stock_groups",
+    )
+else:
+    st.sidebar.caption("🗂️ Henüz hisse grubunuz yok — Ayarlar'dan oluşturabilirsiniz.")
 
 st.sidebar.divider()
 st.markdown("""
@@ -192,7 +214,22 @@ else:
                 args=(module_state_key, mod_name),
             )
 
-target_list = st.session_state.ticker_lists[market]
+if selected_groups:
+    target_list = []
+    for g in selected_groups:
+        target_list.extend(st.session_state.stock_groups.get(g, []))
+    target_list = list(dict.fromkeys(target_list))
+    market = " + ".join(selected_groups)
+
+    max_len = max((len(st.session_state.stock_groups.get(g, [])) for g in selected_groups), default=0)
+    with st.expander(f"🗂️ Aktif Hisse Grubu Seçimi: **{market}** — Toplam {len(target_list)} hisse", expanded=False):
+        table_data = {
+            g: st.session_state.stock_groups.get(g, []) + [""] * (max_len - len(st.session_state.stock_groups.get(g, [])))
+            for g in selected_groups
+        }
+        st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+else:
+    target_list = st.session_state.ticker_lists[market]
 
 if 'current_module' not in st.session_state or st.session_state.current_module != module:
     st.session_state.current_module = module
@@ -238,10 +275,11 @@ if module == NAV_HOME:
 
     st.divider()
     st.subheader("📋 Hisse Listeleri")
-    lc1, lc2, lc3 = st.columns(3)
+    lc1, lc2, lc3, lc4 = st.columns(4)
     lc1.metric("NASDAQ 100 Listesi", len(st.session_state.ticker_lists["NASDAQ 100"]))
     lc2.metric("NYSE Listesi", len(st.session_state.ticker_lists["NYSE"]))
     lc3.metric("BIST 100 Listesi", len(st.session_state.ticker_lists["BIST 100"]))
+    lc4.metric("Hisse Grupları", len(st.session_state.stock_groups))
 
     st.divider()
     st.subheader("🎯 Bu Oturumdaki Son Tarama Sonuçları")
@@ -693,11 +731,128 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         st.rerun()
 
 # ==============================================================================
+# 7. MODÜL: HİSSE GRUPLARINI YÖNET
+# ==============================================================================
+elif module == "🗂️ Hisse Gruplarını Yönet":
+    st.header("🗂️ Hisse Gruplarını Yönetme ve Kalıcı Kaydetme")
+    st.caption(
+        "Kendi hisse gruplarınızı oluşturun; borsa listelerinden seçerek veya kendi "
+        "ticker'ınızı yazarak gruba hisse ekleyin. Sol menüdeki '🗂️ Hisse Grubu' alanından "
+        "bir veya birden fazla grubu seçerek tüm analiz modüllerinde piyasa listeleri "
+        "yerine kullanabilirsiniz."
+    )
+
+    st.subheader("➕ Yeni Hisse Grubu Oluştur")
+    with st.form("new_group_form", clear_on_submit=True):
+        new_group_name = st.text_input("Grup Adı:", placeholder="örn: Favorilerim, Temettü Hisseleri")
+        submitted = st.form_submit_button("Grup Oluştur")
+        if submitted:
+            name = new_group_name.strip()
+            if not name:
+                st.warning("⚠️ Lütfen bir grup adı girin.")
+            elif name in st.session_state.stock_groups:
+                st.warning(f"⚠️ **{name}** adında bir grup zaten mevcut.")
+            else:
+                st.session_state.stock_groups[name] = []
+                save_stock_groups(st.session_state.stock_groups, username)
+                st.success(f"✅ **{name}** grubu oluşturuldu! Şimdi hisse ekleyebilirsiniz.")
+                st.rerun()
+
+    st.divider()
+
+    if not st.session_state.stock_groups:
+        st.info("Henüz hiç hisse grubunuz yok. Yukarıdan yeni bir grup oluşturarak başlayın.")
+    else:
+        st.subheader("📂 Mevcut Gruplar")
+        group_names = list(st.session_state.stock_groups.keys())
+        selected_group = st.selectbox("Düzenlenecek grubu seçin:", group_names, key="group_editor_select")
+        current_group_tickers = st.session_state.stock_groups[selected_group]
+
+        col_add, col_del = st.columns(2)
+
+        with col_add:
+            st.markdown("**➕ Bu Gruba Hisse Ekle**")
+            add_mode = st.radio(
+                "Ekleme yöntemi:", ["Borsadan Seç", "Kendi Ticker'ımı Gireyim"],
+                key=f"add_mode_{selected_group}", horizontal=True,
+            )
+
+            if add_mode == "Borsadan Seç":
+                src_market = st.selectbox(
+                    "Borsa:", ["NASDAQ 100", "NYSE", "BIST 100"], key=f"src_market_{selected_group}"
+                )
+                available = [t for t in st.session_state.ticker_lists[src_market] if t not in current_group_tickers]
+                picks = st.multiselect("Eklenecek hisseler:", available, key=f"picks_{selected_group}")
+                if st.button("Seçilenleri Gruba Ekle", key=f"add_picks_{selected_group}"):
+                    if picks:
+                        st.session_state.stock_groups[selected_group] = list(
+                            dict.fromkeys(current_group_tickers + picks)
+                        )
+                        save_stock_groups(st.session_state.stock_groups, username)
+                        st.success(f"✅ {len(picks)} hisse **{selected_group}** grubuna eklendi!")
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Lütfen en az bir hisse seçin.")
+            else:
+                st.caption("💡 BIST hisseleri için `.IS` uzantısını eklemeyi unutmayın (örn: THYAO.IS).")
+                custom_ticker = st.text_input(
+                    "Ticker (örn: AAPL, THYAO.IS):", key=f"custom_ticker_{selected_group}"
+                ).strip().upper()
+                if st.button("Ticker'ı Gruba Ekle", key=f"add_custom_{selected_group}"):
+                    if not custom_ticker:
+                        st.warning("⚠️ Lütfen bir ticker girin.")
+                    elif custom_ticker in current_group_tickers:
+                        st.warning(f"⚠️ **{custom_ticker}** zaten bu grupta mevcut.")
+                    else:
+                        st.session_state.stock_groups[selected_group].append(custom_ticker)
+                        save_stock_groups(st.session_state.stock_groups, username)
+                        st.success(f"✅ **{custom_ticker}**, **{selected_group}** grubuna eklendi!")
+                        st.rerun()
+
+        with col_del:
+            st.markdown("**🗑️ Gruptan Hisse Çıkar**")
+            if current_group_tickers:
+                ticker_to_remove = st.selectbox(
+                    "Çıkarılacak hisse:", current_group_tickers, key=f"remove_sel_{selected_group}"
+                )
+                if st.button("Hisseyi Gruptan Çıkar", key=f"remove_btn_{selected_group}"):
+                    st.session_state.stock_groups[selected_group].remove(ticker_to_remove)
+                    save_stock_groups(st.session_state.stock_groups, username)
+                    st.success(f"🗑️ **{ticker_to_remove}** çıkarıldı.")
+                    st.rerun()
+            else:
+                st.caption("Bu grupta henüz hisse yok.")
+
+        st.write("---")
+        st.subheader(f"📋 {selected_group} İçeriği ({len(current_group_tickers)} Hisse)")
+        st.write(", ".join(current_group_tickers) if current_group_tickers else "_Bu grup henüz boş._")
+
+        st.write("<br>", unsafe_allow_html=True)
+        st.markdown("**⚠️ Grubu Sil**")
+        confirm_key = f"confirm_delete_group_{selected_group}"
+        if st.button(f"🗑️ '{selected_group}' Grubunu Sil", key=f"del_group_btn_{selected_group}"):
+            st.session_state[confirm_key] = True
+
+        if st.session_state.get(confirm_key):
+            st.warning(f"❓ **{selected_group}** grubunu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
+            cc1, cc2 = st.columns(2)
+            if cc1.button("✅ Evet, Sil", type="primary", key=f"confirm_yes_{selected_group}"):
+                del st.session_state.stock_groups[selected_group]
+                save_stock_groups(st.session_state.stock_groups, username)
+                st.session_state.pop(confirm_key, None)
+                st.session_state["_pending_group_removal"] = selected_group
+                st.success(f"🗑️ **{selected_group}** grubu silindi.")
+                st.rerun()
+            if cc2.button("❌ Vazgeç", key=f"confirm_no_{selected_group}"):
+                st.session_state.pop(confirm_key, None)
+                st.rerun()
+
+# ==============================================================================
 # MODÜL: DTW ZAMAN SERİSİ & BENZERLİK ANALİZİ (GÖRÜNTÜLEME & TİP GÜVENCELİ)
 # ==============================================================================
 elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
     st.header("🔄 DTW (Dynamic Time Warping) Zaman Serisi & Benzerlik Analizi")
-    st.caption("NASDAQ 100 hisselerinin son 2 gününün 5 dakikalık seans içi fiyat hareketlerini kıyaslar.")
+    st.caption(f"Seçili **{market}** kaynağındaki hisselerin son 2 gününün 5 dakikalık seans içi fiyat hareketlerini kıyaslar.")
 
     col_btn, col_thresh, col_window = st.columns([2, 1.5, 1.5])
     
@@ -724,7 +879,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
     # 2. Butona basıldıysa ham verileri yeniden çek ve hesapla
     if run_dtw_fetch:
-        with st.spinner("NASDAQ 100 verileri Yahoo Finance'den çekiliyor ve Türkiye saatine çevriliyor..."):
+        with st.spinner(f"{market} verileri Yahoo Finance'den çekiliyor ve Türkiye saatine çevriliyor..."):
             dtw_data = fetch_and_cache_5m_data(target_list)
             st.session_state.dtw_data = dtw_data
             

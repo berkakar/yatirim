@@ -109,6 +109,51 @@ def save_ticker_lists(ticker_dict, username):
         json.dump(ticker_dict, f, ensure_ascii=False, indent=4)
 
 
+def _group_file(username):
+    return f"custom_stock_groups_{username}.json"
+
+
+def load_stock_groups(username):
+    """Kullanıcının borsa listelerinden bağımsız, serbestçe adlandırıp
+    oluşturduğu hisse gruplarını yükler. Önce GitHub'daki (kalıcı) kopyayı,
+    yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
+    group_file = _group_file(username)
+    data = None
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, group_file, {})
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(group_file):
+        try:
+            with open(group_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if not data:
+        return {}
+
+    return {name: list(dict.fromkeys(tickers)) for name, tickers in data.items()}
+
+
+def save_stock_groups(groups_dict, username):
+    """Kullanıcının hisse gruplarını kalıcı olması için GitHub'a commit'ler (mümkün
+    olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
+    group_file = _group_file(username)
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, group_file, groups_dict, f"Update stock groups ({username})")
+        except Exception as e:
+            st.warning(f"⚠️ Hisse grupları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
+    with open(group_file, 'w', encoding='utf-8') as f:
+        json.dump(groups_dict, f, ensure_ascii=False, indent=4)
+
+
 def search_tickers(query, max_results=8):
     """Yahoo Finance'in kendi arama API'si (yf.Search) üzerinden şirket adı/sembole
     göre hisse arar - hem ABD hem BIST hisselerini kapsar. Sonuçları
