@@ -5,6 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from alpaca_client import AlpacaClient
+from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
 from config import load_initial_capital, save_initial_capital
 from ui_style import zebra_style
@@ -42,22 +43,35 @@ def _order_price(order: dict) -> float | None:
     return None
 
 
-def _algorithm_label(order: dict) -> str:
+def _parse_order_tag(order: dict) -> tuple[str, str]:
     """alpaca_buy_points.py tags buy-limit entries with client_order_id
-    "algo-<algorithm_id>-<symbol>-<epoch>" so historical orders stay
-    attributed to whichever algorithm was active when each was placed, even
-    after the portfolio's active algorithm later changes. Orders placed
-    before this tagging existed, or not a tagged buy-limit entry, show "—"."""
+    "algo-<algorithm_id>-<timeframe>-<symbol>-<epoch>" so historical orders
+    stay attributed to whichever algorithm/mum periyodu was active when each
+    was placed, even after the portfolio's settings later change. Orders
+    placed before the timeframe was added to this tag have the older
+    4-part "algo-<algorithm_id>-<symbol>-<epoch>" form (mum periyodu
+    unknown). Orders that aren't a tagged buy-limit entry show "—" for both.
+    Returns (algoritma_etiketi, mum_periyodu_etiketi)."""
     parts = (order.get("client_order_id") or "").split("-")
-    if len(parts) != 4 or parts[0] != "algo":
-        return "—"
-    algo = ALGORITHMS.get(parts[1])
-    return algo[0] if algo else "—"
+    if not parts or parts[0] != "algo":
+        return "—", "—"
+    if len(parts) == 5:
+        algo_id, timeframe = parts[1], parts[2]
+    elif len(parts) == 4:
+        algo_id, timeframe = parts[1], None
+    else:
+        return "—", "—"
+
+    algo = ALGORITHMS.get(algo_id)
+    algo_label = algo[0] if algo else "—"
+    timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe) if timeframe else "—"
+    return algo_label, timeframe_label
 
 
 def format_order_row(order: dict) -> dict:
     created = _to_tr_time(order["created_at"])
     price = _order_price(order)
+    algo_label, timeframe_label = _parse_order_tag(order)
 
     if order.get("qty"):
         amount = f"{float(order['qty']):g} adet"
@@ -71,7 +85,8 @@ def format_order_row(order: dict) -> dict:
         "Tarih (TRT)": created.strftime("%d.%m.%Y %H:%M:%S"),
         "Hisse": order["symbol"],
         "Tip": TYPE_TR.get(order["type"], order["type"]),
-        "Algoritma": _algorithm_label(order),
+        "Algoritma": algo_label,
+        "Mum Periyodu": timeframe_label,
         "Yön": "Satış" if order["side"] == "sell" else "Alış",
         "Fiyat": round(price, 2) if price is not None else "—",
         "Adet/Tutar": amount,

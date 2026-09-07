@@ -136,10 +136,14 @@ def check_symbol(
     if target_qty <= 0:
         return
 
-    # Tags the order with which algorithm produced it (parsed back out in
-    # alpaca_dashboard.py's history table) - "algo-<id>-<symbol>-<epoch>",
-    # dash-separated since algorithm ids use underscores.
-    client_order_id = f"algo-{algorithm}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
+    # Tags the order with which algorithm + timeframe produced it (parsed
+    # back out in alpaca_dashboard.py's history table) -
+    # "algo-<id>-<timeframe>-<symbol>-<epoch>", dash-separated since neither
+    # algorithm ids (underscores) nor timeframes ("15Min", "1Day", ...)
+    # contain dashes. Older orders placed before the timeframe was added to
+    # this tag have the 4-part "algo-<id>-<symbol>-<epoch>" form instead -
+    # _parse_order_tag in alpaca_dashboard.py handles both.
+    client_order_id = f"algo-{algorithm}-{timeframe}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
     # alpaca_client.place_limit_entry and the module docstring.
     stop_loss_price = round(target_price * (1 - INITIAL_STOP_PCT), 2)
