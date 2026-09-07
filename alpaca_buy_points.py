@@ -28,6 +28,16 @@ initial-stop placement is now just a fallback for a position that somehow
 has none (e.g. opened outside this system); its structure-based trailing
 still runs on its own schedule to tighten the stop over time.
 
+config["stop_loss_enabled"] / config["max_loss_pct"] (set in
+premium_buy_portfolio.py, same UI as the BackTest module's "Zarar Kes") add
+a portfolio-wide circuit breaker on top of that per-trade stop: before
+placing a new entry for a symbol, check_symbol compares that symbol's
+realized loss over the last STOP_LOSS_LOOKBACK_DAYS days (alpaca_client.
+AlpacaClient.compute_realized_loss, paired from its own fill history) against
+its allocated budget (budget * weight_pct). Past the threshold, no new buy
+is placed for that symbol - it stays in cash - though any already-open
+position keeps being managed by its own stop as usual.
+
 Run with --once (used by the GitHub Actions workflow, as an earlier step
 than the trailing-stop pass).
 """
@@ -54,6 +64,7 @@ CONFIG_PATH = "portfolio_config_berkakar.json"
 
 LOOKBACK_DAYS = int(os.environ.get("BUY_LOOKBACK_DAYS", "60"))
 DAILY_LOOKBACK_DAYS = int(os.environ.get("BUY_DAILY_LOOKBACK_DAYS", "400"))
+STOP_LOSS_LOOKBACK_DAYS = int(os.environ.get("STOP_LOSS_LOOKBACK_DAYS", "90"))
 
 
 def load_local_config() -> dict:
@@ -63,7 +74,10 @@ def load_local_config() -> dict:
         return json.load(f)
 
 
-def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str) -> None:
+def check_symbol(
+    client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
+    max_loss_pct: float | None = None,
+) -> None:
     existing_order = client.get_open_limit_buy_order(symbol)
 
     if client.get_position(symbol) is not None:
@@ -71,6 +85,20 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
             client.cancel_order(existing_order["id"])
             log(f"{symbol}: position already open, canceled stale buy-limit order.")
         return
+
+    dollar_amount = budget * (weight_pct / 100)
+    if dollar_amount <= 0:
+        return
+
+    if max_loss_pct:
+        realized_loss = client.compute_realized_loss(symbol, STOP_LOSS_LOOKBACK_DAYS)
+        loss_pct = realized_loss / dollar_amount * 100
+        if loss_pct >= max_loss_pct:
+            if existing_order is not None:
+                client.cancel_order(existing_order["id"])
+            log(f"{symbol}: zarar kes tetiklendi (gerçekleşen zarar %{loss_pct:.2f} >= %{max_loss_pct:g} eşik), "
+                "nakitte kalınıyor, yeni alım yapılmıyor.")
+            return
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
     bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
@@ -101,10 +129,6 @@ def check_symbol(client: AlpacaClient, symbol: str, weight_pct: float, budget: f
         if existing_order is not None:
             client.cancel_order(existing_order["id"])
             log(f"{symbol}: no valid buy signal ({algorithm}), canceled resting buy-limit order.")
-        return
-
-    dollar_amount = budget * (weight_pct / 100)
-    if dollar_amount <= 0:
         return
 
     target_price = signal.price
@@ -167,6 +191,7 @@ def run_once(client: AlpacaClient) -> None:
     if default_algorithm not in ALGORITHMS:
         default_algorithm = DEFAULT_ALGORITHM
     symbol_settings = config.get("symbol_settings") or {}
+    max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
 
     for asset in watchlist["assets"]:
         symbol = asset["symbol"]
@@ -176,7 +201,7 @@ def run_once(client: AlpacaClient) -> None:
             algorithm = default_algorithm
         timeframe = settings.get("timeframe") or TIMEFRAME
         try:
-            check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe)
+            check_symbol(client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe, max_loss_pct)
         except Exception as e:
             # One symbol's order getting rejected (or any other failure) must
             # never take the rest of the watchlist down with it - and, since

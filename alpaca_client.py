@@ -156,6 +156,38 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_symbol_fills(self, symbol: str, days: int) -> list[dict]:
+        """Bu sembol için son `days` gün içinde dolan (filled) emirler, dolum
+        zamanına göre artan sırada - compute_realized_loss'un alış/satış
+        eşleştirmesi için kullanılır."""
+        after = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+        r = self._get("/orders", params={
+            "status": "all", "symbols": symbol, "after": after, "direction": "asc", "limit": 500,
+        })
+        r.raise_for_status()
+        return [o for o in r.json() if o["status"] == "filled" and o.get("filled_avg_price")]
+
+    def compute_realized_loss(self, symbol: str, lookback_days: int = 90) -> float:
+        """Son `lookback_days` gün içinde bu sembol için kapanmış (alış+satış
+        eşleşen) işlemlerin toplam gerçekleşen zararını pozitif bir sayı
+        olarak döner (net kârda veya zarar yoksa 0.0). Aynı anda tek pozisyon
+        açıldığı varsayımıyla, dolan emirleri zaman sırasına göre alış/satış
+        çifti olarak eşleştirir - "zarar kes" kontrolü (premium_buy_portfolio.py,
+        alpaca_buy_points.py) bu sayıyı sembolün kendi bütçesine oranlar."""
+        fills = self.get_symbol_fills(symbol, lookback_days)
+        total_pnl = 0.0
+        open_buy = None
+        for o in fills:
+            price = float(o["filled_avg_price"])
+            qty = float(o["filled_qty"])
+            if o["side"] == "buy":
+                open_buy = (price, qty)
+            elif o["side"] == "sell" and open_buy is not None:
+                entry_price, entry_qty = open_buy
+                total_pnl += (price - entry_price) * min(qty, entry_qty)
+                open_buy = None
+        return max(0.0, -total_pnl)
+
     def wait_for_fill(self, order_id: str, timeout: float = 30) -> dict:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:

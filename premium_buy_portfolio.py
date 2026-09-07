@@ -21,6 +21,7 @@ PRICE_REFRESH_SECONDS = 30
 @st.fragment(run_every=PRICE_REFRESH_SECONDS)
 def _render_buy_point_table(
     client: AlpacaClient, current_symbols: list[str], symbol_settings: dict[str, dict], default_algorithm: str,
+    weights: dict[str, float], budget: float, stop_loss_enabled: bool, max_loss_pct: float | None,
 ):
     daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
     rows = []
@@ -49,13 +50,26 @@ def _render_buy_point_table(
         active_signal = signals.get(active_algorithm)
         has_position = client.get_position(symbol) is not None
 
+        stopped_out = False
+        if stop_loss_enabled and max_loss_pct and not has_position:
+            dollar_amount = budget * (weights.get(symbol, 0) / 100)
+            if dollar_amount > 0:
+                try:
+                    realized_loss = client.compute_realized_loss(symbol)
+                except Exception:
+                    realized_loss = 0.0
+                stopped_out = (realized_loss / dollar_amount * 100) >= max_loss_pct
+
         row = {"Hisse": symbol, "Güncel Fiyat": round(current_price, 2), "Mum Periyodu": TIMEFRAME_LABELS.get(timeframe, timeframe)}
         for algo_id, (label, _) in ALGORITHMS.items():
             sig = signals.get(algo_id)
             row[label] = sig.price if sig else "—"
         row["Kullanılan Algoritma"] = ALGORITHMS[active_algorithm][0]
-        row["Kullanılacak Fiyat"] = active_signal.price if active_signal else "—"
-        row["Durum"] = "Pozisyon Açık" if has_position else ("Bekleniyor" if active_signal else "Sinyal Yok")
+        row["Kullanılacak Fiyat"] = "—" if stopped_out else (active_signal.price if active_signal else "—")
+        if stopped_out:
+            row["Durum"] = "Zarar Kesildi"
+        else:
+            row["Durum"] = "Pozisyon Açık" if has_position else ("Bekleniyor" if active_signal else "Sinyal Yok")
         rows.append(row)
 
     st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
@@ -65,7 +79,9 @@ def _render_buy_point_table(
         "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
         "(\"—\" = sinyal yok). 'Kullanılan Algoritma' ve 'Kullanılacak Fiyat', o hisse için aşağıda seçtiğiniz "
         "(veya BackTest sonucu yoksa varsayılan) algoritma/mum periyoduna göredir - gerçek alım GitHub Action "
-        "tarafından 5 dakikalık taramada bu fiyat/algoritma/periyot ile yapılır."
+        "tarafından 5 dakikalık taramada bu fiyat/algoritma/periyot ile yapılır. \"Zarar Kesildi\", Zarar Kes "
+        "etkinken o hissenin kendi bütçesine göre gerçekleşen zararının eşiğe ulaştığı, yeni alım yapılmadığı "
+        "anlamına gelir."
     )
 
 
@@ -180,13 +196,33 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         format_func=lambda k: ALGORITHMS[k][0],
     )
 
+    st.subheader("🛑 Risk Yönetimi")
+    sl1, sl2 = st.columns([1, 2])
+    stop_loss_enabled = sl1.checkbox(
+        "Zarar Kes", value=bool(config.get("stop_loss_enabled")), key="pbp_stop_loss_enabled",
+        help="Etkinleştirilirse, bir hissenin kendi bütçesine (ağırlığına göre ayrılan tutara) göre "
+             "gerçekleşen (kapanmış işlemlerdeki) toplam zararı girilen yüzdeye ulaştığında, o hisse için "
+             "yeni alım yapılmaz - nakitte kalınır. Açık pozisyon varsa kendi stop'uyla yönetilmeye devam eder.",
+    )
+    max_loss_pct = sl2.number_input(
+        "Maksimum zarar yüzdesi", min_value=0.1, max_value=100.0,
+        value=float(config.get("max_loss_pct") or 10.0), step=0.5,
+        disabled=not stop_loss_enabled, key="pbp_max_loss_pct",
+        help="Hissenin kendi bütçesine göre gerçekleşen zararı bu yüzdeye ulaştığında, o hisse için yeni "
+             "alım durdurulur.",
+    )
+
+    weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
+
     if st.button("💾 Portföyü Kaydet", type="primary"):
         client.set_watchlist_symbols(watchlist["id"], selected_symbols)
         new_config = {
             "budget": float(budget),
-            "weights": {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()},
+            "weights": weights_map,
             "algorithm": selected_algorithm,
             "symbol_settings": symbol_settings,
+            "stop_loss_enabled": bool(stop_loss_enabled),
+            "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
         }
         write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
         st.success("Portföy kaydedildi.")
@@ -196,7 +232,10 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         return
 
     st.subheader("📍 Premium Buy Point Karşılaştırması")
-    _render_buy_point_table(client, current_symbols, symbol_settings, selected_algorithm)
+    _render_buy_point_table(
+        client, current_symbols, symbol_settings, selected_algorithm,
+        weights_map, float(budget), bool(stop_loss_enabled), float(max_loss_pct) if stop_loss_enabled else None,
+    )
 
     st.subheader("📜 Son 30 Gün Alım/Satım Emirleri")
     history_rows = [
