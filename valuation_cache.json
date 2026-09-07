@@ -127,19 +127,19 @@
   "AKBNK.IS": {
     "raw": {
       "Hisse": "AKBNK.IS",
-      "Alt Sektör (İş Modeli)": "Banks - Regional",
-      "Ana Sektör": "Financial Services",
-      "F/K": 5.73,
-      "PD/DD": 1.17,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
       "FD/FAVÖK": null,
-      "PEG": 1.79,
-      "EPS Büyümesi %": 36.7,
-      "Gelir Büyümesi %": 42.0,
-      "Öz Sermaye Getirisi (ROE) %": 22.86,
-      "Net Kar Marjı %": 29.49,
-      "Brüt Kar Marjı %": 0.0,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 1.91,
+      "Varlık Getirisi (ROA) %": null,
       "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
       "Cari Oran": null,
@@ -147,7 +147,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "SISE.IS": {
     "raw": {
@@ -277,19 +277,19 @@
   "YKBNK.IS": {
     "raw": {
       "Hisse": "YKBNK.IS",
-      "Alt Sektör (İş Modeli)": "Banks - Regional",
-      "Ana Sektör": "Financial Services",
-      "F/K": 5.73,
-      "PD/DD": 1.1,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
       "FD/FAVÖK": null,
-      "PEG": 0.43,
-      "EPS Büyümesi %": -5.2,
-      "Gelir Büyümesi %": 29.4,
-      "Öz Sermaye Getirisi (ROE) %": 21.79,
-      "Net Kar Marjı %": 24.92,
-      "Brüt Kar Marjı %": 0.0,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 1.58,
+      "Varlık Getirisi (ROA) %": null,
       "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
       "Cari Oran": null,
@@ -297,7 +297,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "PGSUS.IS": {
     "raw": {
@@ -397,7 +397,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "HEKTS.IS": {
     "raw": {
@@ -677,27 +677,27 @@
   "MAVI.IS": {
     "raw": {
       "Hisse": "MAVI.IS",
-      "Alt Sektör (İş Modeli)": "Apparel Retail",
-      "Ana Sektör": "Consumer Cyclical",
-      "F/K": 16.35,
-      "PD/DD": 2.19,
-      "FD/FAVÖK": 4.11,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": 23.7,
-      "Öz Sermaye Getirisi (ROE) %": 11.07,
-      "Net Kar Marjı %": 3.94,
-      "Brüt Kar Marjı %": 51.28,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 12.21,
-      "Borç / Özsermaye": 0.35,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.59,
-      "Likidite Oranı": 1.01,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-04-30"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "AEFES.IS": {
     "raw": {
@@ -977,52 +977,52 @@
   "BSOKE.IS": {
     "raw": {
       "Hisse": "BSOKE.IS",
-      "Alt Sektör (İş Modeli)": "Building Materials",
-      "Ana Sektör": "Basic Materials",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 3.48,
-      "FD/FAVÖK": 221.06,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": -4.4,
-      "Öz Sermaye Getirisi (ROE) %": -9.73,
-      "Net Kar Marjı %": -20.54,
-      "Brüt Kar Marjı %": 5.59,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": -1.97,
-      "Borç / Özsermaye": 0.22,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.01,
-      "Likidite Oranı": 0.57,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "CANTE.IS": {
     "raw": {
       "Hisse": "CANTE.IS",
-      "Alt Sektör (İş Modeli)": "Utilities - Independent Power Producers",
-      "Ana Sektör": "Utilities",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 0.42,
-      "FD/FAVÖK": 10.43,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": 45.6,
-      "Öz Sermaye Getirisi (ROE) %": -5.36,
-      "Net Kar Marjı %": -34.96,
-      "Brüt Kar Marjı %": 3.99,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": -1.6,
-      "Borç / Özsermaye": 0.02,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 3.01,
-      "Likidite Oranı": 1.86,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "CCOLA.IS": {
     "raw": {
@@ -1227,27 +1227,27 @@
   "KONTR.IS": {
     "raw": {
       "Hisse": "KONTR.IS",
-      "Alt Sektör (İş Modeli)": "Conglomerates",
-      "Ana Sektör": "Industrials",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 0.73,
-      "FD/FAVÖK": 30.3,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
-      "EPS Büyümesi %": -97.0,
-      "Gelir Büyümesi %": 2.8,
-      "Öz Sermaye Getirisi (ROE) %": -20.22,
-      "Net Kar Marjı %": -6.5,
-      "Brüt Kar Marjı %": 7.55,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": -0.07,
-      "Borç / Özsermaye": 1.68,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 0.95,
-      "Likidite Oranı": 0.49,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "KORDS.IS": {
     "raw": {
@@ -1302,27 +1302,27 @@
   "ODAS.IS": {
     "raw": {
       "Hisse": "ODAS.IS",
-      "Alt Sektör (İş Modeli)": "Utilities - Regulated Electric",
-      "Ana Sektör": "Utilities",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 0.67,
-      "FD/FAVÖK": 15.86,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": 29.7,
-      "Öz Sermaye Getirisi (ROE) %": -1.11,
-      "Net Kar Marjı %": 3.05,
-      "Brüt Kar Marjı %": 14.81,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": -0.74,
-      "Borç / Özsermaye": 0.05,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 2.32,
-      "Likidite Oranı": 1.34,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "OYAKC.IS": {
     "raw": {
@@ -1727,27 +1727,27 @@
   "CLEBI.IS": {
     "raw": {
       "Hisse": "CLEBI.IS",
-      "Alt Sektör (İş Modeli)": "Airports & Air Services",
-      "Ana Sektör": "Industrials",
-      "F/K": 10.12,
-      "PD/DD": 4.28,
-      "FD/FAVÖK": 9.04,
-      "PEG": 4.88,
-      "EPS Büyümesi %": -98.7,
-      "Gelir Büyümesi %": 38.0,
-      "Öz Sermaye Getirisi (ROE) %": 37.54,
-      "Net Kar Marjı %": 16.15,
-      "Brüt Kar Marjı %": 33.59,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 11.1,
-      "Borç / Özsermaye": 1.2,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.26,
-      "Likidite Oranı": 0.85,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "CRDFA.IS": {
     "raw": {
@@ -1902,27 +1902,27 @@
   "EGEEN.IS": {
     "raw": {
       "Hisse": "EGEEN.IS",
-      "Alt Sektör (İş Modeli)": "Auto Parts",
-      "Ana Sektör": "Consumer Cyclical",
-      "F/K": 29.2,
-      "PD/DD": 2.07,
-      "FD/FAVÖK": 75.58,
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": -34.4,
-      "Öz Sermaye Getirisi (ROE) %": -3.46,
-      "Net Kar Marjı %": -6.27,
-      "Brüt Kar Marjı %": 13.49,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 0.06,
-      "Borç / Özsermaye": 0.19,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 3.65,
-      "Likidite Oranı": 2.46,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "EGSER.IS": {
     "raw": {
@@ -2172,7 +2172,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "IEYHO.IS": {
     "raw": {
@@ -2202,27 +2202,27 @@
   "IHLAS.IS": {
     "raw": {
       "Hisse": "IHLAS.IS",
-      "Alt Sektör (İş Modeli)": "Conglomerates",
-      "Ana Sektör": "Industrials",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 0.58,
+      "PD/DD": null,
       "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": 15.1,
-      "Öz Sermaye Getirisi (ROE) %": -21.13,
-      "Net Kar Marjı %": -16.85,
-      "Brüt Kar Marjı %": -7.83,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": -9.83,
-      "Borç / Özsermaye": 0.25,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 2.67,
-      "Likidite Oranı": 0.74,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "IHLGM.IS": {
     "raw": {
@@ -2322,7 +2322,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "IZMDC.IS": {
     "raw": {
@@ -2352,27 +2352,27 @@
   "JANTS.IS": {
     "raw": {
       "Hisse": "JANTS.IS",
-      "Alt Sektör (İş Modeli)": "Auto Parts",
-      "Ana Sektör": "Consumer Cyclical",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
       "F/K": null,
-      "PD/DD": 1.55,
-      "FD/FAVÖK": 20.93,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": 19.7,
-      "Öz Sermaye Getirisi (ROE) %": -1.49,
-      "Net Kar Marjı %": -1.5,
-      "Brüt Kar Marjı %": 14.37,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 1.44,
-      "Borç / Özsermaye": 0.24,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
-      "Cari Oran": 2.47,
-      "Likidite Oranı": 1.81,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-03-31"
+      "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "KAREL.IS": {
     "raw": {
@@ -2422,7 +2422,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-07"
   },
   "KONYA.IS": {
     "raw": {
@@ -5277,6 +5277,156 @@
   "ADESE.IS": {
     "raw": {
       "Hisse": "ADESE.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "BOSSA.IS": {
+    "raw": {
+      "Hisse": "BOSSA.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "SERNT.IS": {
+    "raw": {
+      "Hisse": "SERNT.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "KATMR.IS": {
+    "raw": {
+      "Hisse": "KATMR.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "PENTA.IS": {
+    "raw": {
+      "Hisse": "PENTA.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "HUNER.IS": {
+    "raw": {
+      "Hisse": "HUNER.IS",
+      "Alt Sektör (İş Modeli)": "Diğer",
+      "Ana Sektör": "Diğer",
+      "F/K": null,
+      "PD/DD": null,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": null,
+      "Öz Sermaye Getirisi (ROE) %": null,
+      "Net Kar Marjı %": null,
+      "Brüt Kar Marjı %": null,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": null,
+      "Borç / Özsermaye": null,
+      "Borç / Varlık %": null,
+      "Cari Oran": null,
+      "Likidite Oranı": null,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": null
+    },
+    "cached_at": "2026-09-07"
+  },
+  "PSGYO.IS": {
+    "raw": {
+      "Hisse": "PSGYO.IS",
       "Alt Sektör (İş Modeli)": "Diğer",
       "Ana Sektör": "Diğer",
       "F/K": null,
