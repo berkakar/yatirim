@@ -10,5 +10,17 @@
     "TTWO": 12.5,
     "SKHY": 12.5
   },
-  "algorithm": "demand_zone"
+  "algorithm": "demand_zone",
+  "symbol_settings": {
+    "NVDA": {
+      "algorithm": "breakout_volume",
+      "timeframe": "30Min"
+    },
+    "SKHY": {
+      "algorithm": "breakout_volume",
+      "timeframe": "15Min"
+    }
+  },
+  "stop_loss_enabled": true,
+  "max_loss_pct": 4.0
 }
