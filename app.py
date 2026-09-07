@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import json
 import os
 
-from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups
+from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups, load_initial_capital, save_initial_capital
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import get_scanner_data
@@ -259,15 +259,47 @@ if module == NAV_HOME:
         try:
             client = AlpacaClient(key_id, secret_key)
             positions = client.get_all_positions()
-            total_value = sum(float(p["market_value"]) for p in positions)
-            total_pl = sum(float(p["unrealized_pl"]) for p in positions)
-            total_cost = sum(float(p["cost_basis"]) for p in positions)
-            total_pl_pct = (total_pl / total_cost * 100) if total_cost else 0.0
+            account = client.get_account()
+            cash = float(account["cash"])
+            equity = float(account["equity"])  # nakit + tüm pozisyonların güncel piyasa değeri
 
-            c1, c2, c3 = st.columns(3)
+            if 'initial_capital' not in st.session_state:
+                st.session_state.initial_capital = load_initial_capital(username)
+
+            with st.expander(
+                "💵 İlk Sermaye Ayarı",
+                expanded=st.session_state.initial_capital is None,
+            ):
+                st.caption(
+                    "Alım/satım sayısı arttıkça 'açık pozisyonların gerçekleşmemiş K/Z toplamı' kavramı "
+                    "portföyün gerçek performansını yansıtmaz hale gelir. Bunun yerine, hesaba ilk "
+                    "yatırdığınız sermayeyi bir kez girin - kâr, o andaki toplam hesap değeri (nakit + "
+                    "pozisyonlar) ile bu sermaye karşılaştırılarak hesaplanır; yapılan tüm alım/satımların "
+                    "net etkisini (gerçekleşmiş ve gerçekleşmemiş birlikte) kapsar."
+                )
+                new_capital = st.number_input(
+                    "İlk yatırılan sermaye ($)", min_value=0.0,
+                    value=float(st.session_state.initial_capital or 0.0), step=100.0,
+                    key="initial_capital_input",
+                )
+                if st.button("Kaydet", key="save_initial_capital_btn"):
+                    save_initial_capital(new_capital, username)
+                    st.session_state.initial_capital = new_capital
+                    st.success("İlk sermaye kaydedildi.")
+                    st.rerun()
+
+            initial_capital = st.session_state.initial_capital
+
+            c1, c2, c3, c4 = st.columns(4)
             c1.metric("Açık Pozisyon", len(positions))
-            c2.metric("Toplam Pozisyon Değeri", f"${total_value:,.2f}")
-            c3.metric("Toplam Kâr/Zarar", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
+            c2.metric("Nakit", f"${cash:,.2f}")
+            c3.metric("Toplam Portföy Değeri", f"${equity:,.2f}")
+            if initial_capital:
+                total_pl = equity - initial_capital
+                total_pl_pct = total_pl / initial_capital * 100
+                c4.metric("Portföyün Anlık Kârı", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
+            else:
+                c4.metric("Portföyün Anlık Kârı", "—")
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:

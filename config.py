@@ -154,6 +154,52 @@ def save_stock_groups(groups_dict, username):
         json.dump(groups_dict, f, ensure_ascii=False, indent=4)
 
 
+def _capital_file(username):
+    return f"initial_capital_{username}.json"
+
+
+def load_initial_capital(username):
+    """Kullanıcının Alpaca hesabına ilk yatırdığı sermayeyi yükler - Genel
+    Bakış'taki portföyün anlık kârlılığını (nakit + pozisyon değeri, bu
+    sermayeye göre) hesaplamak için referans değer. Kayıtlı değer yoksa
+    None döner."""
+    capital_file = _capital_file(username)
+    data = None
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, capital_file, None)
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(capital_file):
+        try:
+            with open(capital_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    if not data:
+        return None
+    return data.get("initial_capital")
+
+
+def save_initial_capital(amount, username):
+    """İlk sermayeyi kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
+    ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
+    capital_file = _capital_file(username)
+    payload = {"initial_capital": amount}
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, capital_file, payload, f"Update initial capital ({username})")
+        except Exception as e:
+            st.warning(f"⚠️ İlk sermaye GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
+    with open(capital_file, 'w', encoding='utf-8') as f:
+        json.dump(payload, f, ensure_ascii=False, indent=4)
+
+
 def search_tickers(query, max_results=8):
     """Yahoo Finance'in kendi arama API'si (yf.Search) üzerinden şirket adı/sembole
     göre hisse arar - hem ABD hem BIST hisselerini kapsar. Sonuçları

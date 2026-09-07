@@ -53,6 +53,13 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_account(self) -> dict:
+        """Hesap özeti - "cash" (nakit) ve "equity" (nakit + tüm pozisyonların
+        güncel piyasa değeri, yani anlık toplam hesap değeri) buradan gelir."""
+        r = self._get("/account")
+        r.raise_for_status()
+        return r.json()
+
     def get_position(self, symbol: str) -> dict | None:
         r = self._get(f"/positions/{symbol}")
         if r.status_code == 404:
