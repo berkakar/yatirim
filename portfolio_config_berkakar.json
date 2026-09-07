@@ -16,6 +16,18 @@
       "algorithm": "breakout_volume",
       "timeframe": "30Min"
     },
+    "NXPI": {
+      "algorithm": "volatility_support",
+      "timeframe": "1Hour"
+    },
+    "NOW": {
+      "algorithm": "trend_pullback",
+      "timeframe": "15Min"
+    },
+    "TTWO": {
+      "algorithm": "demand_zone",
+      "timeframe": "30Min"
+    },
     "SKHY": {
       "algorithm": "breakout_volume",
       "timeframe": "15Min"
