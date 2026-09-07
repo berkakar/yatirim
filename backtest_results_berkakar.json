@@ -24194,5 +24194,2548 @@
     "stop_loss_triggered": false,
     "stop_loss_triggered_at": null,
     "trades": []
+  },
+  {
+    "run_id": "NXPI-demand_zone-15Min-20260907T185037",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "demand_zone",
+    "timeframe": "15Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9423.0,
+    "pnl": -577.0,
+    "pnl_pct": -5.77,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": true,
+    "stop_loss_triggered_at": "2026-06-05T13:45:00Z",
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-30T14:30:00Z",
+        "price": 189.95,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T17:15:00Z",
+        "price": 187.1,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-07T13:45:00Z",
+        "price": 195.14,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-07T15:00:00Z",
+        "price": 192.21,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T13:30:00Z",
+        "price": 315.25,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T13:45:00Z",
+        "price": 310.52,
+        "qty": 30,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T13:30:00Z",
+        "price": 311.74,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T13:45:00Z",
+        "price": 307.06,
+        "qty": 30,
+        "reason": "stop · zarar kes tetiklendi (toplam zarar %5.77)"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-demand_zone-30Min-20260907T185037",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "demand_zone",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9320.22,
+    "pnl": -679.78,
+    "pnl_pct": -6.8,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": true,
+    "stop_loss_triggered_at": "2026-06-01T14:00:00Z",
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-30T14:30:00Z",
+        "price": 189.96,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T17:00:00Z",
+        "price": 187.11,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-07T13:30:00Z",
+        "price": 195.14,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-07T15:00:00Z",
+        "price": 192.21,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-23T17:30:00Z",
+        "price": 239.35,
+        "qty": 40,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T13:30:00Z",
+        "price": 239.35,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-29T14:30:00Z",
+        "price": 327.88,
+        "qty": 29,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T15:00:00Z",
+        "price": 322.96,
+        "qty": 29,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T13:30:00Z",
+        "price": 315.43,
+        "qty": 30,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T14:00:00Z",
+        "price": 307.35,
+        "qty": 30,
+        "reason": "stop · zarar kes tetiklendi (toplam zarar %6.80)"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-demand_zone-1Hour-20260907T185037",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "demand_zone",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 11267.02,
+    "pnl": 1267.02,
+    "pnl_pct": 12.67,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-27T18:00:00Z",
+        "price": 191.43,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T15:00:00Z",
+        "price": 188.56,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-02T14:00:00Z",
+        "price": 194.43,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-02T16:00:00Z",
+        "price": 191.51,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-07T14:00:00Z",
+        "price": 192.8,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T16:00:00Z",
+        "price": 290.1823,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-12T15:00:00Z",
+        "price": 293.89,
+        "qty": 49,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-14T16:00:00Z",
+        "price": 293.89,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-21T15:00:00Z",
+        "price": 298.47,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-21T19:00:00Z",
+        "price": 298.47,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T14:00:00Z",
+        "price": 315.38,
+        "qty": 46,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T15:00:00Z",
+        "price": 310.39,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T14:00:00Z",
+        "price": 312.56,
+        "qty": 45,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T15:00:00Z",
+        "price": 307.345,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T18:00:00Z",
+        "price": 300.4,
+        "qty": 46,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-09T14:00:00Z",
+        "price": 300.4,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-10T14:00:00Z",
+        "price": 289.72,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T17:00:00Z",
+        "price": 285.37,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-16T19:00:00Z",
+        "price": 305.67,
+        "qty": 45,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-17T19:00:00Z",
+        "price": 301.08,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-22T19:00:00Z",
+        "price": 319.63,
+        "qty": 42,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T14:00:00Z",
+        "price": 305.25,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-24T14:00:00Z",
+        "price": 293.96,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T17:00:00Z",
+        "price": 289.55,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T14:00:00Z",
+        "price": 292.24,
+        "qty": 44,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T15:00:00Z",
+        "price": 283.73,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-07T14:00:00Z",
+        "price": 273.5,
+        "qty": 45,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-07T15:00:00Z",
+        "price": 269.4,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T14:00:00Z",
+        "price": 285.8,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-13T16:00:00Z",
+        "price": 281.51,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-15T14:00:00Z",
+        "price": 281.7,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T15:00:00Z",
+        "price": 277.47,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T14:00:00Z",
+        "price": 277.12,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T15:00:00Z",
+        "price": 270.225,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T14:00:00Z",
+        "price": 269.4,
+        "qty": 43,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T14:00:00Z",
+        "price": 265.36,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 246.21,
+        "qty": 46,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-30T14:00:00Z",
+        "price": 242.52,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-10T15:00:00Z",
+        "price": 234.84,
+        "qty": 48,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-11T17:00:00Z",
+        "price": 234.84,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T14:00:00Z",
+        "price": 225.31,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 0)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-19T19:00:00Z",
+        "price": 225.31,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-20T15:00:00Z",
+        "price": 225.31,
+        "qty": 50,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T14:00:00Z",
+        "price": 219.57,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-03T14:00:00Z",
+        "price": 223.11,
+        "qty": 49,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-04T19:00:00Z",
+        "price": 227.66,
+        "qty": 49,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-demand_zone-1Day-20260907T185037",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "demand_zone",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 13283.26,
+    "pnl": 3283.26,
+    "pnl_pct": 32.83,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-07T04:00:00Z",
+        "price": 193.22,
+        "qty": 51,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T04:00:00Z",
+        "price": 285.09,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-01T04:00:00Z",
+        "price": 308.94,
+        "qty": 47,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T04:00:00Z",
+        "price": 308.94,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-09T04:00:00Z",
+        "price": 298.6,
+        "qty": 49,
+        "reason": "Talep bölgesi (dokunuş: 2)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T04:00:00Z",
+        "price": 291,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-17T04:00:00Z",
+        "price": 299.3,
+        "qty": 47,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T04:00:00Z",
+        "price": 299.3,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T04:00:00Z",
+        "price": 273.84,
+        "qty": 52,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-17T04:00:00Z",
+        "price": 259.74,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T04:00:00Z",
+        "price": 273.44,
+        "qty": 49,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T04:00:00Z",
+        "price": 269.34,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-20T04:00:00Z",
+        "price": 225.86,
+        "qty": 59,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T04:00:00Z",
+        "price": 222.47,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-03T04:00:00Z",
+        "price": 225.86,
+        "qty": 58,
+        "reason": "Talep bölgesi (dokunuş: 1)"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-04T04:00:00Z",
+        "price": 227.66,
+        "qty": 58,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-trend_pullback-15Min-20260907T185038",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "trend_pullback",
+    "timeframe": "15Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9415.86,
+    "pnl": -584.14,
+    "pnl_pct": -5.84,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": true,
+    "stop_loss_triggered_at": "2026-07-01T13:30:00Z",
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-24T14:15:00Z",
+        "price": 243.47,
+        "qty": 41,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T13:30:00Z",
+        "price": 242.0057,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:30:00Z",
+        "price": 283.76,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T16:00:00Z",
+        "price": 290.4524,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-05T19:45:00Z",
+        "price": 294.33,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T13:45:00Z",
+        "price": 298.3326,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T15:00:00Z",
+        "price": 290.13,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-21T14:15:00Z",
+        "price": 305.7132,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-26T13:45:00Z",
+        "price": 326.77,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-26T15:45:00Z",
+        "price": 326.77,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-03T13:45:00Z",
+        "price": 325.06,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-03T14:00:00Z",
+        "price": 320.18,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-03T19:45:00Z",
+        "price": 321.75,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T13:30:00Z",
+        "price": 314.195,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-17T18:00:00Z",
+        "price": 307.77,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-17T19:15:00Z",
+        "price": 303.15,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-22T18:00:00Z",
+        "price": 321.81,
+        "qty": 31,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T13:30:00Z",
+        "price": 307.555,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T14:15:00Z",
+        "price": 306.57,
+        "qty": 32,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T14:30:00Z",
+        "price": 301.97,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T14:30:00Z",
+        "price": 298.76,
+        "qty": 32,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T18:30:00Z",
+        "price": 300.0953,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-29T13:45:00Z",
+        "price": 278.64,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-29T14:00:00Z",
+        "price": 274.46,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-30T17:30:00Z",
+        "price": 281.14,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-01T13:30:00Z",
+        "price": 275.595,
+        "qty": 34,
+        "reason": "stop · zarar kes tetiklendi (toplam zarar %5.84)"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-trend_pullback-30Min-20260907T185038",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "trend_pullback",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10355.17,
+    "pnl": 355.17,
+    "pnl_pct": 3.55,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:30:00Z",
+        "price": 283.76,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T16:00:00Z",
+        "price": 290.2952,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T15:00:00Z",
+        "price": 290.13,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T13:30:00Z",
+        "price": 325.672,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-28T19:30:00Z",
+        "price": 332.39,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T14:30:00Z",
+        "price": 327.4,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-04T13:30:00Z",
+        "price": 321.75,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T13:30:00Z",
+        "price": 314.195,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-17T18:00:00Z",
+        "price": 307.77,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-17T19:00:00Z",
+        "price": 303.15,
+        "qty": 35,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T14:30:00Z",
+        "price": 298.76,
+        "qty": 36,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-25T19:00:00Z",
+        "price": 298.76,
+        "qty": 36,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-30T17:30:00Z",
+        "price": 281.14,
+        "qty": 38,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-01T13:30:00Z",
+        "price": 275.595,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-01T15:30:00Z",
+        "price": 282.38,
+        "qty": 37,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T14:30:00Z",
+        "price": 278.14,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T13:30:00Z",
+        "price": 273.07,
+        "qty": 38,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T13:30:00Z",
+        "price": 273.07,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T16:00:00Z",
+        "price": 268.25,
+        "qty": 39,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 268.25,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T18:00:00Z",
+        "price": 247.12,
+        "qty": 42,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 247.12,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-30T16:30:00Z",
+        "price": 250.34,
+        "qty": 41,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-30T18:30:00Z",
+        "price": 246.58,
+        "qty": 41,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-trend_pullback-1Hour-20260907T185038",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "trend_pullback",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10504.28,
+    "pnl": 504.28,
+    "pnl_pct": 5.04,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-05-05T16:00:00Z",
+        "price": 294.65,
+        "qty": 33,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T14:00:00Z",
+        "price": 294.65,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T15:00:00Z",
+        "price": 290.13,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T14:00:00Z",
+        "price": 324.0946,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-09T16:00:00Z",
+        "price": 296.95,
+        "qty": 37,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-09T19:00:00Z",
+        "price": 292.5,
+        "qty": 37,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T16:00:00Z",
+        "price": 268.25,
+        "qty": 40,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 268.25,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-23T17:00:00Z",
+        "price": 275.44,
+        "qty": 39,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk EMA20 desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T14:00:00Z",
+        "price": 271.1,
+        "qty": 39,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T18:00:00Z",
+        "price": 247.12,
+        "qty": 43,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 243.41,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-30T17:00:00Z",
+        "price": 249.12,
+        "qty": 42,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-30T18:00:00Z",
+        "price": 245.38,
+        "qty": 42,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-trend_pullback-1Day-20260907T185038",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "trend_pullback",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9819.12,
+    "pnl": -180.88,
+    "pnl_pct": -1.81,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-05-18T04:00:00Z",
+        "price": 291.7,
+        "qty": 34,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-19T04:00:00Z",
+        "price": 286.38,
+        "qty": 34,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-08T04:00:00Z",
+        "price": 273.07,
+        "qty": 35,
+        "reason": "Günlük trend yükselişte (SMA200 üzeri), 30dk VWAP desteğine değip yeşil kapandı"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T04:00:00Z",
+        "price": 273.07,
+        "qty": 35,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-volatility_support-15Min-20260907T185039",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "volatility_support",
+    "timeframe": "15Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10494.13,
+    "pnl": 494.13,
+    "pnl_pct": 4.94,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-12T19:00:00Z",
+        "price": 190.75,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-13T17:45:00Z",
+        "price": 190.75,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-20T18:30:00Z",
+        "price": 190.19,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T14:30:00Z",
+        "price": 190.19,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T18:00:00Z",
+        "price": 186.91,
+        "qty": 53,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-15T15:30:00Z",
+        "price": 208.4588,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-15T17:45:00Z",
+        "price": 207.26,
+        "qty": 53,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-17T13:30:00Z",
+        "price": 211.4296,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-23T19:30:00Z",
+        "price": 239.04,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T13:30:00Z",
+        "price": 239.04,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-27T14:15:00Z",
+        "price": 237.16,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-27T17:00:00Z",
+        "price": 233.585,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T15:00:00Z",
+        "price": 230.51,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-30T13:30:00Z",
+        "price": 285.9031,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-30T14:30:00Z",
+        "price": 283.76,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T16:00:00Z",
+        "price": 290.4524,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T15:00:00Z",
+        "price": 294.95,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T16:45:00Z",
+        "price": 290.53,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-07T17:15:00Z",
+        "price": 290.45,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-11T15:30:00Z",
+        "price": 294.39,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-12T15:00:00Z",
+        "price": 294.89,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-13T13:45:00Z",
+        "price": 294.89,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-14T14:30:00Z",
+        "price": 294.63,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T13:30:00Z",
+        "price": 285.09,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-21T15:30:00Z",
+        "price": 299.57,
+        "qty": 45,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-27T14:15:00Z",
+        "price": 328.5363,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-28T19:30:00Z",
+        "price": 332.39,
+        "qty": 45,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T14:30:00Z",
+        "price": 327.4,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-29T16:45:00Z",
+        "price": 324.65,
+        "qty": 45,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-01T13:30:00Z",
+        "price": 316.525,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-05T17:15:00Z",
+        "price": 298.7,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-05T18:30:00Z",
+        "price": 298.7,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-10T16:00:00Z",
+        "price": 290.01,
+        "qty": 49,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-10T17:15:00Z",
+        "price": 285.64,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-16T14:45:00Z",
+        "price": 315.82,
+        "qty": 44,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-16T15:15:00Z",
+        "price": 311.08,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-16T18:45:00Z",
+        "price": 307.7,
+        "qty": 45,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-16T19:45:00Z",
+        "price": 303.08,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-22T19:15:00Z",
+        "price": 319.69,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T13:30:00Z",
+        "price": 307.555,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T14:15:00Z",
+        "price": 306.57,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T14:30:00Z",
+        "price": 301.97,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T17:45:00Z",
+        "price": 299.21,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T13:45:00Z",
+        "price": 294.72,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-25T19:45:00Z",
+        "price": 298.19,
+        "qty": 43,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T13:30:00Z",
+        "price": 287.945,
+        "qty": 43,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T17:00:00Z",
+        "price": 281.27,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T18:45:00Z",
+        "price": 277.05,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-02T15:45:00Z",
+        "price": 273.45,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T17:30:00Z",
+        "price": 269.35,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-06T19:45:00Z",
+        "price": 282.12,
+        "qty": 42,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-07T13:30:00Z",
+        "price": 270.905,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T15:00:00Z",
+        "price": 284.5,
+        "qty": 40,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-13T18:15:00Z",
+        "price": 280.23,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-14T19:30:00Z",
+        "price": 284.64,
+        "qty": 40,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T14:30:00Z",
+        "price": 280.37,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-16T14:15:00Z",
+        "price": 271.58,
+        "qty": 41,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-16T19:30:00Z",
+        "price": 267.51,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T15:15:00Z",
+        "price": 262.83,
+        "qty": 42,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T15:45:00Z",
+        "price": 262.83,
+        "qty": 42,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T14:15:00Z",
+        "price": 248.09,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T14:30:00Z",
+        "price": 244.37,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T18:15:00Z",
+        "price": 231.78,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-03T13:30:00Z",
+        "price": 223.36,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-11T17:15:00Z",
+        "price": 235.16,
+        "qty": 44,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-12T15:45:00Z",
+        "price": 234.57,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-13T15:45:00Z",
+        "price": 233.12,
+        "qty": 45,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-17T19:45:00Z",
+        "price": 233.12,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T15:15:00Z",
+        "price": 224.29,
+        "qty": 46,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-20T13:45:00Z",
+        "price": 224.29,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-20T17:30:00Z",
+        "price": 223.34,
+        "qty": 46,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T13:45:00Z",
+        "price": 219.99,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-24T14:15:00Z",
+        "price": 219.22,
+        "qty": 47,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-01T13:30:00Z",
+        "price": 219.22,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-03T14:00:00Z",
+        "price": 224.28,
+        "qty": 46,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-04T19:45:00Z",
+        "price": 227.66,
+        "qty": 46,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-volatility_support-30Min-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "volatility_support",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 13487.56,
+    "pnl": 3487.56,
+    "pnl_pct": 34.88,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-19T16:00:00Z",
+        "price": 191.56,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-27T17:30:00Z",
+        "price": 191.56,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T18:00:00Z",
+        "price": 186.91,
+        "qty": 53,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-15T16:30:00Z",
+        "price": 207.0385,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-28T15:00:00Z",
+        "price": 230.51,
+        "qty": 48,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-04T16:00:00Z",
+        "price": 290.2952,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T14:00:00Z",
+        "price": 289.69,
+        "qty": 48,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T13:30:00Z",
+        "price": 325.672,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-16T19:30:00Z",
+        "price": 307.56,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-17T18:00:00Z",
+        "price": 302.95,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T14:30:00Z",
+        "price": 304.15,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-23T15:00:00Z",
+        "price": 299.59,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T16:00:00Z",
+        "price": 300.5,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T13:30:00Z",
+        "price": 295.99,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-24T16:30:00Z",
+        "price": 295.2,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T17:00:00Z",
+        "price": 290.77,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T17:00:00Z",
+        "price": 281.27,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T18:30:00Z",
+        "price": 277.05,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-02T16:00:00Z",
+        "price": 272.89,
+        "qty": 53,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T17:30:00Z",
+        "price": 268.8,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T15:00:00Z",
+        "price": 284.5,
+        "qty": 50,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-13T18:00:00Z",
+        "price": 280.23,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T15:00:00Z",
+        "price": 269.69,
+        "qty": 52,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T14:30:00Z",
+        "price": 265.64,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T18:00:00Z",
+        "price": 247.12,
+        "qty": 56,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 247.12,
+        "qty": 56,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-31T18:30:00Z",
+        "price": 232.84,
+        "qty": 59,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-31T19:30:00Z",
+        "price": 229.35,
+        "qty": 59,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T16:00:00Z",
+        "price": 225.09,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-20T13:30:00Z",
+        "price": 225.09,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-20T17:30:00Z",
+        "price": 223.34,
+        "qty": 61,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-24T13:30:00Z",
+        "price": 219.99,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-24T15:00:00Z",
+        "price": 219.01,
+        "qty": 61,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-01T13:30:00Z",
+        "price": 219.01,
+        "qty": 61,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-volatility_support-1Hour-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "volatility_support",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 16154.55,
+    "pnl": 6154.55,
+    "pnl_pct": 61.55,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-19T16:00:00Z",
+        "price": 191.56,
+        "qty": 52,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-27T17:00:00Z",
+        "price": 191.56,
+        "qty": 52,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-30T18:00:00Z",
+        "price": 186.91,
+        "qty": 53,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T16:00:00Z",
+        "price": 290.1823,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-19T15:00:00Z",
+        "price": 290.13,
+        "qty": 53,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-29T14:00:00Z",
+        "price": 324.0946,
+        "qty": 53,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-23T16:00:00Z",
+        "price": 300.5,
+        "qty": 57,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-24T14:00:00Z",
+        "price": 293.87,
+        "qty": 57,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-26T17:00:00Z",
+        "price": 281.27,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-06-26T18:00:00Z",
+        "price": 277.05,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-06-29T16:00:00Z",
+        "price": 277.06,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T14:00:00Z",
+        "price": 277.06,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-02T16:00:00Z",
+        "price": 272.89,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-02T17:00:00Z",
+        "price": 268.8,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T17:00:00Z",
+        "price": 281.58,
+        "qty": 58,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T14:00:00Z",
+        "price": 281.58,
+        "qty": 58,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T16:00:00Z",
+        "price": 268.25,
+        "qty": 61,
+        "reason": "SMA20-1.5×ATR14 altında"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-20T19:00:00Z",
+        "price": 268.25,
+        "qty": 61,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-24T15:00:00Z",
+        "price": 269.69,
+        "qty": 60,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-27T14:00:00Z",
+        "price": 265.64,
+        "qty": 60,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-29T18:00:00Z",
+        "price": 247.12,
+        "qty": 65,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T19:00:00Z",
+        "price": 243.41,
+        "qty": 65,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T16:00:00Z",
+        "price": 225.09,
+        "qty": 70,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-20T14:00:00Z",
+        "price": 223.895,
+        "qty": 70,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-24T15:00:00Z",
+        "price": 219.01,
+        "qty": 72,
+        "reason": "SMA20-1.5×ATR14 altında ve Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-01T14:00:00Z",
+        "price": 217.51,
+        "qty": 72,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-01T17:00:00Z",
+        "price": 221.47,
+        "qty": 70,
+        "reason": "Bollinger alt bandına değdi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-04T19:00:00Z",
+        "price": 227.66,
+        "qty": 70,
+        "reason": "test_end_close"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-volatility_support-1Day-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "volatility_support",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10000.0,
+    "pnl": 0.0,
+    "pnl_pct": 0.0,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": []
+  },
+  {
+    "run_id": "NXPI-breakout_volume-15Min-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "breakout_volume",
+    "timeframe": "15Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9418.08,
+    "pnl": -581.92,
+    "pnl_pct": -5.82,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": true,
+    "stop_loss_triggered_at": "2026-03-25T15:00:00Z",
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-17T13:45:00Z",
+        "price": 195.78,
+        "qty": 51,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %191'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-18T14:15:00Z",
+        "price": 192.84,
+        "qty": 51,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-19T19:15:00Z",
+        "price": 193.51,
+        "qty": 50,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %222'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-20T18:15:00Z",
+        "price": 190.61,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-23T13:45:00Z",
+        "price": 197.28,
+        "qty": 49,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %156'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-23T16:15:00Z",
+        "price": 194.32,
+        "qty": 49,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-25T13:45:00Z",
+        "price": 201.04,
+        "qty": 47,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %223'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-25T15:00:00Z",
+        "price": 198.02,
+        "qty": 47,
+        "reason": "stop · zarar kes tetiklendi (toplam zarar %5.82)"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-breakout_volume-30Min-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "breakout_volume",
+    "timeframe": "30Min",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9419.13,
+    "pnl": -580.87,
+    "pnl_pct": -5.81,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": true,
+    "stop_loss_triggered_at": "2026-04-17T19:00:00Z",
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-25T14:00:00Z",
+        "price": 199.87,
+        "qty": 50,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %181'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-25T15:00:00Z",
+        "price": 196.87,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-31T14:00:00Z",
+        "price": 194.06,
+        "qty": 50,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %277'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-31T14:30:00Z",
+        "price": 191.15,
+        "qty": 50,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-08T14:00:00Z",
+        "price": 205.51,
+        "qty": 47,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %265'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-08T14:30:00Z",
+        "price": 202.43,
+        "qty": 47,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-14T13:30:00Z",
+        "price": 208.02,
+        "qty": 45,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %418'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-15T15:30:00Z",
+        "price": 208.02,
+        "qty": 45,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-17T16:00:00Z",
+        "price": 217.99,
+        "qty": 43,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %167'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-17T19:00:00Z",
+        "price": 214.72,
+        "qty": 43,
+        "reason": "stop · zarar kes tetiklendi (toplam zarar %5.81)"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-breakout_volume-1Hour-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "breakout_volume",
+    "timeframe": "1Hour",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 11864.25,
+    "pnl": 1864.25,
+    "pnl_pct": 18.64,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-10T14:00:00Z",
+        "price": 205.63,
+        "qty": 48,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %252'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-13T14:00:00Z",
+        "price": 201.4,
+        "qty": 48,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-04-15T14:00:00Z",
+        "price": 209.84,
+        "qty": 46,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %243'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-07T16:00:00Z",
+        "price": 290.1823,
+        "qty": 46,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-12T14:00:00Z",
+        "price": 305.87,
+        "qty": 44,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %288'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-12T15:00:00Z",
+        "price": 293.92,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-21T14:00:00Z",
+        "price": 310.11,
+        "qty": 41,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %390'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-21T15:00:00Z",
+        "price": 302.11,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-05-27T14:00:00Z",
+        "price": 332.54,
+        "qty": 38,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %350'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-28T14:00:00Z",
+        "price": 325.5,
+        "qty": 38,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-23T14:00:00Z",
+        "price": 278.9,
+        "qty": 44,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %306'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-23T15:00:00Z",
+        "price": 273.215,
+        "qty": 44,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-10T14:00:00Z",
+        "price": 240.08,
+        "qty": 50,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %257'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-10T15:00:00Z",
+        "price": 234.94,
+        "qty": 50,
+        "reason": "stop"
+      }
+    ]
+  },
+  {
+    "run_id": "NXPI-breakout_volume-1Day-20260907T185040",
+    "run_at": "2026-09-07T18:50:35+00:00",
+    "symbol": "NXPI",
+    "algorithm": "breakout_volume",
+    "timeframe": "1Day",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 13178.14,
+    "pnl": 3178.14,
+    "pnl_pct": 31.78,
+    "stop_loss_enabled": true,
+    "max_loss_pct": 5.0,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-04-20T04:00:00Z",
+        "price": 216,
+        "qty": 46,
+        "reason": "20 barlık direnç kırıldı, hacim ortalamanın %157'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-05-15T04:00:00Z",
+        "price": 285.09,
+        "qty": 46,
+        "reason": "stop"
+      }
+    ]
   }
 ]
