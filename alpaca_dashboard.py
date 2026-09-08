@@ -141,6 +141,38 @@ def render_account_summary(client: AlpacaClient, username: str, positions: list[
         c4.metric("Portföyün Anlık Kârı", "—")
 
 
+def render_realized_pnl_table(client: AlpacaClient, orders: list[dict], history_days: int):
+    """Son `history_days` gün içindeki dolan emirleri sembole göre eşleştirip
+    (bkz. AlpacaClient.compute_realized_pnl_by_symbol) her sembolün kapanmış
+    (alış+satış tamamlanmış) işlemlerinin kümülatif gerçekleşen kâr/zararını
+    gösterir - bir hisse artık açık pozisyon olarak görünmese (tamamen
+    satılmış olsa) bile burada listelenmeye devam eder."""
+    realized = client.compute_realized_pnl_by_symbol(orders)
+    if not realized:
+        st.info(f"Son {history_days} günde kapanmış (alış+satış eşleşen) işlem yok.")
+        return
+
+    rows = []
+    for symbol, data in sorted(realized.items(), key=lambda kv: kv[1]["pnl"]):
+        pnl_pct = (data["pnl"] / data["cost_basis"] * 100) if data["cost_basis"] else None
+        rows.append({
+            "Hisse": symbol,
+            "Kapanan İşlem": data["trades"],
+            "Kapanan Adet": f"{data['qty']:g}",
+            "Gerçekleşen K/Z ($)": round(data["pnl"], 2),
+            "Gerçekleşen K/Z %": round(pnl_pct, 2) if pnl_pct is not None else "—",
+        })
+
+    st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
+    total_pnl = sum(d["pnl"] for d in realized.values())
+    st.caption(
+        f"Toplam gerçekleşen K/Z: ${total_pnl:,.2f}. Son {history_days} gün içinde alınıp satılan "
+        "(kapanmış) pozisyonlar için, alış/satış dolum fiyatları zaman sırasına göre eşleştirilerek "
+        "hesaplanır (aynı anda tek pozisyon açıldığı varsayımıyla). Halen açık olan pozisyonların "
+        "gerçekleşmemiş kâr/zararı yukarıdaki tabloda ayrıca gösterilir."
+    )
+
+
 def render_alpaca_dashboard(username):
     user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
     key_id = user_alpaca.get("key_id")
@@ -183,9 +215,14 @@ def render_alpaca_dashboard(username):
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
 
+    orders = client.get_recent_orders(days=HISTORY_DAYS)
+
+    st.subheader("💰 Kapanmış İşlemler - Gerçekleşen Kâr/Zarar")
+    render_realized_pnl_table(client, orders, HISTORY_DAYS)
+
     st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
 
-    history_rows = [format_order_row(o) for o in client.get_recent_orders(days=HISTORY_DAYS)]
+    history_rows = [format_order_row(o) for o in orders]
 
     if not history_rows:
         st.info(f"Son {HISTORY_DAYS} günde işlem yok.")

@@ -21,6 +21,33 @@ DEFAULT_TRADING_URL = "https://paper-api.alpaca.markets/v2"
 DEFAULT_DATA_URL = "https://data.alpaca.markets/v2"
 
 
+def _match_fifo_pnl(fills: list[dict]) -> tuple[float, int, float, float]:
+    """`fills`: tek bir sembol için, zaman sırasına göre artan sırada dolan
+    (filled) emirler. Aynı anda tek pozisyon açıldığı varsayımıyla, alış ve
+    satışları sırasıyla çift olarak eşleştirir (FIFO). Eşleşmemiş bir alış
+    (henüz satılmamış açık pozisyon) hesaba katılmaz.
+    Returns (net_pnl, eşleşen_işlem_sayısı, kapanan_toplam_adet, toplam_maliyet_bazı)."""
+    pnl = 0.0
+    trades = 0
+    qty_closed = 0.0
+    cost_basis = 0.0
+    open_buy = None
+    for o in fills:
+        price = float(o["filled_avg_price"])
+        qty = float(o["filled_qty"])
+        if o["side"] == "buy":
+            open_buy = (price, qty)
+        elif o["side"] == "sell" and open_buy is not None:
+            entry_price, entry_qty = open_buy
+            matched_qty = min(qty, entry_qty)
+            pnl += (price - entry_price) * matched_qty
+            cost_basis += entry_price * matched_qty
+            trades += 1
+            qty_closed += matched_qty
+            open_buy = None
+    return pnl, trades, qty_closed, cost_basis
+
+
 class AlpacaClient:
     def __init__(self, key_id: str, secret_key: str,
                  trading_url: str = DEFAULT_TRADING_URL, data_url: str = DEFAULT_DATA_URL):
@@ -177,23 +204,37 @@ class AlpacaClient:
     def compute_realized_loss(self, symbol: str, lookback_days: int = 90) -> float:
         """Son `lookback_days` gün içinde bu sembol için kapanmış (alış+satış
         eşleşen) işlemlerin toplam gerçekleşen zararını pozitif bir sayı
-        olarak döner (net kârda veya zarar yoksa 0.0). Aynı anda tek pozisyon
-        açıldığı varsayımıyla, dolan emirleri zaman sırasına göre alış/satış
-        çifti olarak eşleştirir - "zarar kes" kontrolü (premium_buy_portfolio.py,
-        alpaca_buy_points.py) bu sayıyı sembolün kendi bütçesine oranlar."""
+        olarak döner (net kârda veya zarar yoksa 0.0). "zarar kes" kontrolü
+        (premium_buy_portfolio.py, alpaca_buy_points.py) bu sayıyı sembolün
+        kendi bütçesine oranlar - eşleştirme mantığı için _match_fifo_pnl'e
+        bakın."""
         fills = self.get_symbol_fills(symbol, lookback_days)
-        total_pnl = 0.0
-        open_buy = None
-        for o in fills:
-            price = float(o["filled_avg_price"])
-            qty = float(o["filled_qty"])
-            if o["side"] == "buy":
-                open_buy = (price, qty)
-            elif o["side"] == "sell" and open_buy is not None:
-                entry_price, entry_qty = open_buy
-                total_pnl += (price - entry_price) * min(qty, entry_qty)
-                open_buy = None
-        return max(0.0, -total_pnl)
+        pnl, _, _, _ = _match_fifo_pnl(fills)
+        return max(0.0, -pnl)
+
+    def compute_realized_pnl_by_symbol(self, orders: list[dict]) -> dict[str, dict]:
+        """`orders` (ör. get_recent_orders'ın döndürdüğü, tüm semboller
+        karışık liste) içindeki dolan emirleri sembole göre gruplar ve her
+        sembol için _match_fifo_pnl ile kapanmış (round-trip tamamlanmış)
+        işlemlerin net gerçekleşen kâr/zararını hesaplar - Alpaca Canlı
+        Pozisyonlar sayfasında, o sembolde artık açık pozisyon kalmamış olsa
+        bile (hisse tamamen satılmış olsa da) kümülatif sonucu göstermek
+        için kullanılır. Sadece bu pencerede en az bir kapanmış işlemi olan
+        semboller döner - ör. sadece satışı bu pencerede olup eşleşen alışı
+        pencerenin dışında kalan semboller dahil edilmez.
+        Returns {symbol: {"pnl": float, "trades": int, "qty": float, "cost_basis": float}}."""
+        fills_by_symbol: dict[str, list[dict]] = {}
+        for o in orders:
+            if o["status"] == "filled" and o.get("filled_avg_price"):
+                fills_by_symbol.setdefault(o["symbol"], []).append(o)
+
+        result = {}
+        for symbol, fills in fills_by_symbol.items():
+            fills.sort(key=lambda o: o.get("filled_at") or o["created_at"])
+            pnl, trades, qty, cost_basis = _match_fifo_pnl(fills)
+            if trades:
+                result[symbol] = {"pnl": pnl, "trades": trades, "qty": qty, "cost_basis": cost_basis}
+        return result
 
     def wait_for_fill(self, order_id: str, timeout: float = 30) -> dict:
         deadline = time.monotonic() + timeout
