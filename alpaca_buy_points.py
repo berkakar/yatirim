@@ -45,13 +45,26 @@ For a symbol that already has an open position, check_symbol instead runs
 an "ilave alım" (top-up) check: if the symbol's target budget (budget *
 weight_pct) now exceeds what's actually invested in it (qty * avg entry -
 e.g. because the user raised the portfolio's total budget while keeping
-weights the same), it places a plain GTC limit buy (no bracket stop) for
-the shortfall once the algorithm has a valid signal again - same
-price/timing discipline as a fresh entry, just sized to the gap instead of
-the full budget. The top-up has no stop-loss leg of its own; the position's
-single resting stop already exists, and alpaca_trailing_stop.manage_position
-resizes it to the position's current total qty on every pass so it keeps
-covering the whole position after the top-up fills.
+weights the same) and the algorithm has a valid signal whose price is
+within TOP_UP_MARKET_TOLERANCE_PCT of the live price, it tops up the
+position for the shortfall.
+
+This can NOT be a second resting GTC limit order the way a fresh entry is:
+the position's existing protective stop-sell is already resting, and
+Alpaca rejects any new order on the opposite side of an existing resting
+order for the same symbol as a "potential wash trade" (HTTP 403,
+"opposite side market/stop order exists" - confirmed in production against
+MU, whose top-up silently failed with exactly this error every pass).
+Instead, check_symbol cancels the resting stop, buys the shortfall with a
+market order (filling in seconds, not sitting open for however long a
+limit order might take to reach its price), and immediately re-arms a
+stop sized to the new total qty - at the same price as before by default,
+or tightened toward the new (top-up-blended) average entry if the user's
+"top_up_stop_mode" setting (Premium Buy Point module) asks for that (see
+alpaca_trailing_stop.load_top_up_stop_mode). Any failure in that sequence
+(the market order itself, or its fill confirmation) re-arms the stop at
+its old price/qty before giving up on the top-up, so a position is never
+left without a stop.
 
 Every entry is submitted as a bracket order with a stop-loss leg at
 INITIAL_STOP_PCT below the limit price (see alpaca_client.place_limit_entry),
@@ -85,7 +98,7 @@ from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
-from alpaca_trailing_stop import INITIAL_STOP_PCT, get_regular_hours_bars, TIMEFRAME, log
+from alpaca_trailing_stop import INITIAL_STOP_PCT, get_regular_hours_bars, load_top_up_stop_mode, TIMEFRAME, log
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 
 load_dotenv()
@@ -95,6 +108,15 @@ load_dotenv()
 # için sadece isimler güncellendi).
 WATCHLIST_NAME = "premium-buy-portfolio-berkakar"
 CONFIG_PATH = "portfolio_config_berkakar.json"
+
+# Top-up'ın canlıda gözlemlenen gerçek arızası (MU, 2026-09-08): mevcut
+# pozisyonu koruyan resting stop-sell varken top-up için verilen düz
+# buy-limit, Alpaca tarafından "potential wash trade" (403) olarak
+# reddediliyordu - aynı sembolde zıt yönlü iki bağımsız açık emre izin
+# verilmiyor. check_symbol artık top-up'ı market emriyle anında dolduruyor
+# (resting bırakmıyor) ve TOP_UP_MARKET_TOLERANCE_PCT içindeyken - bkz.
+# check_symbol'ün top-up dalı.
+TOP_UP_MARKET_TOLERANCE_PCT = 0.5 / 100
 
 LOOKBACK_DAYS = int(os.environ.get("BUY_LOOKBACK_DAYS", "60"))
 DAILY_LOOKBACK_DAYS = int(os.environ.get("BUY_DAILY_LOOKBACK_DAYS", "400"))
@@ -111,22 +133,24 @@ def load_local_config() -> dict:
 def check_symbol(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
     max_loss_pct: float | None = None, available_cash: float | None = None,
+    top_up_stop_mode: str = "keep",
 ) -> float:
     """Pozisyon yoksa: sinyale göre yeni bir giriş (bracket buy-limit) açar
     veya bekleyen girişi günceller - aşağıdaki asıl akış budur.
 
     Pozisyon zaten açıksa: hedef bütçe (budget * weight_pct), o sembole
     şu ana kadar yatırılmış tutarı (adet * ortalama giriş) aştığında ve
-    algoritmanın hâlâ bir al sinyali olduğunda, aradaki farkı düz bir
-    limit emriyle (bracket stop'suz) tamamlayan bir "ilave alım" dalı
-    çalıştırır - böylece kullanıcı nakit/bütçe artırıp ağırlığı sabit
-    bıraktığında sistem o hisseye otomatik olarak ek alım yapabilir.
-    İlave alımın kendi bracket stop'u yoktur: pozisyonun tek resting
-    stop'u zaten var, alpaca_trailing_stop.manage_position bunu her
-    pass'te pozisyonun güncel toplam adedine göre yeniden boyutlandırır
-    (bkz. o fonksiyondaki qty eşitleme adımı). "Zarar kes" (max_loss_pct)
-    sadece YENİ girişleri engeller - zaten açık bir pozisyona ilave alımı
-    değil.
+    algoritmanın hâlâ bir al sinyali olduğunda (ve güncel fiyat sinyal
+    fiyatına TOP_UP_MARKET_TOLERANCE_PCT içindeyken), aradaki farkı bir
+    "ilave alım" dalıyla tamamlar. Bu, resting bir buy-limit DEĞİL, market
+    emridir: pozisyonu koruyan stop-sell zaten resting durumdayken zıt
+    yönde ikinci bir resting emir Alpaca tarafından "wash trade" olarak
+    reddediliyor (canlıda gözlemlendi) - o yüzden stop kısa süreliğine
+    iptal edilip top-up market emriyle anında dolduruluyor, sonra yeni
+    toplam adede göre (top_up_stop_mode'a göre fiyatı da güncellenerek
+    veya aynı bırakılarak - bkz. alpaca_trailing_stop.py) hemen yeniden
+    kuruluyor. "Zarar kes" (max_loss_pct) sadece YENİ girişleri engeller -
+    zaten açık bir pozisyona ilave alımı değil.
 
     `available_cash` verilmişse (run_once, pass başında Alpaca'dan çekip
     her yeni emrin tutarını düşerek geçirir), hedeflenen adet bu sınırı
@@ -212,11 +236,54 @@ def check_symbol(
                 log(f"{symbol}: ilave alım için nakit yetersiz (kullanılabilir ${available_cash:.2f}), "
                     "bu pass'te atlanıyor.")
             return 0.0
-        order = client.place_limit_entry(symbol, top_up_qty, "long", target_price, client_order_id=client_order_id)
-        spent = top_up_qty * target_price
+
+        # canlıda gözlemlenen arıza: resting bir buy-limit, pozisyonun stop-sell'iyle
+        # zıt yönde aynı anda açık kalamıyor (Alpaca "potential wash trade" ile
+        # reddediyor - bkz. modül üstü not). O yüzden top-up resting limit emir
+        # DEĞİL, fiyat hedefe (target_price) yeterince yakınken market emriyle
+        # anında dolduruluyor - stop'suz kalan pencere market emrinin dolma
+        # süresiyle sınırlı (saniyeler), bir resting limitin günlerce
+        # korumasız bırakabileceğinden çok daha güvenli.
+        if abs(live_price - target_price) / target_price > TOP_UP_MARKET_TOLERANCE_PCT:
+            log(f"{symbol}: ilave al sinyali var ama güncel fiyat ({live_price:.2f}) hedeften "
+                f"({target_price:.2f}) uzak, bu pass'te bekleniyor.")
+            return 0.0
+
+        stop_order = client.get_open_stop_order(symbol)
+        if stop_order is None:
+            log(f"{symbol}: ilave alım için resting stop bulunamadı, güvenlik için bu pass'te atlanıyor "
+                "(alpaca_trailing_stop.py'nin bir sonraki geçişi stop'u kuracaktır).")
+            return 0.0
+
+        old_stop_price = float(stop_order["stop_price"])
+        old_qty = float(position["qty"])
+        client.cancel_order(stop_order["id"])
+        try:
+            buy_order = client.place_market_entry(symbol, top_up_qty, "long")
+            filled = client.wait_for_fill(buy_order["id"], timeout=30)
+        except Exception as e:
+            # Stop iptal edildi ama alım başarısız/zaman aşımına uğradı - pozisyon
+            # korumasız kalmasın, eski adet/fiyatla stop'u hemen geri kur.
+            log(f"{symbol}: ilave alım market emri başarısız/zaman aşımı ({e}), stop ${old_stop_price:.2f} "
+                "olarak geri kuruldu, ilave alım yapılmadı.")
+            client.place_stop_order(symbol, old_qty, "long", old_stop_price)
+            return 0.0
+
+        fill_price = float(filled["filled_avg_price"])
+        new_position = client.get_position(symbol)
+        new_qty = float(new_position["qty"])
+
+        if top_up_stop_mode == "tighten_to_new_entry":
+            new_entry = float(new_position["avg_entry_price"])
+            new_stop_price = max(old_stop_price, round(new_entry * (1 - INITIAL_STOP_PCT), 2))
+        else:
+            new_stop_price = old_stop_price
+
+        client.place_stop_order(symbol, new_qty, "long", new_stop_price)
+        spent = top_up_qty * fill_price
         log(f"{symbol}: bütçe arttı (yatırılan ${invested:.2f} -> hedef ${dollar_amount:.2f}), ilave al "
-            f"sinyaliyle ({signal.reason}) {top_up_qty} adet @ {target_price:.2f} limit emri verildi. "
-            f"order {order['id']}.")
+            f"sinyaliyle ({signal.reason}) {top_up_qty} adet market emriyle @ {fill_price:.2f} alındı "
+            f"(order {buy_order['id']}), stop ${old_stop_price:.2f} -> ${new_stop_price:.2f} yeniden kuruldu.")
         return spent
 
     target_qty = math.floor(dollar_amount / target_price)
@@ -339,6 +406,7 @@ def run_once(client: AlpacaClient) -> None:
         default_algorithm = DEFAULT_ALGORITHM
     symbol_settings = config.get("symbol_settings") or {}
     max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
+    top_up_stop_mode = load_top_up_stop_mode()
 
     try:
         available_cash = compute_available_cash_for_buying(client)
@@ -355,7 +423,7 @@ def run_once(client: AlpacaClient) -> None:
         try:
             spent = check_symbol(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe, max_loss_pct,
-                available_cash,
+                available_cash, top_up_stop_mode,
             )
             available_cash -= spent
         except Exception as e:
