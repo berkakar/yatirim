@@ -252,6 +252,17 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "alım durdurulur.",
     )
 
+    st.info(
+        "💡 **İlave Alım (Top-up) nasıl çalışır?** Bir hissede pozisyon zaten açıkken bütçe artırılıp "
+        "ağırlık sabit bırakılırsa ve algoritmanın sinyal fiyatı güncel fiyata yakınsa (%0.5 içinde), "
+        "sistem aradaki farkı otomatik tamamlar. Bu, **taze bir girişten farklı** işler: taze giriş "
+        "bekleyen (resting) bir limit emridir, ama pozisyonu koruyan stop-sell emri zaten resting "
+        "durumdayken aynı sembolde zıt yönde ikinci bir resting emir Alpaca tarafından \"wash trade\" "
+        "sayılıp reddedilir. Bu yüzden ilave alım **market emriyle anında** dolduruluyor: stop birkaç "
+        "saniyeliğine iptal edilip, alım gerçekleşir gerçekleşmez yeni toplam adede göre hemen yeniden "
+        "kuruluyor (alım başarısız olursa da stop eski haliyle geri kuruluyor - pozisyon hiçbir adımda "
+        "korumasız kalmıyor)."
+    )
     top_up_stop_options = ["keep", "tighten_to_new_entry"]
     top_up_stop_labels = {
         "keep": "Mevcut haliyle bırak - sadece adet genişler, stop seviyesi değişmez",
@@ -263,11 +274,10 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         index=top_up_stop_options.index(config.get("top_up_stop_mode") or "keep"),
         format_func=lambda v: top_up_stop_labels[v],
         key="pbp_top_up_stop_mode",
-        help="Bir hissede pozisyon zaten açıkken bütçe artırılıp ağırlık sabit bırakılırsa, alım algoritması "
-             "(sinyal oluştuğunda) aradaki farkı otomatik tamamlar - bu, pozisyonun ortalama giriş fiyatını "
-             "değiştirebilir. Bu seçenek, o an tek olan resting stop'un adedi (her zaman) yeni pozisyon "
-             "büyüklüğüne göre genişletildikten sonra, fiyat seviyesinin de yeni ortalama girişe göre "
-             "sıkılaştırılıp sıkılaştırılmayacağını belirler - hiçbir durumda mevcut korumayı gevşetmez.",
+        help="İlave alım market emriyle dolduktan hemen sonra, tek resting stop yeni toplam adede göre "
+             "yeniden kuruluyor - bu seçenek sadece o yeniden kurulan stop'un FİYATINI belirler: aynı "
+             "seviyede mi kalsın, yoksa yeni (top-up ile harmanlanmış) ortalama girişe göre sıkılaştırılsın "
+             "mı - hiçbir durumda mevcut korumayı gevşetmez.",
     )
 
     weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
