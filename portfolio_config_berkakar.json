@@ -16,6 +16,10 @@
       "algorithm": "breakout_volume",
       "timeframe": "30Min"
     },
+    "INTC": {
+      "algorithm": "demand_zone",
+      "timeframe": "1Hour"
+    },
     "NXPI": {
       "algorithm": "volatility_support",
       "timeframe": "1Hour"
