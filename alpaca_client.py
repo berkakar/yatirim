@@ -99,6 +99,15 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_open_orders(self) -> list[dict]:
+        """Hesaptaki TÜM açık emirler (herhangi bir sembol) - alpaca_buy_points.py
+        bunu, portföy watchlist'inden çıkarılmış bir sembolde hâlâ resting
+        kalmış (artık kimsenin yönetmediği) bir buy-limit emri olup olmadığını
+        kontrol etmek için kullanır."""
+        r = self._get("/orders", params={"status": "open"})
+        r.raise_for_status()
+        return r.json()
+
     def get_open_stop_order(self, symbol: str) -> dict | None:
         r = self._get("/orders", params={"status": "open", "symbols": symbol})
         r.raise_for_status()

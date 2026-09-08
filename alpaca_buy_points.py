@@ -19,6 +19,16 @@ order in sync with the current signal, it doesn't need to catch the fill
 itself (unlike a market-order-on-poll approach, which can only react at
 whatever moment it happens to check).
 
+A symbol removed from the watchlist (via premium_buy_portfolio.py's symbol
+picker) stops being scanned by check_symbol entirely, which used to leave
+any still-resting buy-limit order for it orphaned - nothing would ever
+cancel it, so it could still fill later even though the user had removed
+that symbol from the portfolio. cancel_orphaned_buy_limits runs once at the
+start of every pass to clean these up (only orders this system placed,
+tagged "algo-..."). An open position for a removed symbol is untouched
+either way - alpaca_trailing_stop.py manages every open position's stop
+independent of watchlist membership, so it keeps trailing normally.
+
 For a symbol that already has an open position, check_symbol instead runs
 an "ilave alım" (top-up) check: if the symbol's target budget (budget *
 weight_pct) now exceeds what's actually invested in it (qty * avg entry -
@@ -220,6 +230,36 @@ def check_symbol(
         f"(bracket stop -> {stop_loss_price:.2f}, {signal.reason}). new order {order['id']}.")
 
 
+def cancel_orphaned_buy_limits(client: AlpacaClient, watchlist_symbols: set[str]) -> None:
+    """Bir sembol Premium Buy Point portföyünden (watchlist) çıkarıldığında
+    check_symbol artık o sembol için hiç çalışmıyor - eğer o sembolde henüz
+    dolmamış, bu sistemin açtığı ("algo-" ile başlayan client_order_id'li)
+    bir GTC buy-limit emri kalmışsa, kimse onu iptal etmiyordu ve fiyat oraya
+    gelirse hâlâ dolabiliyordu. Her --once taramasının başında, artık
+    watchlist'te olmayan sembollerin bu tür emirlerini temizler. Elle
+    (bu sistem dışında) açılmış emirlere ya da açık pozisyonlara dokunmaz -
+    stop yönetimi zaten alpaca_trailing_stop.py'de watchlist'ten bağımsız."""
+    try:
+        open_orders = client.get_open_orders()
+    except Exception as e:
+        log(f"failed to fetch open orders for orphan cleanup, skipping: {e}")
+        return
+
+    for order in open_orders:
+        if order["type"] != "limit" or order["side"] != "buy":
+            continue
+        if not (order.get("client_order_id") or "").startswith("algo-"):
+            continue  # bu sistemin açmadığı bir emir - dokunma
+        symbol = order["symbol"]
+        if symbol in watchlist_symbols:
+            continue  # hâlâ takip ediliyor, check_symbol kendi yönetir
+        try:
+            client.cancel_order(order["id"])
+            log(f"{symbol}: portföyden çıkarılmış, kalan buy-limit emri iptal edildi ({order['id']}).")
+        except Exception as e:
+            log(f"{symbol}: orphan buy-limit cleanup failed, skipping: {e}")
+
+
 def run_once(client: AlpacaClient) -> None:
     clock = client.get_clock()
     if not clock["is_open"]:
@@ -227,7 +267,10 @@ def run_once(client: AlpacaClient) -> None:
         return
 
     watchlist = client.get_watchlist_by_name(WATCHLIST_NAME)
-    if watchlist is None or not watchlist.get("assets"):
+    watchlist_symbols = {a["symbol"] for a in watchlist["assets"]} if watchlist else set()
+    cancel_orphaned_buy_limits(client, watchlist_symbols)
+
+    if not watchlist_symbols:
         log("No premium-buy-portfolio watchlist, or it's empty.")
         return
 
@@ -240,8 +283,7 @@ def run_once(client: AlpacaClient) -> None:
     symbol_settings = config.get("symbol_settings") or {}
     max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
 
-    for asset in watchlist["assets"]:
-        symbol = asset["symbol"]
+    for symbol in sorted(watchlist_symbols):
         settings = symbol_settings.get(symbol) or {}
         algorithm = settings.get("algorithm") or default_algorithm
         if algorithm not in ALGORITHMS:

@@ -127,9 +127,26 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     if selected_symbols:
         existing_weights = config.get("weights") or {}
         equal_share = round(100 / len(selected_symbols), 2)
+
+        def _default_weight_pct(symbol: str) -> float:
+            # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için, kayıtlı/
+            # varsayılan bir sayı yerine GERÇEK güncel ağırlığı (yatırılan
+            # tutar = adet × ortalama giriş / bütçe) gösterir - böylece bu
+            # alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve top-up
+            # için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
+            # hisseler eskisi gibi kayıtlı ağırlığa veya eşit paylaşıma düşer.
+            try:
+                position = client.get_position(symbol)
+            except Exception:
+                position = None
+            if position is not None and budget > 0:
+                invested = float(position["qty"]) * float(position["avg_entry_price"])
+                return round(invested / budget * 100, 2)
+            return float(existing_weights.get(symbol, equal_share))
+
         weight_df = pd.DataFrame({
             "Hisse": selected_symbols,
-            "Ağırlık %": [float(existing_weights.get(s, equal_share)) for s in selected_symbols],
+            "Ağırlık %": [_default_weight_pct(s) for s in selected_symbols],
         })
         edited_weights = st.data_editor(
             weight_df,
@@ -137,6 +154,11 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             use_container_width=True,
             key="premium_buy_weight_editor",
             column_config={"Ağırlık %": st.column_config.NumberColumn(min_value=0.0, max_value=100.0, step=1.0)},
+        )
+        st.caption(
+            "Alpaca'da hâlâ açık pozisyonu olan hisseler için ağırlık, o hisseye şu ana kadar yatırılmış "
+            "tutarın (adet × ortalama giriş) toplam bütçeye oranı olarak otomatik gelir - kaydetmeden önce "
+            "istediğiniz gibi değiştirebilirsiniz."
         )
         total_weight = edited_weights["Ağırlık %"].sum()
         if abs(total_weight - 100) < 0.01:
