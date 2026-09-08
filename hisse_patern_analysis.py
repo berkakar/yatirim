@@ -1,8 +1,8 @@
 """Hisse Patern Modülü - veri ve DTW hesaplama katmanı.
 
 Kullanıcı tarafından seçilen hisselerin günlük kapanış fiyatlarını kullanarak
-üç farklı periyot tipinde (yıllık, 3 aylık, aylık) tekrarlayan patern
-benzerliğini ölçer: her periyot tipi için hissenin tamamlanmış son N periyodu
+dört farklı periyot tipinde (yıllık, 3 aylık, aylık, haftalık) tekrarlayan
+patern benzerliğini ölçer: her periyot tipi için hissenin tamamlanmış son N periyodu
 (örn. yıllık için son 3 tam takvim yılı) ikili (pairwise) olarak DTW (Dynamic
 Time Warping - bkz. dtw_analysis.py, "🔄 DTW Zaman Serisi & Benzerlik
 Analizi" modülüyle ortak algoritma) ile karşılaştırılır; ortalamaları o
@@ -33,6 +33,7 @@ PERIOD_CONFIGS = {
     "yillik": {"label": "Yıllık (3 Yıllık)", "freq": "Y", "n_periods": 3, "chart_rule": "ME"},
     "3_aylik": {"label": "3 Aylık (Son 2 Yıl)", "freq": "Q", "n_periods": 8, "chart_rule": "W"},
     "aylik": {"label": "Aylık (Son 12 Ay)", "freq": "M", "n_periods": 12, "chart_rule": None},
+    "haftalik": {"label": "Haftalık (Son 12 Hafta)", "freq": "W", "n_periods": 12, "chart_rule": None},
 }
 
 

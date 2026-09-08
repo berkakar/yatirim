@@ -1,9 +1,14 @@
 """Hisse Patern Modülü - kullanıcı tarafından seçilen hisselerin günlük
-kapanış fiyatlarını kullanarak yıllık, 3 aylık ve aylık periyotlar arasındaki
-tekrarlayan patern benzerliğini DTW (Dynamic Time Warping) ile ölçer ve
-tablo halinde gösterir. Bkz. hisse_patern_analysis.py (hesaplama katmanı) ve
-dtw_analysis.py (DTW algoritması - "🔄 DTW Zaman Serisi & Benzerlik Analizi"
-modülüyle ortak).
+kapanış fiyatlarını kullanarak yıllık, 3 aylık, aylık ve haftalık periyotlar
+arasındaki tekrarlayan patern benzerliğini DTW (Dynamic Time Warping) ile
+ölçer ve tablo halinde gösterir. Bkz. hisse_patern_analysis.py (hesaplama
+katmanı) ve dtw_analysis.py (DTW algoritması - "🔄 DTW Zaman Serisi &
+Benzerlik Analizi" modülüyle ortak).
+
+Patern Benzerlik Tablosu'ndaki bir benzerlik % hücresine tıklamak (Streamlit
+"single-cell" seçim desteği), aşağıdaki Patern Detayı bölümünü doğrudan o
+hisse/periyoda açar - manuel "Hisse"/"Periyot" seçicileri hâlâ elde durur,
+tıklama sadece onları önceden dolduran bir kısayoldur.
 """
 import pandas as pd
 import plotly.graph_objects as go
@@ -37,7 +42,7 @@ def _build_column_config():
 def render_hisse_patern(target_list):
     st.caption(
         "Seçtiğiniz hisselerin günlük kapanış fiyatları kullanılarak, hissenin kendi "
-        "geçmişindeki periyotlar (yıl / çeyrek / ay) DTW (Dynamic Time Warping) ile "
+        "geçmişindeki periyotlar (yıl / çeyrek / ay / hafta) DTW (Dynamic Time Warping) ile "
         "ikili olarak karşılaştırılır; ortalama benzerlik skoru o hissenin ne kadar "
         "tekrarlayan/mevsimsel bir fiyat pareni izlediğini gösterir."
     )
@@ -93,25 +98,44 @@ def render_hisse_patern(target_list):
     )
 
     display_cols = ["Hisse", "Son Fiyat"] + _SIM_COLUMNS
+    clicked_ticker, clicked_period_key = None, None
     if df_filtered.empty:
         st.warning("⚠️ Seçtiğiniz eşik değerinin üzerinde benzerlik gösteren hisse bulunamadı.")
     else:
-        st.dataframe(
+        st.caption("💡 Bir benzerlik % hücresine tıklayarak aşağıdaki Patern Detayı'nı doğrudan o hisse/periyoda açabilirsiniz.")
+        table_event = st.dataframe(
             zebra_style(df_filtered[display_cols]),
             column_config=_build_column_config(),
             use_container_width=True,
             hide_index=True,
+            on_select="rerun",
+            selection_mode="single-cell",
+            key="hisse_patern_table",
         )
+        selected_cells = table_event.selection.cells if table_event and table_event.selection else []
+        if selected_cells:
+            row_idx, col_name = selected_cells[0]
+            if col_name in _SIM_COLUMNS:
+                clicked_ticker = df_filtered.iloc[row_idx]["Hisse"]
+                clicked_period_key = next(
+                    k for k, cfg in PERIOD_CONFIGS.items() if f"{cfg['label']} Benzerlik %" == col_name
+                )
 
     st.divider()
     st.subheader("🔍 Patern Detayı")
     st.caption(
-        "Tablodaki bir periyot sütununa \"tıklamanın\" karşılığı: bir hisse ve periyot tipi "
-        "seçin, o periyoda ait geçmiş dönemlerin fiyatları farklı renklerde üst üste "
-        "çizilsin (yıllık için aylık, 3 aylık için haftalık, aylık için günlük kapanışlar)."
+        "Bir hisse ve periyot tipi seçin (ya da yukarıdaki tablodan bir benzerlik hücresine "
+        "tıklayın), o periyoda ait geçmiş dönemlerin fiyatları farklı renklerde üst üste "
+        "çizilsin (yıllık için aylık, 3 aylık için haftalık, aylık ve haftalık için günlük "
+        "kapanışlar)."
     )
 
     tickers_with_data = df["Hisse"].tolist()
+    if clicked_ticker is not None and clicked_ticker in tickers_with_data:
+        st.session_state["hisse_patern_detail_ticker"] = clicked_ticker
+        st.session_state["hisse_patern_detail_period"] = clicked_period_key
+        st.caption(f"↳ Tablodan seçildi: **{clicked_ticker}** - {PERIOD_CONFIGS[clicked_period_key]['label']}")
+
     dcol1, dcol2 = st.columns([2, 3])
     with dcol1:
         detail_ticker = st.selectbox("Hisse:", tickers_with_data, key="hisse_patern_detail_ticker")
