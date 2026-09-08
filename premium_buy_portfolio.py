@@ -212,6 +212,24 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "alım durdurulur.",
     )
 
+    top_up_stop_options = ["keep", "tighten_to_new_entry"]
+    top_up_stop_labels = {
+        "keep": "Mevcut haliyle bırak - sadece adet genişler, stop seviyesi değişmez",
+        "tighten_to_new_entry": "Yeni ortalama girişe göre nefes payı ekle - sadece stop'u sıkılaştırırsa uygulanır",
+    }
+    top_up_stop_mode = st.radio(
+        "İlave Alım (Top-up) sonrası stop davranışı",
+        top_up_stop_options,
+        index=top_up_stop_options.index(config.get("top_up_stop_mode") or "keep"),
+        format_func=lambda v: top_up_stop_labels[v],
+        key="pbp_top_up_stop_mode",
+        help="Bir hissede pozisyon zaten açıkken bütçe artırılıp ağırlık sabit bırakılırsa, alım algoritması "
+             "(sinyal oluştuğunda) aradaki farkı otomatik tamamlar - bu, pozisyonun ortalama giriş fiyatını "
+             "değiştirebilir. Bu seçenek, o an tek olan resting stop'un adedi (her zaman) yeni pozisyon "
+             "büyüklüğüne göre genişletildikten sonra, fiyat seviyesinin de yeni ortalama girişe göre "
+             "sıkılaştırılıp sıkılaştırılmayacağını belirler - hiçbir durumda mevcut korumayı gevşetmez.",
+    )
+
     weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
 
     if st.button("💾 Portföyü Kaydet", type="primary"):
@@ -223,6 +241,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             "symbol_settings": symbol_settings,
             "stop_loss_enabled": bool(stop_loss_enabled),
             "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
+            "top_up_stop_mode": top_up_stop_mode,
         }
         write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
         st.success("Portföy kaydedildi.")

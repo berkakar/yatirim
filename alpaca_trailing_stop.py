@@ -26,6 +26,16 @@ Manages every open position in the account. Each pass, per position:
   5. Of whatever candidates apply, only the one that most tightens the
      stop (and stays on the correct side of the current price) is sent -
      never loosens, never sent past current price.
+  6. If the position's total qty has grown or shrunk since the last pass
+     (most notably: alpaca_buy_points.py's budget top-up, which buys more
+     shares of a symbol that already has an open position), the resting
+     stop's own qty is resized to match first, so it always covers the
+     whole position. Depending on the user's "İlave Alım sonrası stop
+     davranışı" choice in the Premium Buy Point module
+     (portfolio_config_berkakar.json's top_up_stop_mode, loaded once per
+     pass), a top-up that changed the average entry price can also add a
+     same-%-as-a-fresh-entry candidate at the new average - still subject
+     to the "only tightens" rule in step 5.
 
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
@@ -33,6 +43,7 @@ between passes and until the market reopens.
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -63,11 +74,30 @@ TREND_EMA_PERIOD = int(os.environ.get("TRADE_TREND_EMA_PERIOD", "50"))
 
 FALLBACK_BUFFER_PCT = 0.001  # only used if ATR can't be computed yet (too few bars)
 
+# alpaca_buy_points.py'nin okuduğu aynı dosya (Premium Buy Point modülünde
+# write_portfolio_config ile commit edilir) - tek kullanıcı (berkakar)
+# varsayımı burada da geçerli.
+CONFIG_PATH = "portfolio_config_berkakar.json"
+TOP_UP_STOP_MODE_DEFAULT = "keep"
+
 ET = ZoneInfo("America/New_York")
 
 
 def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
+
+
+def load_top_up_stop_mode() -> str:
+    """Premium Buy Point modülünde kullanıcının seçtiği, ilave alım (top-up)
+    sonrası resting stop davranışı - "keep" (varsayılan: sadece adet
+    genişler, fiyat seviyesi değişmez) veya "tighten_to_new_entry" (yeni
+    ortalama giriş fiyatına göre bir nefes payı adayı da eklenir - bkz.
+    manage_position, sadece stop'u sıkılaştırırsa uygulanır)."""
+    if not os.path.exists(CONFIG_PATH):
+        return TOP_UP_STOP_MODE_DEFAULT
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        config = json.load(f)
+    return config.get("top_up_stop_mode") or TOP_UP_STOP_MODE_DEFAULT
 
 
 def _parse_iso(ts: str) -> datetime:
@@ -143,13 +173,14 @@ def seconds_until_open(clock: dict) -> float:
     return max(0.0, (next_open - datetime.now(timezone.utc)).total_seconds())
 
 
-def manage_position(client: AlpacaClient, pos: dict) -> None:
+def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT) -> None:
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
     side = "long" if signed_qty > 0 else "short"
     entry_price = float(pos["avg_entry_price"])
 
+    topped_up = False
     stop_order = client.get_open_stop_order(symbol)
     if stop_order is None:
         if side == "long":
@@ -167,6 +198,7 @@ def manage_position(client: AlpacaClient, pos: dict) -> None:
             # the whole position, not just however many shares it was
             # originally sized for.
             stop_order = client.replace_stop_qty(stop_order["id"], qty)
+            topped_up = True
             log(f"{symbol}: resized resting stop qty {stop_qty:g} -> {qty:g} (position size changed).")
 
     current_stop_price = float(stop_order["stop_price"])
@@ -191,6 +223,21 @@ def manage_position(client: AlpacaClient, pos: dict) -> None:
             candidates.append((entry_price, "breakeven"))
         elif side == "short" and entry_price < current_stop_price and entry_price > last_price:
             candidates.append((entry_price, "breakeven"))
+
+    if topped_up and top_up_stop_mode == "tighten_to_new_entry":
+        # Premium Buy Point modülünde kullanıcının seçtiği tercih: top-up,
+        # pozisyonun ortalama giriş fiyatını değiştirmiş olabilir - yeni
+        # ortalamaya göre bir INITIAL_STOP_PCT nefes payı adayı da eklenir.
+        # Aşağıdaki "en çok sıkılaştıran"+improves seçimi sayesinde bu aday
+        # mevcut korumayı asla gevşetmez, sadece sıkılaştırabilir.
+        if side == "long":
+            top_up_candidate = entry_price * (1 - INITIAL_STOP_PCT)
+            if top_up_candidate < last_price:
+                candidates.append((top_up_candidate, "top-up nefes payı"))
+        else:
+            top_up_candidate = entry_price * (1 + INITIAL_STOP_PCT)
+            if top_up_candidate > last_price:
+                candidates.append((top_up_candidate, "top-up nefes payı"))
 
     if check_trend_filter(client, symbol, side):
         pivot = validated_trailing_level(bars, side, SWING_ORDER, STALE_REFERENCE_DAYS)
@@ -238,8 +285,9 @@ def run_once(client: AlpacaClient) -> None:
         log("No open equity positions.")
         return
 
+    top_up_stop_mode = load_top_up_stop_mode()
     for pos in positions:
-        manage_position(client, pos)
+        manage_position(client, pos, top_up_stop_mode)
 
 
 def run_loop(client: AlpacaClient) -> None:
