@@ -119,9 +119,27 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     selected_symbols = edited_picker[edited_picker["Seçili"]]["Hisse"].tolist()
 
     st.subheader("💰 Bütçe ve Hisse Ağırlıkları")
+    try:
+        live_cash = float(client.get_account()["cash"])
+    except Exception:
+        live_cash = None
+
     budget = st.number_input(
-        "Toplam portföy bütçesi ($)", min_value=0.0, value=float(config.get("budget") or 0), step=100.0,
+        "Toplam portföy bütçesi ($)", min_value=0.0,
+        value=float(live_cash if live_cash is not None else (config.get("budget") or 0)), step=100.0,
+        key="pbp_budget",
+        help="Sayfa her açıldığında Alpaca'daki güncel nakit bakiyeyle önceden doldurulur - isterseniz "
+             "aşağı çekip bir kısmını nakitte tutabilirsiniz, ama bu tutar hesaptaki nakti aşamaz.",
     )
+    if live_cash is None:
+        st.caption("⚠️ Alpaca'daki güncel nakit bakiye alınamadı - bütçe sınırı bu sayfada kontrol edilemiyor.")
+    elif budget > live_cash:
+        st.warning(
+            f"Girdiğiniz bütçe (${budget:,.2f}), Alpaca'daki güncel nakit bakiyeyi (${live_cash:,.2f}) "
+            "aşıyor. Bu haliyle kaydedilemez - lütfen bütçeyi bu tutarın altına indirin."
+        )
+    else:
+        st.caption(f"Alpaca'daki güncel nakit bakiye: ${live_cash:,.2f}.")
 
     edited_weights = pd.DataFrame(columns=["Hisse", "Ağırlık %"])
     if selected_symbols:
@@ -255,19 +273,25 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
 
     if st.button("💾 Portföyü Kaydet", type="primary"):
-        client.set_watchlist_symbols(watchlist["id"], selected_symbols)
-        new_config = {
-            "budget": float(budget),
-            "weights": weights_map,
-            "algorithm": selected_algorithm,
-            "symbol_settings": symbol_settings,
-            "stop_loss_enabled": bool(stop_loss_enabled),
-            "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
-            "top_up_stop_mode": top_up_stop_mode,
-        }
-        write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
-        st.success("Portföy kaydedildi.")
-        st.rerun()
+        if live_cash is not None and budget > live_cash:
+            st.error(
+                f"Bütçe (${budget:,.2f}), Alpaca'daki nakit bakiyeyi (${live_cash:,.2f}) aşıyor - kaydedilmedi. "
+                "Lütfen bütçeyi indirin ve tekrar deneyin."
+            )
+        else:
+            client.set_watchlist_symbols(watchlist["id"], selected_symbols)
+            new_config = {
+                "budget": float(budget),
+                "weights": weights_map,
+                "algorithm": selected_algorithm,
+                "symbol_settings": symbol_settings,
+                "stop_loss_enabled": bool(stop_loss_enabled),
+                "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
+                "top_up_stop_mode": top_up_stop_mode,
+            }
+            write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
+            st.success("Portföy kaydedildi.")
+            st.rerun()
 
     if not current_symbols:
         return
