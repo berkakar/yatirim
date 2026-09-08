@@ -159,6 +159,15 @@ def manage_position(client: AlpacaClient, pos: dict) -> None:
         stop_order = client.place_stop_order(symbol, qty, side, initial_stop)
         log(f"{symbol}: no resting stop found (not opened as a bracket order here), "
             f"placed fallback initial stop at {initial_stop:.2f} (entry {entry_price:.2f}).")
+    else:
+        stop_qty = float(stop_order["qty"])
+        if abs(stop_qty - qty) > 1e-9:
+            # alpaca_buy_points.py's budget top-up (or a manual trade) changed
+            # the position's total size - the resting stop must keep covering
+            # the whole position, not just however many shares it was
+            # originally sized for.
+            stop_order = client.replace_stop_qty(stop_order["id"], qty)
+            log(f"{symbol}: resized resting stop qty {stop_qty:g} -> {qty:g} (position size changed).")
 
     current_stop_price = float(stop_order["stop_price"])
     stop_order_id = stop_order["id"]

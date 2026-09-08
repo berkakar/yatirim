@@ -167,6 +167,14 @@ class AlpacaClient:
     def replace_stop_price(self, order_id: str, stop_price: float) -> dict:
         return self._patch(f"/orders/{order_id}", {"stop_price": f"{stop_price:.2f}"})
 
+    def replace_stop_qty(self, order_id: str, qty: float) -> dict:
+        """Resting stop'un adedini pozisyonun güncel toplam adedine eşitler -
+        alpaca_buy_points.py'nin bütçe artışına göre yaptığı ilave alım (veya
+        elle yapılan bir işlem) pozisyon boyutunu değiştirdiğinde, tek resting
+        stop'un pozisyonun TAMAMINI kapsamasını sağlamak için
+        alpaca_trailing_stop.manage_position tarafından çağrılır."""
+        return self._patch(f"/orders/{order_id}", {"qty": qty})
+
     def get_stop_order_history(self, symbol: str, limit: int = 50) -> list[dict]:
         """Every stop order ever placed for this symbol (initial + each
         trail, since replacing a stop creates a new order and marks the old

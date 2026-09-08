@@ -19,6 +19,18 @@ order in sync with the current signal, it doesn't need to catch the fill
 itself (unlike a market-order-on-poll approach, which can only react at
 whatever moment it happens to check).
 
+For a symbol that already has an open position, check_symbol instead runs
+an "ilave alım" (top-up) check: if the symbol's target budget (budget *
+weight_pct) now exceeds what's actually invested in it (qty * avg entry -
+e.g. because the user raised the portfolio's total budget while keeping
+weights the same), it places a plain GTC limit buy (no bracket stop) for
+the shortfall once the algorithm has a valid signal again - same
+price/timing discipline as a fresh entry, just sized to the gap instead of
+the full budget. The top-up has no stop-loss leg of its own; the position's
+single resting stop already exists, and alpaca_trailing_stop.manage_position
+resizes it to the position's current total qty on every pass so it keeps
+covering the whole position after the top-up fills.
+
 Every entry is submitted as a bracket order with a stop-loss leg at
 INITIAL_STOP_PCT below the limit price (see alpaca_client.place_limit_entry),
 so the protective stop exists on Alpaca's side the instant the entry fills -
@@ -78,27 +90,46 @@ def check_symbol(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
     max_loss_pct: float | None = None,
 ) -> None:
-    existing_order = client.get_open_limit_buy_order(symbol)
+    """Pozisyon yoksa: sinyale göre yeni bir giriş (bracket buy-limit) açar
+    veya bekleyen girişi günceller - aşağıdaki asıl akış budur.
 
-    if client.get_position(symbol) is not None:
-        if existing_order is not None:
-            client.cancel_order(existing_order["id"])
-            log(f"{symbol}: position already open, canceled stale buy-limit order.")
-        return
+    Pozisyon zaten açıksa: hedef bütçe (budget * weight_pct), o sembole
+    şu ana kadar yatırılmış tutarı (adet * ortalama giriş) aştığında ve
+    algoritmanın hâlâ bir al sinyali olduğunda, aradaki farkı düz bir
+    limit emriyle (bracket stop'suz) tamamlayan bir "ilave alım" dalı
+    çalıştırır - böylece kullanıcı nakit/bütçe artırıp ağırlığı sabit
+    bıraktığında sistem o hisseye otomatik olarak ek alım yapabilir.
+    İlave alımın kendi bracket stop'u yoktur: pozisyonun tek resting
+    stop'u zaten var, alpaca_trailing_stop.manage_position bunu her
+    pass'te pozisyonun güncel toplam adedine göre yeniden boyutlandırır
+    (bkz. o fonksiyondaki qty eşitleme adımı). "Zarar kes" (max_loss_pct)
+    sadece YENİ girişleri engeller - zaten açık bir pozisyona ilave alımı
+    değil."""
+    existing_order = client.get_open_limit_buy_order(symbol)
+    position = client.get_position(symbol)
+
+    if position is not None and existing_order is not None:
+        client.cancel_order(existing_order["id"])
+        existing_order = None
+        log(f"{symbol}: position already open, canceled stale buy-limit order.")
 
     dollar_amount = budget * (weight_pct / 100)
     if dollar_amount <= 0:
         return
 
-    if max_loss_pct:
+    if max_loss_pct and position is None:
         realized_loss = client.compute_realized_loss(symbol, STOP_LOSS_LOOKBACK_DAYS)
         loss_pct = realized_loss / dollar_amount * 100
         if loss_pct >= max_loss_pct:
-            if existing_order is not None:
-                client.cancel_order(existing_order["id"])
             log(f"{symbol}: zarar kes tetiklendi (gerçekleşen zarar %{loss_pct:.2f} >= %{max_loss_pct:g} eşik), "
                 "nakitte kalınıyor, yeni alım yapılmıyor.")
             return
+
+    if position is not None:
+        invested = float(position["qty"]) * float(position["avg_entry_price"])
+        top_up_amount = dollar_amount - invested
+        if top_up_amount <= 0:
+            return  # bütçe henüz yatırılan tutarı aşmıyor, ilave alıma gerek yok
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
     bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
@@ -126,15 +157,12 @@ def check_symbol(
         signal = reject_if_marketable(signal, live_price)
 
     if signal is None:
-        if existing_order is not None:
+        if position is None and existing_order is not None:
             client.cancel_order(existing_order["id"])
             log(f"{symbol}: no valid buy signal ({algorithm}), canceled resting buy-limit order.")
         return
 
     target_price = signal.price
-    target_qty = math.floor(dollar_amount / target_price)
-    if target_qty <= 0:
-        return
 
     # Tags the order with which algorithm + timeframe produced it (parsed
     # back out in alpaca_dashboard.py's history table) -
@@ -144,6 +172,21 @@ def check_symbol(
     # this tag have the 4-part "algo-<id>-<symbol>-<epoch>" form instead -
     # _parse_order_tag in alpaca_dashboard.py handles both.
     client_order_id = f"algo-{algorithm}-{timeframe}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
+
+    if position is not None:
+        top_up_qty = math.floor(top_up_amount / target_price)
+        if top_up_qty <= 0:
+            return
+        order = client.place_limit_entry(symbol, top_up_qty, "long", target_price, client_order_id=client_order_id)
+        log(f"{symbol}: bütçe arttı (yatırılan ${invested:.2f} -> hedef ${dollar_amount:.2f}), ilave al "
+            f"sinyaliyle ({signal.reason}) {top_up_qty} adet @ {target_price:.2f} limit emri verildi. "
+            f"order {order['id']}.")
+        return
+
+    target_qty = math.floor(dollar_amount / target_price)
+    if target_qty <= 0:
+        return
+
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
     # alpaca_client.place_limit_entry and the module docstring.
     stop_loss_price = round(target_price * (1 - INITIAL_STOP_PCT), 2)
