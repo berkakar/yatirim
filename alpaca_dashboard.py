@@ -215,6 +215,30 @@ def render_alpaca_dashboard(username):
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
 
+        with st.expander("🛡️ Stop-Loss Mantığı Nasıl Çalışır?"):
+            st.markdown(
+                "Yukarıdaki 'Stop Fiyatı' sütunu, elle değil, aşağıdaki kurallarla otomatik "
+                "yönetilen structure-based bir trailing-stop sistemini yansıtır:\n\n"
+                "- Pozisyon açıldığında (ya da elle açılmış, hiç stopu olmayan bir pozisyonda) "
+                "önce giriş fiyatının %1.5 altına (long) / üstüne (short) sabit bir ilk stop konur.\n"
+                "- Fiyat lehe en az %1 hareket ettiğinde stop, en azından giriş fiyatına "
+                "(breakeven) çekilir.\n"
+                "- Fiyat daha da ilerlerse, stop; kırılma-onaylı (break-of-structure) son swing "
+                "noktasının biraz gerisine, ATR ile ölçeklenen bir tampon payıyla taşınır - bu "
+                "sadece günlük EMA trend filtresi izin verdiği sürece uygulanır.\n"
+                "- O an geçerli adaylardan (breakeven, top-up, structure) hangisi en sıkıysa o "
+                "seçilir; stop hiçbir zaman gevşetilmez ve güncel fiyatı geçmez.\n"
+                "- Pozisyona ilave alım yapıldığında stopun adedi otomatik güncellenir; tercihe "
+                "göre yeni ortalama giriş fiyatına göre ek bir sıkılaştırma adayı da "
+                "değerlendirilir.\n"
+                "- Normal stop emirleri yalnızca normal seansta (09:30-16:00 ET) tetiklenebildiği "
+                "için, pre-market/after-hours'ta fiyat stopu kırarsa ayrı bir *extended-hours "
+                "guard* mekanizması devreye girip day+extended-hours limit emriyle koruma sağlar "
+                "ve Telegram'dan bildirim gönderir.\n"
+                "- Tüm bu kontroller GitHub Actions üzerinden normal seansta 5 dakikada, seans "
+                "dışında ~10 dakikada bir otomatik çalışır - manuel müdahale gerekmez."
+            )
+
     orders = client.get_recent_orders(days=HISTORY_DAYS)
 
     st.subheader("💰 Kapanmış İşlemler - Gerçekleşen Kâr/Zarar")
