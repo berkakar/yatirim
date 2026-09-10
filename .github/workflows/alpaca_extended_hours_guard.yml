@@ -1,0 +1,40 @@
+name: Alpaca Extended Hours Guard
+
+# Not: Alpaca'nın stop/stop_limit emirleri sadece normal seansta (09:30-16:00
+# ET) tetiklenebiliyor. Bu workflow, pre-market (04:00-09:30 ET) ve
+# after-hours (16:00-20:00 ET) pencerelerinde çalışıp, fiyat zaten stopu
+# kırmışsa onu day+extended_hours bir limit emriyle değiştiriyor - bkz.
+# alpaca_trailing_stop.py'deki run_extended_hours_guard.
+#
+# Cron saatleri UTC'dir ve ET'nin yaz saati (EDT, UTC-4) varsaydığı için
+# yazılmıştır - mevcut alpaca_trailing_stop.yml ile aynı varsayım. Kış
+# saatinde (EST, UTC-5) pencereler gerçek ET saatine göre bir saat kayar;
+# script kendi içinde extended_hours_session ile bunu takvimden doğrulayıp
+# gerekirse no-op yapar, o yüzden fazladan/eksik tetiklenen dakikalar
+# zararsızdır.
+on:
+  schedule:
+    - cron: "*/10 8-13 * * 1-5"   # ~04:00-09:59 ET pre-market
+    - cron: "*/10 20-23 * * 1-5"  # ~16:00-19:59 ET after-hours
+  workflow_dispatch: {}
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python alpaca_trailing_stop.py --extended-hours-guard
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}

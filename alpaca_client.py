@@ -80,6 +80,16 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_calendar(self, start: str, end: str) -> list[dict]:
+        """[{"date", "open", "close", ...}, ...] ("HH:MM", ET) - hafta
+        sonu/resmi tatilde o gün için boş liste döner. alpaca_trailing_stop's
+        extended_hours_session, yarım günleri de doğru ele almak için
+        sabit 09:30/16:00 varsaymak yerine buradan o günün gerçek open/close
+        saatini okur."""
+        r = self._get("/calendar", params={"start": start, "end": end})
+        r.raise_for_status()
+        return r.json()
+
     def get_account(self) -> dict:
         """Hesap özeti - "cash" (nakit) ve "equity" (nakit + tüm pozisyonların
         güncel piyasa değeri, yani anlık toplam hesap değeri) buradan gelir."""
@@ -115,6 +125,19 @@ class AlpacaClient:
             if order["type"] in ("stop", "stop_limit"):
                 return order
         return None
+
+    def has_open_exit_order(self, symbol: str, side: str) -> bool:
+        """Tip fark etmeksizin (stop/stop_limit/limit), pozisyonu kapatacak
+        yönde açık bir emir var mı - extended-hours guard'ın bıraktığı
+        day+extended_hours limit-sell de buna dahil. alpaca_trailing_stop's
+        manage_position, get_open_stop_order hiçbir şey bulamadığında yeni
+        bir fallback stop koymadan önce burayı kontrol eder: aksi halde,
+        guard'ın emri hâlâ resting olan hisseleri tutarken üstüne ikinci bir
+        stop denemek Alpaca'dan "insufficient qty available" hatası alırdı."""
+        r = self._get("/orders", params={"status": "open", "symbols": symbol})
+        r.raise_for_status()
+        closing_side = "sell" if side == "long" else "buy"
+        return any(o["side"] == closing_side for o in r.json())
 
     def place_market_entry(self, symbol: str, qty: float, side: str) -> dict:
         return self._post("/orders", {
@@ -175,6 +198,23 @@ class AlpacaClient:
 
     def replace_stop_price(self, order_id: str, stop_price: float) -> dict:
         return self._patch(f"/orders/{order_id}", {"stop_price": f"{stop_price:.2f}"})
+
+    def place_extended_hours_limit(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
+        """Alpaca normal seans dışında (extended hours) yalnızca limit
+        emirlerin - ve sadece time_in_force="day" ile - çalışmasına izin
+        veriyor; stop/stop_limit emirler bu pencerede hiç tetiklenemiyor.
+        alpaca_trailing_stop's extended-hours guard, stopu zaten kırılmış bir
+        pozisyon için bunu, normal stopun yerine geçecek tek seçenek olarak
+        kullanır."""
+        return self._post("/orders", {
+            "symbol": symbol,
+            "qty": qty,
+            "side": "sell" if side == "long" else "buy",
+            "type": "limit",
+            "limit_price": f"{limit_price:.2f}",
+            "time_in_force": "day",
+            "extended_hours": True,
+        })
 
     def replace_stop_qty(self, order_id: str, qty: float) -> dict:
         """Resting stop'un adedini pozisyonun güncel toplam adedine eşitler -
