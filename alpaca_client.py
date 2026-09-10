@@ -156,6 +156,33 @@ class AlpacaClient:
                 return order
         return None
 
+    def get_order(self, order_id: str) -> dict:
+        r = self._get(f"/orders/{order_id}")
+        r.raise_for_status()
+        return r.json()
+
+    def place_extended_hours_entry_limit(self, symbol: str, qty: float, limit_price: float,
+                                          client_order_id: str | None = None) -> dict:
+        """Extended hours'ta çalışabilecek tek giriş emri türü - Alpaca bu
+        pencerede bracket/OTO emirlere izin vermiyor, sadece düz limit
+        emirlere (time_in_force="day" + extended_hours=True).
+        alpaca_buy_points.run_extended_hours_entry_scan, normal seanstaki
+        gibi bracket'la stop'u anında iliştiremediği için, dolduğunu (poll
+        ile) tespit edip korumayı place_extended_hours_limit ile ayrı bir
+        adımda kuruyor."""
+        payload = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": "buy",
+            "type": "limit",
+            "limit_price": f"{limit_price:.2f}",
+            "time_in_force": "day",
+            "extended_hours": True,
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
+
     def place_limit_entry(self, symbol: str, qty: float, side: str, limit_price: float,
                            client_order_id: str | None = None, stop_loss_price: float | None = None) -> dict:
         payload = {

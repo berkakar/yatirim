@@ -87,19 +87,39 @@ position keeps being managed by its own stop as usual.
 
 Run with --once (used by the GitHub Actions workflow, as an earlier step
 than the trailing-stop pass).
+
+Separately, --extended-hours-entries (run_extended_hours_entry_scan) lets a
+fresh entry's signal fill during pre-market/after-hours too, not just
+regular hours: Alpaca doesn't support bracket/OTO orders in extended hours
+(only plain limit), so the entry goes out unbracketed and the script polls
+for its own fill in a tight internal loop (its own GitHub Actions workflow,
+independent of this one), arming a naive-%INITIAL_STOP_PCT protective
+extended-hours limit-sell the moment it detects a fill - not instantly like
+a bracket, but within its poll interval rather than waiting on the next
+regular session. check_symbol's own existing-order check (see
+already_bracketed) upgrades that plain order to a proper bracket the moment
+regular hours see it still unfilled, so it's never left permanently
+unprotected. Top-up during extended hours isn't supported yet - its market
+order can't execute outside regular hours either, and would need the same
+kind of redesign.
 """
 
 import argparse
 import json
 import math
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
-from alpaca_trailing_stop import INITIAL_STOP_PCT, get_regular_hours_bars, load_top_up_stop_mode, TIMEFRAME, log
+from alpaca_trailing_stop import (
+    INITIAL_STOP_PCT, extended_hours_session, get_regular_hours_bars, load_telegram_settings,
+    load_top_up_stop_mode, TIMEFRAME, log,
+)
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
+from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
 
@@ -121,6 +141,14 @@ TOP_UP_MARKET_TOLERANCE_PCT = 0.5 / 100
 LOOKBACK_DAYS = int(os.environ.get("BUY_LOOKBACK_DAYS", "60"))
 DAILY_LOOKBACK_DAYS = int(os.environ.get("BUY_DAILY_LOOKBACK_DAYS", "400"))
 STOP_LOSS_LOOKBACK_DAYS = int(os.environ.get("STOP_LOSS_LOOKBACK_DAYS", "90"))
+
+# run_extended_hours_entry_scan - bir dolumu bir sonraki ~10dk'lık GitHub
+# Actions tetiklemesine kadar değil, aynı çalıştırma içinde saniyeler
+# içinde yakalayıp korumayı hemen kurabilmek için, script kendi içinde bu
+# kadar süre boyunca (job'un geri kalanına ve bir sonraki tetiklemeye pay
+# bırakacak şekilde) sıkı bir döngüyle emirleri kontrol eder.
+EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS = int(os.environ.get("BUY_EXTENDED_HOURS_POLL_WINDOW_SECONDS", "360"))
+EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS = int(os.environ.get("BUY_EXTENDED_HOURS_POLL_INTERVAL_SECONDS", "15"))
 
 
 def load_local_config() -> dict:
@@ -311,8 +339,14 @@ def check_symbol(
 
     current_price = float(existing_order["limit_price"])
     current_qty = float(existing_order["qty"])
-    if abs(current_price - target_price) < 0.01 and abs(current_qty - target_qty) < 0.0001:
+    already_bracketed = existing_order.get("order_class") == "oto"
+    if already_bracketed and abs(current_price - target_price) < 0.01 and abs(current_qty - target_qty) < 0.0001:
         return 0.0  # already correctly placed - order's notional was already counted at pass start
+    # already_bracketed=False burada, fiyat/adet aynı kalsa bile aşağı düşüp
+    # iptal+yeniden-yerleştiriyor: run_extended_hours_entry_scan'in bıraktığı
+    # düz (bracket'sız) bir emir olabilir - normal seans onu görür görmez
+    # bracket'a "yükseltmeliyiz", yoksa daha sonra regular hours'ta dolarsa
+    # hiç stopu olmayan bir pozisyon açılırdı.
 
     # Alpaca rejects qty changes on fractional-qty orders via replace ("qty
     # must be an integer") - cancel and re-place instead, which works for
@@ -332,6 +366,204 @@ def check_symbol(
     # freshly spent under-states available_cash for later symbols rather than
     # over-stating it - never risks exceeding the real cash limit.
     return target_qty * target_price
+
+
+def check_symbol_extended_hours_entry(
+    client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
+    max_loss_pct: float | None = None, available_cash: float | None = None,
+) -> tuple[float, str | None]:
+    """check_symbol'ün fresh-entry dalının extended-hours varyantı - top-up
+    burada YOK: top-up'ın market emri extended hours'ta hiç çalışmıyor,
+    ayrı bir tasarım gerektirir, şimdilik kapsam dışı.
+
+    Zaten pozisyonu olan semboller atlanır (yukarıdaki gerekçeyle). Zaten
+    resting bir bracket (order_class "oto") emri olan semboller de atlanır -
+    o emir zaten normal seansta kendi başına yönetiliyor; üstüne ikinci bir
+    emir eklemek aynı sembolde çift dolma riski yaratırdı. Sinyal
+    hesaplaması (bar çekme, algoritma, reject_if_marketable) check_symbol
+    ile birebir aynı - farkı sadece SON adım: Alpaca extended hours'ta
+    bracket desteklemediği için emir düz (order_class'sız) bir limit-buy
+    olarak gönderilir; koruma, dolduğu tespit edildiğinde ayrı bir adımda
+    (run_extended_hours_entry_scan'ın poll döngüsü) kurulur.
+
+    Dönüş: (bu çağrıda yeni harcanan/rezerve edilen tutar, izlenecek açık
+    emrin id'si ya da None)."""
+    position = client.get_position(symbol)
+    if position is not None:
+        return 0.0, None  # top-up extended hours'ta henüz desteklenmiyor
+
+    existing_order = client.get_open_limit_buy_order(symbol)
+    if existing_order is not None and existing_order.get("order_class") == "oto":
+        return 0.0, None  # zaten normal (bracket) bir emir resting - dokunma
+
+    dollar_amount = budget * (weight_pct / 100)
+    if dollar_amount <= 0:
+        return 0.0, None
+
+    if max_loss_pct:
+        realized_loss = client.compute_realized_loss(symbol, STOP_LOSS_LOOKBACK_DAYS)
+        loss_pct = realized_loss / dollar_amount * 100
+        if loss_pct >= max_loss_pct:
+            return 0.0, None
+
+    start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+    bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+    if not bars:
+        return 0.0, None
+
+    daily_closes = None
+    if algorithm == "trend_pullback":
+        daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
+        try:
+            daily_closes = [b["c"] for b in client.get_raw_bars(symbol, "1Day", daily_start.isoformat())]
+        except Exception:
+            daily_closes = []
+
+    _, algo_fn = ALGORITHMS[algorithm]
+    signal = algo_fn(bars, daily_closes)
+
+    if signal is not None:
+        try:
+            live_price = client.get_latest_trade_price(symbol)
+        except Exception:
+            live_price = None
+        if live_price is None:
+            live_price = bars[-1].c
+        signal = reject_if_marketable(signal, live_price)
+
+    if signal is None:
+        if existing_order is not None:
+            client.cancel_order(existing_order["id"])
+            log(f"{symbol}: extended hours - artık geçerli bir al sinyali yok, resting emir iptal edildi.")
+        return 0.0, None
+
+    target_price = signal.price
+    target_qty = math.floor(dollar_amount / target_price)
+    if available_cash is not None:
+        target_qty = min(target_qty, math.floor(available_cash / target_price))
+    if target_qty <= 0:
+        return 0.0, None
+
+    if existing_order is not None:
+        current_price = float(existing_order["limit_price"])
+        current_qty = float(existing_order["qty"])
+        if abs(current_price - target_price) < 0.01 and abs(current_qty - target_qty) < 0.0001:
+            return 0.0, existing_order["id"]  # zaten doğru fiyatta, izlemeye devam
+        client.cancel_order(existing_order["id"])
+
+    client_order_id = f"algo-{algorithm}-{timeframe}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
+    order = client.place_extended_hours_entry_limit(symbol, target_qty, target_price, client_order_id)
+    log(f"{symbol}: extended hours - {target_price:.2f}'den limit-buy gönderildi ({signal.reason}), "
+        f"adet {target_qty} (${target_qty * target_price:.2f}), order {order['id']}.")
+    return target_qty * target_price, order["id"]
+
+
+def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
+    """Pre-market/after-hours'ta watchlist'teki (pozisyonu olmayan)
+    sembolleri tarar, geçerli sinyali olanlar için düz bir extended-hours
+    limit-buy gönderir/günceller (bkz. check_symbol_extended_hours_entry),
+    sonra kendi içinde EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS boyunca her
+    EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS'de bir bu emirlerin dolup
+    dolmadığını kontrol eder - dolduğu anda (bir sonraki ~10dk'lık GitHub
+    Actions tetiklemesini beklemeden) hemen naif %INITIAL_STOP_PCT'lik bir
+    koruma (day+extended-hours limit-sell) kurar ve Telegram'dan bildirir.
+
+    Poll penceresi bitene kadar dolmayan emirler olduğu gibi resting kalır -
+    bir sonraki tetiklemede (ya da regular hours başladığında check_symbol
+    tarafından, bkz. already_bracketed düzeltmesi) izlenmeye/yönetilmeye
+    devam eder."""
+    session = extended_hours_session(client)
+    if session is None:
+        log("Extended-hours penceresi dışında, giriş taraması atlanıyor.")
+        return
+
+    watchlist = client.get_watchlist_by_name(WATCHLIST_NAME)
+    watchlist_symbols = {a["symbol"] for a in watchlist["assets"]} if watchlist else set()
+    if not watchlist_symbols:
+        log(f"{session}: premium-buy-portfolio watchlist boş, giriş taraması atlanıyor.")
+        return
+
+    config = load_local_config()
+    budget = float(config.get("budget") or 0)
+    weights = config.get("weights") or {}
+    default_algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
+    if default_algorithm not in ALGORITHMS:
+        default_algorithm = DEFAULT_ALGORITHM
+    symbol_settings = config.get("symbol_settings") or {}
+    max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
+
+    try:
+        available_cash = compute_available_cash_for_buying(client)
+    except Exception as e:
+        log(f"{session}: hesap nakti alınamadı, bu pass atlanıyor: {e}")
+        return
+
+    pending: dict[str, str] = {}  # symbol -> order_id, dolumu izlenecek
+    for symbol in sorted(watchlist_symbols):
+        settings = symbol_settings.get(symbol) or {}
+        algorithm = settings.get("algorithm") or default_algorithm
+        if algorithm not in ALGORITHMS:
+            algorithm = default_algorithm
+        timeframe = settings.get("timeframe") or TIMEFRAME
+        try:
+            spent, order_id = check_symbol_extended_hours_entry(
+                client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe,
+                max_loss_pct, available_cash,
+            )
+            available_cash -= spent
+            if order_id is not None:
+                pending[symbol] = order_id
+        except Exception as e:
+            log(f"{symbol}: extended-hours check_symbol failed, atlanıyor: {e}")
+
+    if not pending:
+        return
+
+    bot_token, chat_id = load_telegram_settings()
+    log(f"{session}: {len(pending)} sembol için dolum bekleniyor, "
+        f"{EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS}s boyunca her "
+        f"{EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS}s'de bir kontrol edilecek.")
+
+    deadline = time.monotonic() + EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS
+    while pending and time.monotonic() < deadline:
+        for symbol, order_id in list(pending.items()):
+            try:
+                order = client.get_order(order_id)
+            except Exception as e:
+                log(f"{symbol}: emir durumu sorgulanamadı, bu tur atlanıyor: {e}")
+                continue
+
+            if order["status"] == "filled":
+                entry_price = float(order["filled_avg_price"])
+                qty = float(order["filled_qty"])
+                stop_price = round(entry_price * (1 - INITIAL_STOP_PCT), 2)
+                try:
+                    client.place_extended_hours_limit(symbol, qty, "long", stop_price)
+                    msg = (
+                        f"✅ {symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
+                        f"koruma stopu hemen {stop_price:.2f} seviyesinden (day+extended-hours limit) kuruldu."
+                    )
+                except Exception as e:
+                    msg = (
+                        f"🚨 {symbol}: extended hours girişi {entry_price:.2f}'den doldu ama koruma stopu "
+                        f"kurulamadı, pozisyon şu an KORUMASIZ: {e}"
+                    )
+                log(msg)
+                if bot_token and chat_id:
+                    try:
+                        send_telegram_message(bot_token, chat_id, msg)
+                    except TelegramError:
+                        pass
+                del pending[symbol]
+            elif order["status"] in ("canceled", "expired", "rejected"):
+                del pending[symbol]
+
+        if pending:
+            time.sleep(EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS)
+
+    if pending:
+        log(f"{session}: {len(pending)} sembol hâlâ dolmadı, bir sonraki taramada izlenmeye devam edilecek: "
+            f"{', '.join(pending)}.")
 
 
 def cancel_orphaned_buy_limits(client: AlpacaClient, watchlist_symbols: set[str]) -> None:
@@ -447,7 +679,15 @@ def build_client() -> AlpacaClient:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Run a single pass and exit (used by GitHub Actions).")
+    parser.add_argument(
+        "--extended-hours-entries", action="store_true",
+        help="Pre-market/after-hours'ta yeni giriş sinyallerini tara, dolanları hemen koru ve çık "
+             "(ayrı bir GitHub Actions workflow'u tarafından kullanılır).",
+    )
     args = parser.parse_args()
 
     client = build_client()
-    run_once(client)
+    if args.extended_hours_entries:
+        run_extended_hours_entry_scan(client)
+    else:
+        run_once(client)

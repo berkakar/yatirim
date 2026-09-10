@@ -104,6 +104,28 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     current_symbols = [a["symbol"] for a in watchlist.get("assets", [])]
     config = read_portfolio_config(GITHUB_REPO, github_token, username)
 
+    with st.expander("📈 Alım Yaklaşımı Nasıl Çalışır?"):
+        st.markdown(
+            "- **Normal seansta (09:30-16:00 ET):** Watchlist'teki, pozisyonu olmayan her hisse için "
+            "seçili algoritma taranır; sinyal varsa fiyatından bekleyen (GTC) bir limit-buy emri "
+            "konur/güncellenir - **bracket (OTO)** olarak, yani emrin stop-loss bacağı (giriş fiyatının "
+            "%1.5 altı) dolduğu anda Alpaca tarafında otomatik aktif olur, hiçbir gecikme olmaz.\n"
+            "- **Pre-market (04:00-09:30 ET) / after-hours (16:00-20:00 ET):** Alpaca bu saatlerde "
+            "bracket emirlere izin vermediği için, aynı sinyal fiyatından düz (bracket'sız) bir "
+            "*day + extended-hours limit-buy* gönderilir. Ayrı bir mekanizma, kendi içinde birkaç "
+            "dakika boyunca sıkı bir döngüyle dolup dolmadığını kontrol eder ve dolduğu anda naif "
+            "%1.5'lik bir koruma stopu hemen kurar - bracket'ın anlık korumasına göre birkaç dakikalık "
+            "bir gecikme olabilir, ama bir sonraki normal seans açılışını beklemekten çok daha hızlı.\n"
+            "- Normal seans başladığında, extended hours'ta yerleştirilmiş ama henüz dolmamış bir "
+            "emir varsa sistem onu otomatik olarak bracket'a **yükseltir** - böylece daha sonra ne "
+            "zaman dolarsa dolsun korumasız kalmaz.\n"
+            "- **İlave alım (top-up)** şu an yalnızca normal seansta çalışıyor (aşağıdaki kutuda "
+            "anlatıldığı gibi market emriyle) - extended hours'ta henüz desteklenmiyor, market "
+            "emirleri de o saatlerde çalışmıyor.\n"
+            "- Zarar Kes (portföy bazlı) ve nakit/bütçe sınırlamaları her iki modda da aynı şekilde "
+            "uygulanır."
+        )
+
     st.subheader("🎯 Portföy Seçimi")
     st.caption("Bu listedeki hisseler için premium buy point (demand zone) taranır ve fiyat oraya ulaştığında otomatik alım yapılır.")
 
