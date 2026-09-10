@@ -37,9 +37,22 @@ Manages every open position in the account. Each pass, per position:
      same-%-as-a-fresh-entry candidate at the new average - still subject
      to the "only tightens" rule in step 5.
 
+Separately, run_extended_hours_guard (--extended-hours-guard) covers a gap
+this loop can't: a regular "stop" order only triggers 09:30-16:00 ET, so a
+pre-market/after-hours move can push price through it while it just sits
+there, inert, until the next regular session. Run on its own schedule during
+the 04:00-09:30 and 16:00-20:00 ET windows, it replaces an already-breached
+stop with a day+extended_hours limit order - the only order type Alpaca lets
+execute outside regular hours - and sends a Telegram alert. See its own
+docstring for the residual limitation (an unfilled emergency order still
+expires at the session's end, and manage_position's fallback stop above
+would then reset to the naive initial %, not the level that had been
+trailed to).
+
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
-between passes and until the market reopens.
+between passes and until the market reopens. --extended-hours-guard runs the
+separate mechanism described above and exits.
 """
 
 import argparse
@@ -48,7 +61,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as dtime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import requests
@@ -57,6 +70,7 @@ from dotenv import load_dotenv
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from indicators import atr, ema
 from structure import Bar, validated_trailing_level
+from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
 
@@ -79,6 +93,21 @@ FALLBACK_BUFFER_PCT = 0.001  # only used if ATR can't be computed yet (too few b
 # varsayımı burada da geçerli.
 CONFIG_PATH = "portfolio_config_berkakar.json"
 TOP_UP_STOP_MODE_DEFAULT = "keep"
+
+# Extended-hours guard (bkz. run_extended_hours_guard) - normal "stop" emri
+# sadece normal seansta (aşağıdaki takvimden okunan open/close arası)
+# tetiklenebiliyor; Alpaca bu pencerenin dışında yalnızca limit emirlere
+# (time_in_force="day" + extended_hours=True) izin veriyor. PRE_MARKET_START
+# ve AFTER_HOURS_END, Alpaca'nın izin verdiği sabit 04:00-20:00 ET
+# extended-hours sınırları - günden güne değişmiyor (yarım günlerde asıl
+# open/close takvimden okunduğu için ayrıca hesaba katılıyor).
+PRE_MARKET_START = dtime(4, 0)
+AFTER_HOURS_END = dtime(20, 0)
+EXTENDED_HOURS_SLIPPAGE_PCT = float(os.environ.get("TRADE_EXTENDED_HOURS_SLIPPAGE_PCT", "0.5")) / 100
+
+# fon_hisse_uyari.py'nin de kullandığı aynı tek-kullanıcı bildirim ayarları
+# dosyası ve TELEGRAM_BOT_TOKEN secret'ı - ayrı bir konfigürasyona gerek yok.
+NOTIFICATION_SETTINGS_PATH = "bildirim_ayarlari_berkakar.json"
 
 ET = ZoneInfo("America/New_York")
 
@@ -183,6 +212,16 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
     topped_up = False
     stop_order = client.get_open_stop_order(symbol)
     if stop_order is None:
+        if client.has_open_exit_order(symbol, side):
+            # Extended-hours guard'ın (run_extended_hours_guard) bıraktığı
+            # day+extended_hours limit emri hâlâ resting olabilir - bu, normal
+            # seansta da geçerliliğini koruyor (aynı takvim günü boyunca).
+            # Üstüne ikinci bir stop denemek Alpaca'dan "insufficient qty
+            # available" hatası alır, çünkü hisseler zaten o emir tarafından
+            # tutuluyor. Koruma zaten var, dokunma.
+            log(f"{symbol}: resting stop yok ama başka bir çıkış emri açık "
+                f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
+            return
         if side == "long":
             initial_stop = entry_price * (1 - INITIAL_STOP_PCT)
         else:
@@ -274,6 +313,132 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
         log(f"{symbol}: failed to replace stop order: {e}")
 
 
+def extended_hours_session(client: AlpacaClient) -> str | None:
+    """'pre-market', 'after-hours' ya da None (normal seans, hafta sonu,
+    resmi tatil, ya da 04:00-20:00 ET penceresinin bile dışında). O günün
+    gerçek open/close saatini takvimden okur, böylece yarım günler (bayram
+    arifeleri vb.) de doğru ele alınır - sadece pre-market/after-hours
+    sınırları PRE_MARKET_START/AFTER_HOURS_END'e sabit (Alpaca'nın izin
+    verdiği extended-hours penceresinin kendisi, günden güne değişmiyor)."""
+    now_et = datetime.now(timezone.utc).astimezone(ET)
+    if now_et.weekday() >= 5:
+        return None
+
+    today = now_et.date().isoformat()
+    days = client.get_calendar(today, today)
+    if not days:
+        return None  # resmi tatil
+
+    open_t = datetime.strptime(days[0]["open"], "%H:%M").time()
+    close_t = datetime.strptime(days[0]["close"], "%H:%M").time()
+    now_t = now_et.time()
+
+    if PRE_MARKET_START <= now_t < open_t:
+        return "pre-market"
+    if close_t <= now_t < AFTER_HOURS_END:
+        return "after-hours"
+    return None
+
+
+def load_telegram_settings() -> tuple[str | None, str | None]:
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+    chat_id = None
+    if os.path.exists(NOTIFICATION_SETTINGS_PATH):
+        with open(NOTIFICATION_SETTINGS_PATH, encoding="utf-8") as f:
+            chat_id = (json.load(f).get("telegram_chat_id") or "").strip() or None
+    return bot_token, chat_id
+
+
+def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_id: str | None) -> None:
+    """Normal bir "stop" emri şu an (extended hours) tetiklenemeyeceği için,
+    fiyat zaten stop seviyesini kırmışsa onun yerine geçebilecek tek şeyi -
+    day+extended_hours bir limit emri - gönderir. Stop hâlâ korumadaysa
+    (henüz kırılmamışsa) hiçbir şey yapmaz.
+
+    Sınır: gönderilen limit emri o takvim günü (aynı gün içindeki normal
+    seansı da kapsayacak şekilde) 20:00 ET'de düşer. Seans bitene kadar
+    dolmazsa, sıradaki manage_position çağrısı get_open_stop_order'da hiçbir
+    şey bulamaz ve fallback stop'u INITIAL_STOP_PCT ile entry_price'tan
+    yeniden kurar - o ana kadar structure trail'in kazandırdığı ilerleme
+    (varsa) kaybolur. Bunu tamamen önlemek, trail seviyesini script
+    çalıştırmaları arasında ayrıca kalıcı hale getirmeyi gerektirir; bu
+    mekanizmanın kapsamı, tam korumasız kalmayı önlemekle sınırlı."""
+    symbol = pos["symbol"]
+    signed_qty = float(pos["qty"])
+    qty = abs(signed_qty)
+    side = "long" if signed_qty > 0 else "short"
+
+    stop_order = client.get_open_stop_order(symbol)
+    if stop_order is None:
+        return  # koruyacak resting bir stop yok (muhtemelen bu guard zaten devrede)
+
+    stop_price = float(stop_order["stop_price"])
+    last_price = client.get_latest_trade_price(symbol)
+    if last_price is None:
+        return
+
+    breached = last_price <= stop_price if side == "long" else last_price >= stop_price
+    if not breached:
+        return
+
+    if side == "long":
+        limit_price = round(min(stop_price, last_price) * (1 - EXTENDED_HOURS_SLIPPAGE_PCT), 2)
+    else:
+        limit_price = round(max(stop_price, last_price) * (1 + EXTENDED_HOURS_SLIPPAGE_PCT), 2)
+
+    try:
+        client.cancel_order(stop_order["id"])
+        time.sleep(1)  # cancel'ın hisseleri serbest bırakması için kısa bir pay
+        client.place_extended_hours_limit(symbol, qty, side, limit_price)
+    except requests.HTTPError as e:
+        # Stop muhtemelen zaten iptal oldu ama yerine emir konamadı - pozisyon
+        # şu an gerçekten korumasız. Bunu sessizce geçmek yerine açıkça
+        # bildiriyoruz; sıradaki guard çalışması (birkaç dakika içinde) tekrar
+        # dener çünkü get_open_stop_order artık None dönecek, ama breach hâlâ
+        # sürüyorsa last_price/stop_price karşılaştırması bu kez de tutmaz -
+        # bu yüzden manuel müdahale gerekebilir.
+        msg = (
+            f"🚨 {symbol}: stop kırıldı ({last_price:.2f} vs {stop_price:.2f}) ama extended-hours "
+            f"limit emri gönderilirken hata alındı, pozisyon şu an KORUMASIZ olabilir: {e}"
+        )
+        log(msg)
+        if bot_token and chat_id:
+            try:
+                send_telegram_message(bot_token, chat_id, msg)
+            except TelegramError:
+                pass
+        return
+
+    msg = (
+        f"🚨 {symbol}: extended hours'ta son fiyat {last_price:.2f}, stopu ({stop_price:.2f}) kırdı. "
+        f"Normal stop bu seansta çalışamayacağı için iptal edildi; yerine day+extended-hours "
+        f"limit emri {limit_price:.2f} seviyesinden gönderildi. Dolarsa pozisyon kapanır; "
+        f"dolmadan seans biterse emir düşer ve piyasa açılışında olağan fallback stop devreye girer."
+    )
+    log(msg)
+    if bot_token and chat_id:
+        try:
+            send_telegram_message(bot_token, chat_id, msg)
+        except TelegramError as e:
+            log(f"Telegram bildirimi gönderilemedi: {e}")
+
+
+def run_extended_hours_guard(client: AlpacaClient) -> None:
+    session = extended_hours_session(client)
+    if session is None:
+        log("Extended-hours penceresi dışında (normal seans/hafta sonu/tatil), çıkılıyor.")
+        return
+
+    positions = [p for p in client.get_all_positions() if p.get("asset_class") == "us_equity"]
+    if not positions:
+        log(f"{session}: açık pozisyon yok.")
+        return
+
+    bot_token, chat_id = load_telegram_settings()
+    for pos in positions:
+        guard_position(client, pos, bot_token, chat_id)
+
+
 def run_once(client: AlpacaClient) -> None:
     clock = client.get_clock()
     if not clock["is_open"]:
@@ -315,11 +480,18 @@ def build_client() -> AlpacaClient:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Run a single pass and exit (used by GitHub Actions).")
+    parser.add_argument(
+        "--extended-hours-guard", action="store_true",
+        help="Pre-market/after-hours'ta stopu kırılmış pozisyonlar için day+extended_hours "
+             "limit emri gönder ve çık (ayrı bir GitHub Actions workflow'u tarafından kullanılır).",
+    )
     args = parser.parse_args()
 
     client = build_client()
     try:
-        if args.once:
+        if args.extended_hours_guard:
+            run_extended_hours_guard(client)
+        elif args.once:
             run_once(client)
         else:
             run_loop(client)
