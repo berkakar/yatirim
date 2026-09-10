@@ -1,0 +1,44 @@
+name: Alpaca Extended Hours Entries
+
+# Not: Alpaca, extended hours'ta (04:00-09:30 ve 16:00-20:00 ET) bracket/OTO
+# emirlere izin vermiyor - sadece düz limit emirler çalışıyor. Bu workflow,
+# bu pencerelerde yeni giriş sinyallerini tarar, düz bir extended-hours
+# limit-buy gönderir/günceller, ve kendi içinde birkaç dakika boyunca sıkı
+# bir döngüyle dolup dolmadığını kontrol eder - dolduğu anda hemen bir
+# koruma (naif %INITIAL_STOP_PCT) limit-sell kurar. Bkz.
+# alpaca_buy_points.py'deki run_extended_hours_entry_scan.
+#
+# Ayrı bir job'ta çalışır (alpaca_extended_hours_guard.yml'den bağımsız),
+# böylece bu taramanın kendi içindeki uzun poll döngüsü, mevcut
+# pozisyonları koruyan guard'ın kendi çalışmasını hiç geciktirmez.
+#
+# Cron saatleri UTC'dir ve ET'nin yaz saatini (EDT, UTC-4) varsayar - diğer
+# workflow'larla aynı varsayım; kış saatinde (EST) pencereler bir saat
+# kayar, script kendi içinde extended_hours_session ile bunu takvimden
+# doğrulayıp gerekirse no-op yapar.
+on:
+  schedule:
+    - cron: "*/10 8-13 * * 1-5"   # ~04:00-09:59 ET pre-market
+    - cron: "*/10 20-23 * * 1-5"  # ~16:00-19:59 ET after-hours
+  workflow_dispatch: {}
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python alpaca_buy_points.py --extended-hours-entries
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
