@@ -107,6 +107,49 @@ def _fetch_chunk(session: requests.Session, start: date, end: date, kind: str) -
     return parsed
 
 
+def fetch_fund_by_code(code: str, lookback_days: int = 10) -> dict | None:
+    """Verilen fon kodunun en güncel fiyat/unvan bilgisini döner (fon yoksa None).
+    Hafta sonu/resmi tatil günlerini atlayabilmek için son `lookback_days` günü
+    tarar, en güncel tarihli satırı döner - aşağıdaki toplu fetch_fund_info'nun
+    aksine (tüm YAT fonları) tek bir fonu (fonKodu filtresiyle) hedefler."""
+    session = requests.Session()
+    end = date.today()
+    start = end - timedelta(days=lookback_days)
+    body = {
+        "fonTipi": "YAT",
+        "fonKodu": code,
+        "aramaMetni": None,
+        "fonTurKod": None,
+        "fonGrubu": None,
+        "sfonTurKod": None,
+        "fonTurAciklama": None,
+        "kurucuKod": None,
+        "basTarih": start.strftime("%Y%m%d"),
+        "bitTarih": end.strftime("%Y%m%d"),
+        "basSira": 1,
+        "bitSira": 100,
+        "dil": "TR",
+        "sFonTurKod": "",
+        "fonKod": code,
+        "fonGrup": "",
+        "fonUnvanTip": "",
+    }
+    data = _post_with_retry(session, body)
+
+    err_code = data.get("errorCode")
+    err_msg = (data.get("errorMessage") or "")
+    is_empty_marker = any(m in err_msg.lower() for m in _EMPTY_MARKERS)
+    if (err_code or err_msg) and not is_empty_marker:
+        raise RuntimeError(f"TEFAS API hatası: {err_msg} (kod: {err_code})")
+
+    rows = data.get("resultList") or []
+    if not rows:
+        return None
+    parsed = [{name: row.get(short) for short, name in INFO_FIELDS.items()} for row in rows]
+    parsed.sort(key=lambda r: str(r.get("date") or ""))
+    return parsed[-1]
+
+
 def fetch_fund_info(start: date, end: date, kind: str = "YAT") -> list[dict]:
     """start..end (dahil) arasındaki tüm fonların günlük fiyat/büyüklük
     verisini döner - her eleman bir (fon, tarih) çiftini temsil eder.

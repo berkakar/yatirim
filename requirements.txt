@@ -7,6 +7,7 @@ plotly
 yfinance
 pandas_ta
 requests
+pdfplumber
 python-dotenv
 truststore
 tzdata

@@ -24,6 +24,7 @@ from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard, render_account_summary
 from premium_buy_portfolio import render_premium_buy_portfolio
 from tefas_fonlari import render_turk_fonlari
+from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
 from backtest import render_backtest
 
@@ -37,7 +38,7 @@ MODULE_GROUPS = {
         "📊 Bağımsız Hisse Grafiği",
     ],
     "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
-    "🇹🇷 Türk Fonları": ["Türk Fonları"],
+    "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "📐 Hisse Patern": ["📐 Hisse Patern Analizi"],
     "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
     "🧪 BackTest": ["BackTest"],
@@ -49,6 +50,7 @@ MODULE_DISPLAY = {
     "OBO & TOBO Tarayıcı": "📉 OBO & TOBO Tarayıcı",
     "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
     "Türk Fonları": "🇹🇷 Türk Fonları",
+    "Fonlarım": "💼 Fonlarım",
     "BackTest": "🧪 BackTest",
 }
 
@@ -1073,6 +1075,14 @@ elif module == "Türk Fonları":
     st.header("🇹🇷 Türk Fonları")
     st.caption("TEFAS'tan günlük çekilen Hisse Senedi Yoğun, Değişken, Mutlak Getiri ve İstatistiksel Arbitraj fonlarının fiyat/hacim değişim tablosu.")
     render_turk_fonlari()
+
+# ==============================================================================
+# 10b. MODÜL: FONLARIM (TAKİP EDİLEN FONLAR)
+# ==============================================================================
+elif module == "Fonlarım":
+    st.header("💼 Fonlarım")
+    st.caption("Elinizde bulunan fonları kaydedin; her fon için KAP'tan çekilen en büyük 6 yatırım aracının yüzdesini takip edin.")
+    render_turk_fonlari_takip(username)
 
 # ==============================================================================
 # 11. MODÜL: HİSSE PATERN ANALİZİ
