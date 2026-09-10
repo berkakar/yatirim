@@ -11,7 +11,9 @@ turk_fonlari_takip_data.add_report).
 import pandas as pd
 import streamlit as st
 
+import bildirim_data
 import kap_client
+import telegram_notify
 import turk_fonlari_takip_data as data
 from tefas_client import fetch_fund_by_code
 from ui_style import zebra_style
@@ -22,6 +24,8 @@ def _init_state(username: str) -> None:
         st.session_state.takip_fonlari = data.load_tracked_funds(username)
     if "kap_portfoy_cache" not in st.session_state:
         st.session_state.kap_portfoy_cache = data.load_portfolio_cache()
+    if "bildirim_ayarlari" not in st.session_state:
+        st.session_state.bildirim_ayarlari = bildirim_data.load_notification_settings(username)
 
 
 def _refresh_fund(code: str, name: str) -> tuple[bool, str | None]:
@@ -56,6 +60,79 @@ def _format_holdings_cell(code: str) -> str:
         holdings_str = ", ".join(f"{h[0]} %{h[1]:.2f}" for h in r["holdings"])
         lines.append(f"{r['report_date']} ({r['period_label']}): {holdings_str}")
     return "\n".join(lines)
+
+
+def _render_notification_settings(username: str) -> None:
+    st.divider()
+    st.subheader("🔔 Bildirim Ayarları")
+    st.caption(
+        "Takip ettiğiniz fonların en büyük 6 hissesinden biri günlük bazda belirlediğiniz "
+        "eşiğin altına düşerse Telegram üzerinden bildirim alırsınız. Kontrol, GitHub Actions "
+        "ile BIST işlem saatlerinde periyodik yapılır - anlık değildir."
+    )
+
+    settings = st.session_state.bildirim_ayarlari
+    bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+
+    with st.expander("ℹ️ Telegram Chat ID'imi nasıl bulurum?"):
+        st.markdown(
+            "1. Oluşturduğunuz Telegram botunu arayıp **/start** yazın (bot henüz yoksa "
+            "@BotFather ile bir tane oluşturup token'ını uygulama yöneticinize iletin).\n"
+            "2. Aşağıdaki **\"📋 Son Botla Konuşanları Göster\"** butonuna basıp listeden "
+            "kendinizi bulun, chat ID'nizi kopyalayıp aşağıdaki alana yapıştırın."
+        )
+
+    if st.button("📋 Son Botla Konuşanları Göster"):
+        if not bot_token:
+            st.error("❌ Uygulama ayarlarında TELEGRAM_BOT_TOKEN tanımlı değil - yöneticinizle iletişime geçin.")
+        else:
+            try:
+                chats = telegram_notify.get_recent_chats(bot_token)
+            except telegram_notify.TelegramError as e:
+                st.error(f"❌ {e}")
+            else:
+                st.session_state["_recent_telegram_chats"] = chats
+
+    recent_chats = st.session_state.get("_recent_telegram_chats")
+    if recent_chats:
+        st.dataframe(pd.DataFrame(recent_chats), hide_index=True, use_container_width=True)
+    elif recent_chats is not None:
+        st.info("Bota henüz kimse mesaj göndermemiş - önce Telegram'da bota /start yazın.")
+
+    with st.form("bildirim_ayarlari_form"):
+        col_chat, col_threshold = st.columns(2)
+        with col_chat:
+            chat_id_input = st.text_input("Telegram Chat ID", value=settings["telegram_chat_id"])
+        with col_threshold:
+            threshold_input = st.number_input(
+                "Günlük Kayıp Eşiği (%)",
+                value=float(settings["loss_threshold_pct"]),
+                min_value=-50.0, max_value=0.0, step=0.5,
+                help="Bu değerin altına düşen (ör. -3,0 = %3 ve üzeri günlük düşüş) hisseler için bildirim gönderilir.",
+            )
+        settings_submitted = st.form_submit_button("💾 Ayarları Kaydet")
+
+    if settings_submitted:
+        new_settings = {"telegram_chat_id": chat_id_input.strip(), "loss_threshold_pct": threshold_input}
+        bildirim_data.save_notification_settings(new_settings, username)
+        st.session_state.bildirim_ayarlari = new_settings
+        st.success("✅ Bildirim ayarları kaydedildi.")
+
+    if st.button("🔔 Test Bildirimi Gönder"):
+        if not bot_token:
+            st.error("❌ Uygulama ayarlarında TELEGRAM_BOT_TOKEN tanımlı değil.")
+        elif not settings["telegram_chat_id"]:
+            st.warning("⚠️ Önce Telegram Chat ID'nizi kaydedin.")
+        else:
+            try:
+                telegram_notify.send_telegram_message(
+                    bot_token, settings["telegram_chat_id"],
+                    "✅ Test bildirimi - Fonlarım modülü bildirimleri başarıyla ayarlandı!",
+                )
+            except telegram_notify.TelegramError as e:
+                st.error(f"❌ Test bildirimi gönderilemedi: {e}")
+            else:
+                st.success("✅ Test bildirimi gönderildi, Telegram'ı kontrol edin.")
 
 
 def render_turk_fonlari_takip(username: str) -> None:
@@ -99,6 +176,8 @@ def render_turk_fonlari_takip(username: str) -> None:
                     data.save_portfolio_cache(st.session_state.kap_portfoy_cache)
                     st.success(f"✅ **{new_code} - {fund_name}** takip listenize eklendi.")
                 st.rerun()
+
+    _render_notification_settings(username)
 
     if not st.session_state.takip_fonlari:
         st.info("Henüz takip ettiğiniz bir fon yok - yukarıdan fon kodu girerek ekleyebilirsiniz.")
