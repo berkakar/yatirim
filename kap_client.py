@@ -55,11 +55,6 @@ _TR_MONTHS = {
     7: "Temmuz", 8: "Ağustos", 9: "Eylül", 10: "Ekim", 11: "Kasım", 12: "Aralık",
 }
 
-# Tablo içinde ara/genel toplam satırlarının ilk hücresinde çıkabilecek,
-# gerçek bir menkul kıymet kodu OLMAYAN metinler - yanlışlıkla "en büyük
-# yatırım aracı" sayılmasınlar diye dışlanır.
-_NON_TICKER_LABELS = {"TOPLAM", "GENELTOPLAM", "ARATOPLAM", "NET"}
-
 
 class KapFetchError(Exception):
     """KAP'tan veri çekilirken/ayrıştırılırken oluşan, kullanıcıya
@@ -158,60 +153,61 @@ def _parse_tr_number(text: str) -> float | None:
         return None
 
 
+_TICKER_RE = re.compile(r"^[A-ZÇĞİÖŞÜ0-9]{2,10}$")
+_CCY_RE = re.compile(r"^[A-Z]{2,3}$")
+
+# "III-FON PORTFÖY DEĞERİ TABLOSU"ndaki satır/grup toplamlarının ilk
+# sütununda çıkıp, ticker regex'ine de uyabilen (ör. hepsi büyük harf)
+# ama gerçek bir menkul kıymet OLMAYAN etiketler.
+_NON_TICKER_LABELS = {
+    "GRUP", "VIOP", "FON", "TOPLAM", "GENEL", "NAKİT", "NAKIT", "REPO",
+    "TERS", "VADELİ", "MEVDUAT", "HİSSE", "TÜREV", "DİĞER", "BPP", "TPP",
+}
+
+
 def parse_top_holdings_from_pdf(pdf_bytes: bytes, top_n: int = 6) -> list[tuple[str, float]]:
     """"III-FON PORTFÖY DEĞERİ TABLOSU"nu ayrıştırır: her menkul kıymet
     satırının "TOPLAM (FTD GÖRE)" (Toplam Fon Değerine Göre) yüzdesini
     okur, aynı kod altında birden fazla lot varsa toplar, en büyük `top_n`
     tanesini (kod, yüzde) olarak, yüzdesi en büyükten küçüğe sıralı döner.
 
-    KAP'ın rapor PDF'i her sayfada aynı tabloyu (fon başlığı + başlık
-    satırı ile) tekrar başlatıyor - bu yüzden her sayfa/tablo ayrı ayrı,
-    kendi başlık satırından kolon eşlemesi çıkarılarak işlenir."""
+    KAP'ın rapor PDF'i vektörel tablo çizgileri değil, düz metin
+    hizalamasıyla oluşturulmuş - pdfplumber'ın grid tabanlı
+    extract_tables()'ı bu yüzden hiçbir satır bulamıyor (gerçek bir KAP
+    PDF'i üzerinde doğrulandı). Bunun yerine sayfa metnini satır satır
+    okuyup, "KOD PB ... GRUP% FPD% FTD%" biçimindeki menkul kıymet
+    satırlarını regex ile tanıyoruz - her satırın ilk iki token'ı
+    (kod + para birimi) ve son üç token'ı (yüzdeler) sabit kalıyor,
+    aradaki menkul kıymet unvanı/ISIN kaç satıra sarmış olursa olsun bu
+    ilk satırın tamamı tek satırda kalıyor."""
     totals: dict[str, float] = {}
-    found_table = False
 
     with pdfplumber.open(BytesIO(pdf_bytes)) as pdf:
         for page in pdf.pages:
-            for table in page.extract_tables() or []:
-                if not table:
+            text = page.extract_text() or ""
+            for line in text.split("\n"):
+                tokens = line.split()
+                if len(tokens) < 4:
                     continue
-                header_idx = None
-                for i, row in enumerate(table):
-                    first_cell = _normalize_cell(row[0] if row else "").upper()
-                    if "MENKUL" in first_cell and "KIYMET" in first_cell:
-                        header_idx = i
-                        break
-                if header_idx is None:
+                ticker = tokens[0].upper()
+                if not _TICKER_RE.match(ticker) or ticker in _NON_TICKER_LABELS:
                     continue
-
-                header = [_normalize_cell(c).upper() for c in table[header_idx]]
-                pct_col = None
-                for i, cell in enumerate(header):
-                    if "TOPLAM" in cell and "FTD" in cell and "GORE" in cell.replace("Ö", "O"):
-                        pct_col = i
-                if pct_col is None:
+                if not _CCY_RE.match(tokens[1]):
                     continue
 
-                found_table = True
-                for row in table[header_idx + 1:]:
-                    if len(row) <= pct_col:
-                        continue
-                    ticker = _normalize_cell(row[0]).upper()
-                    if not ticker or not re.match(r"^[A-ZÇĞİÖŞÜ0-9]{2,10}$", ticker):
-                        continue
-                    if ticker in _NON_TICKER_LABELS:
-                        continue
-                    pct = _parse_tr_number(row[pct_col])
-                    if pct is None:
-                        continue
-                    totals[ticker] = totals.get(ticker, 0.0) + pct
+                values = [_parse_tr_number(t) for t in tokens[-3:]]
+                if any(v is None for v in values):
+                    continue
+                ftd_pct = values[-1]  # sıra: GRUP(%), TOPLAM(FPD GÖRE), TOPLAM(FTD GÖRE)
+                if abs(ftd_pct) > 100:  # gerçek bir yüzde olamayacak kadar büyükse (ör. tutar sütunu) at
+                    continue
 
-    if not found_table:
-        raise KapFetchError(
-            "PDF içinde 'III-FON PORTFÖY DEĞERİ TABLOSU' bulunamadı - rapor formatı değişmiş olabilir."
-        )
+                totals[ticker] = totals.get(ticker, 0.0) + ftd_pct
+
     if not totals:
-        raise KapFetchError("PDF ayrıştırıldı ama hiçbir yatırım aracı satırı okunamadı.")
+        raise KapFetchError(
+            "PDF içinde 'III-FON PORTFÖY DEĞERİ TABLOSU' satırları okunamadı - rapor formatı değişmiş olabilir."
+        )
 
     ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:top_n]
     return [(code, round(pct, 2)) for code, pct in ranked]
