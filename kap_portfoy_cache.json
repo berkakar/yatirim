@@ -1,0 +1,39 @@
+{
+  "THF": {
+    "fund_name": "TERA PORTFÖY HİSSE SENEDİ (TL) FONU (HİSSE SENEDİ YOĞUN FON)",
+    "reports": [
+      {
+        "report_date": "02.09.2026",
+        "report_date_sort": "2026-09-02",
+        "period_label": "Ağustos 2026",
+        "disclosure_index": 1657113,
+        "holdings": [
+          [
+            "TERA",
+            8.63
+          ],
+          [
+            "KARCL",
+            7.49
+          ],
+          [
+            "TRHOL",
+            6.54
+          ],
+          [
+            "ANELE",
+            5.44
+          ],
+          [
+            "SELEC",
+            5.27
+          ],
+          [
+            "TEHOL",
+            4.85
+          ]
+        ]
+      }
+    ]
+  }
+}
