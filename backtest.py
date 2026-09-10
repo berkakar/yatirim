@@ -240,6 +240,21 @@ def _render_settings():
         if col.checkbox(TIMEFRAME_LABELS[tf], key=f"bt_tf_{tf}")
     ]
 
+    with st.expander("📅 Mum verisi hangi saatleri kapsıyor?"):
+        st.markdown(
+            "- **15 Dakika / 30 Dakika / 1 Saat:** Sadece normal seans (09:30-16:00 ET) "
+            "mumları kullanılır - canlı trailing-stop'un (`alpaca_trailing_stop.py`) "
+            "kullandığı aynı filtre burada da geçerli, pre-market/after-hours mumları hiç "
+            "dahil edilmez. Bu, backtest sonucunun canlı sistemin gerçekte ne yapacağını "
+            "yansıtmasını sağlamak için bilinçli bir tercih.\n"
+            "- **1 Gün** (ve trend/SMA200 filtresi için kullanılan günlük kapanışlar): "
+            "Alpaca'nın döndürdüğü günlük bar, ek bir seans filtresi uygulanmadan olduğu "
+            "gibi kullanılır - günlük barın kendi zaman damgasına 09:30-16:00 filtresini "
+            "uygulamak, barların tamamını yanlışlıkla eleyebilir. Alpaca'nın günlük barı "
+            "kendi tarafında pre-market/after-hours işlemlerini OHLC'ye dahil edip "
+            "etmediği doğrulanmadı; kod sadece geleni olduğu gibi aktarıyor."
+        )
+
     c1, c2, c3 = st.columns(3)
     days_of_data = c1.number_input(
         "Kaç günlük veri ile çalışılacak", min_value=5, max_value=1000, value=180, step=5,
