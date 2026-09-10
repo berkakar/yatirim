@@ -44,10 +44,14 @@ there, inert, until the next regular session. Run on its own schedule during
 the 04:00-09:30 and 16:00-20:00 ET windows, it replaces an already-breached
 stop with a day+extended_hours limit order - the only order type Alpaca lets
 execute outside regular hours - and sends a Telegram alert. If that emergency
-order itself expires unfilled at the session's end, point 1 above no longer
-resets to the naive initial % from scratch: last_trailed_stop_price lets it
-restore whatever level had actually been trailed to (as long as that history
-is recent enough to trust - see its own docstring).
+order itself expires unfilled at the session's end - leaving the position
+with nothing resting at all - the guard's own next run (its normal ~10min
+cadence, not the next regular session) notices via last_trailed_stop_price
+and re-establishes protection at the same level right away, marketable if
+price is still through it or passive (like a stand-in stop) if not. Only if
+that history isn't recent enough to trust either (see its own docstring)
+does the gap actually widen to the next regular session, where point 1
+above restores the same way.
 
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
@@ -395,52 +399,79 @@ def load_telegram_settings() -> tuple[str | None, str | None]:
 def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_id: str | None) -> None:
     """Normal bir "stop" emri şu an (extended hours) tetiklenemeyeceği için,
     fiyat zaten stop seviyesini kırmışsa onun yerine geçebilecek tek şeyi -
-    day+extended_hours bir limit emri - gönderir. Stop hâlâ korumadaysa
-    (henüz kırılmamışsa) hiçbir şey yapmaz.
+    day+extended_hours bir limit emri - gönderir.
 
-    Sınır: gönderilen limit emri o takvim günü (aynı gün içindeki normal
-    seansı da kapsayacak şekilde) 20:00 ET'de düşer. Seans bitene kadar
-    dolmazsa, sıradaki manage_position çağrısı get_open_stop_order'da hiçbir
-    şey bulamaz - ama artık INITIAL_STOP_PCT ile sıfırdan başlamıyor:
-    last_trailed_stop_price geçmişten (yeterince yakın zamanlıysa) trail
-    edilmiş son seviyeyi geri yüklüyor, o yüzden structure trail'in
-    kazandırdığı ilerleme genelde kaybolmuyor."""
+    İki durumu ayrı ayrı ele alır:
+
+    1. Resting bir stop var ve kırılmış: onu iptal edip yerine marketable
+       (küçük bir kayma payıyla) bir limit-sell gönderir - tıpkı önceki
+       davranış.
+    2. Ne resting bir stop ne de bu guard'ın bıraktığı başka bir çıkış emri
+       var (has_open_exit_order) - yani önceki acil limit emri seans
+       bitiminde dolmadan düşmüş ve pozisyon şu an TAMAMEN korumasız. Bunu
+       bir sonraki normal seans açılışına (manage_position'ın
+       last_trailed_stop_price ile geri yüklemesine) bırakmak yerine,
+       last_trailed_stop_price'tan (yeterince yakın zamanlıysa) aynı
+       seviyeyi hemen geri kurar: fiyat o seviyeyi henüz kırmamışsa sadece
+       normal bir stop'un yerini tutacak pasif bir limit (tam o seviyeden,
+       kayma payı gerekmiyor - zaten tetiklenmiş bir kırılma yok); zaten
+       kırmışsa aynı 1. durumdaki gibi marketable bir limit. Böylece kör
+       bölge, bir sonraki iş gününü değil, bir sonraki guard çalışmasını
+       (mevcut cron ile ~10 dk) bekliyor.
+
+    Stop hâlâ korumadaysa (henüz kırılmamışsa) ya da guard'ın önceki emri
+    hâlâ resting'se hiçbir şey yapmaz.
+
+    Kalan sınır: last_trailed_stop_price hiçbir güvenilir geçmiş bulamazsa
+    (gerçekten hiç stop'u olmamış bir pozisyon, ya da geçmiş
+    EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS'ten daha eski) burada da yapacak bir
+    şey yok - bu durumda kör bölge yine bir sonraki normal seansı bekler."""
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
     side = "long" if signed_qty > 0 else "short"
 
     stop_order = client.get_open_stop_order(symbol)
-    if stop_order is None:
-        return  # koruyacak resting bir stop yok (muhtemelen bu guard zaten devrede)
+    if stop_order is not None:
+        reference_price = float(stop_order["stop_price"])
+        resting_order_id = stop_order["id"]
+    elif client.has_open_exit_order(symbol, side):
+        return  # guard'ın önceki acil emri hâlâ resting - dokunma
+    else:
+        reference_price = last_trailed_stop_price(client, symbol)
+        if reference_price is None:
+            return  # ne resting emir ne güvenilir geçmiş var - yapacak bir şey yok
+        resting_order_id = None
 
-    stop_price = float(stop_order["stop_price"])
     last_price = client.get_latest_trade_price(symbol)
     if last_price is None:
         return
 
-    breached = last_price <= stop_price if side == "long" else last_price >= stop_price
+    breached = last_price <= reference_price if side == "long" else last_price >= reference_price
     if not breached:
-        return
-
-    if side == "long":
-        limit_price = round(min(stop_price, last_price) * (1 - EXTENDED_HOURS_SLIPPAGE_PCT), 2)
+        if resting_order_id is not None:
+            return  # resting stop hâlâ korumada ve kırılmamış - yapacak bir şey yok
+        # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, sadece normal
+        # stop'un yerini tutacak pasif bir limit koyuyoruz - tam referans
+        # seviyesinden (bir stop da zaten tam o fiyattan tetiklenirdi).
+        limit_price = round(reference_price, 2)
+    elif side == "long":
+        limit_price = round(min(reference_price, last_price) * (1 - EXTENDED_HOURS_SLIPPAGE_PCT), 2)
     else:
-        limit_price = round(max(stop_price, last_price) * (1 + EXTENDED_HOURS_SLIPPAGE_PCT), 2)
+        limit_price = round(max(reference_price, last_price) * (1 + EXTENDED_HOURS_SLIPPAGE_PCT), 2)
 
     try:
-        client.cancel_order(stop_order["id"])
-        time.sleep(1)  # cancel'ın hisseleri serbest bırakması için kısa bir pay
+        if resting_order_id is not None:
+            client.cancel_order(resting_order_id)
+            time.sleep(1)  # cancel'ın hisseleri serbest bırakması için kısa bir pay
         client.place_extended_hours_limit(symbol, qty, side, limit_price)
     except requests.HTTPError as e:
-        # Stop muhtemelen zaten iptal oldu ama yerine emir konamadı - pozisyon
-        # şu an gerçekten korumasız. Bunu sessizce geçmek yerine açıkça
-        # bildiriyoruz; sıradaki guard çalışması (birkaç dakika içinde) tekrar
-        # dener çünkü get_open_stop_order artık None dönecek, ama breach hâlâ
-        # sürüyorsa last_price/stop_price karşılaştırması bu kez de tutmaz -
-        # bu yüzden manuel müdahale gerekebilir.
+        # Varsa resting emir muhtemelen zaten iptal oldu ama yerine emir
+        # konamadı - pozisyon şu an gerçekten korumasız. Bunu sessizce
+        # geçmek yerine açıkça bildiriyoruz; sıradaki guard çalışması
+        # (birkaç dakika içinde) tekrar dener.
         msg = (
-            f"🚨 {symbol}: stop kırıldı ({last_price:.2f} vs {stop_price:.2f}) ama extended-hours "
+            f"🚨 {symbol}: stop kırıldı ({last_price:.2f} vs {reference_price:.2f}) ama extended-hours "
             f"limit emri gönderilirken hata alındı, pozisyon şu an KORUMASIZ olabilir: {e}"
         )
         log(msg)
@@ -451,12 +482,26 @@ def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_
                 pass
         return
 
-    msg = (
-        f"🚨 {symbol}: extended hours'ta son fiyat {last_price:.2f}, stopu ({stop_price:.2f}) kırdı. "
-        f"Normal stop bu seansta çalışamayacağı için iptal edildi; yerine day+extended-hours "
-        f"limit emri {limit_price:.2f} seviyesinden gönderildi. Dolarsa pozisyon kapanır; "
-        f"dolmadan seans biterse emir düşer ve piyasa açılışında olağan fallback stop devreye girer."
-    )
+    if resting_order_id is not None:
+        msg = (
+            f"🚨 {symbol}: extended hours'ta son fiyat {last_price:.2f}, stopu ({reference_price:.2f}) kırdı. "
+            f"Normal stop bu seansta çalışamayacağı için iptal edildi; yerine day+extended-hours "
+            f"limit emri {limit_price:.2f} seviyesinden gönderildi. Dolarsa pozisyon kapanır; "
+            f"dolmadan seans biterse emir düşer ve pozisyon tekrar korumasız kalır (bir sonraki guard "
+            f"çalışması bunu last_trailed_stop_price ile yeniden kurmayı dener)."
+        )
+    elif breached:
+        msg = (
+            f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
+            f"Son fiyat {last_price:.2f}, son bilinen seviyeyi ({reference_price:.2f}) hâlâ aşmış "
+            f"durumda - yerine day+extended-hours limit emri {limit_price:.2f} seviyesinden gönderildi."
+        )
+    else:
+        msg = (
+            f"⚠️ {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
+            f"Son fiyat {last_price:.2f} son bilinen seviyeyi ({reference_price:.2f}) henüz aşmamış - "
+            f"yerine (stop'un yerini tutacak) day+extended-hours limit emri aynı seviyeden yeniden kuruldu."
+        )
     log(msg)
     if bot_token and chat_id:
         try:
