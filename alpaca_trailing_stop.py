@@ -43,11 +43,11 @@ pre-market/after-hours move can push price through it while it just sits
 there, inert, until the next regular session. Run on its own schedule during
 the 04:00-09:30 and 16:00-20:00 ET windows, it replaces an already-breached
 stop with a day+extended_hours limit order - the only order type Alpaca lets
-execute outside regular hours - and sends a Telegram alert. See its own
-docstring for the residual limitation (an unfilled emergency order still
-expires at the session's end, and manage_position's fallback stop above
-would then reset to the naive initial %, not the level that had been
-trailed to).
+execute outside regular hours - and sends a Telegram alert. If that emergency
+order itself expires unfilled at the session's end, point 1 above no longer
+resets to the naive initial % from scratch: last_trailed_stop_price lets it
+restore whatever level had actually been trailed to (as long as that history
+is recent enough to trust - see its own docstring).
 
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
@@ -104,6 +104,13 @@ TOP_UP_STOP_MODE_DEFAULT = "keep"
 PRE_MARKET_START = dtime(4, 0)
 AFTER_HOURS_END = dtime(20, 0)
 EXTENDED_HOURS_SLIPPAGE_PCT = float(os.environ.get("TRADE_EXTENDED_HOURS_SLIPPAGE_PCT", "0.5")) / 100
+# manage_position, resting stop bulamadığında (bkz. last_trailed_stop_price)
+# geçmişteki son stop emrini ancak bu kadar yakın zamanlıysa güvenilir sayar
+# - aksi halde sembolün GEÇMİŞTE (haftalar/aylar önce) kapanmış bambaşka bir
+# pozisyonuna ait eski bir stop, şimdiki (muhtemelen bambaşka bir giriş
+# fiyatındaki) pozisyona yanlışlıkla uygulanabilir. Bir hafta sonu/3 günlük
+# tatili rahatça kapsayacak kadar geniş tutuldu.
+EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS = float(os.environ.get("TRADE_EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS", "5"))
 
 # fon_hisse_uyari.py'nin de kullandığı aynı tek-kullanıcı bildirim ayarları
 # dosyası ve TELEGRAM_BOT_TOKEN secret'ı - ayrı bir konfigürasyona gerek yok.
@@ -202,6 +209,28 @@ def seconds_until_open(clock: dict) -> float:
     return max(0.0, (next_open - datetime.now(timezone.utc)).total_seconds())
 
 
+def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
+    """En son (open/replaced/canceled/expired fark etmez) stop emrinin
+    fiyatı - ama sadece yakın zamanda (EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS
+    içinde) kurulmuşsa; aksi halde None. manage_position, resting bir stop
+    bulamadığında koruma seviyesini INITIAL_STOP_PCT'e sıfırlamak yerine
+    buradan trail edilmiş son seviyeyi geri yükleyebilmesi için var - en
+    tipik senaryo, extended-hours guard'ın acil limit emrinin seans
+    bitiminde dolmadan düşmesi.
+
+    get_management_start'taki gibi, API'nin direction="desc" sıralamasına
+    güvenmek yerine dönen kayıtlar arasından en yeni created_at'i elle
+    buluyor."""
+    history = client.get_stop_order_history(symbol)
+    if not history:
+        return None
+    latest = max(history, key=lambda o: _parse_iso(o["created_at"]))
+    age = datetime.now(timezone.utc) - _parse_iso(latest["created_at"])
+    if age > timedelta(days=EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS):
+        return None
+    return float(latest["stop_price"])
+
+
 def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT) -> None:
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
@@ -222,13 +251,27 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
             log(f"{symbol}: resting stop yok ama başka bir çıkış emri açık "
                 f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
             return
-        if side == "long":
-            initial_stop = entry_price * (1 - INITIAL_STOP_PCT)
+
+        naive_stop = entry_price * (1 - INITIAL_STOP_PCT) if side == "long" else entry_price * (1 + INITIAL_STOP_PCT)
+        restored = last_trailed_stop_price(client, symbol)
+        if restored is not None:
+            # Extended-hours guard'ın bıraktığı acil limit emri seans
+            # bitiminde dolmadan düşmüş olabilir - bu durumda structure
+            # trail'in kazandırdığı ilerlemeyi INITIAL_STOP_PCT'e sıfırlamak
+            # yerine, son bilinen trail seviyesini geri yüklüyoruz. İki
+            # adaydan (restored, naive) gerçekten sıkı olanı seçiliyor -
+            # aşağıdaki candidate seçimindeki "en çok sıkılaştıran" kuralıyla
+            # aynı mantık.
+            initial_stop = max(restored, naive_stop) if side == "long" else min(restored, naive_stop)
+            reason = f"son trail edilmiş seviye ({restored:.2f}) geri yüklendi"
         else:
-            initial_stop = entry_price * (1 + INITIAL_STOP_PCT)
+            initial_stop = naive_stop
+            reason = "geçmişte yakın zamanlı bir stop yok, naif ilk stop"
+
         stop_order = client.place_stop_order(symbol, qty, side, initial_stop)
-        log(f"{symbol}: no resting stop found (not opened as a bracket order here), "
-            f"placed fallback initial stop at {initial_stop:.2f} (entry {entry_price:.2f}).")
+        log(f"{symbol}: no resting stop found (not opened as a bracket order here, or "
+            f"extended-hours guard emri seans bitiminde dolmadan düştü) - {reason}: "
+            f"{initial_stop:.2f} (entry {entry_price:.2f}).")
     else:
         stop_qty = float(stop_order["qty"])
         if abs(stop_qty - qty) > 1e-9:
@@ -358,11 +401,10 @@ def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_
     Sınır: gönderilen limit emri o takvim günü (aynı gün içindeki normal
     seansı da kapsayacak şekilde) 20:00 ET'de düşer. Seans bitene kadar
     dolmazsa, sıradaki manage_position çağrısı get_open_stop_order'da hiçbir
-    şey bulamaz ve fallback stop'u INITIAL_STOP_PCT ile entry_price'tan
-    yeniden kurar - o ana kadar structure trail'in kazandırdığı ilerleme
-    (varsa) kaybolur. Bunu tamamen önlemek, trail seviyesini script
-    çalıştırmaları arasında ayrıca kalıcı hale getirmeyi gerektirir; bu
-    mekanizmanın kapsamı, tam korumasız kalmayı önlemekle sınırlı."""
+    şey bulamaz - ama artık INITIAL_STOP_PCT ile sıfırdan başlamıyor:
+    last_trailed_stop_price geçmişten (yeterince yakın zamanlıysa) trail
+    edilmiş son seviyeyi geri yüklüyor, o yüzden structure trail'in
+    kazandırdığı ilerleme genelde kaybolmuyor."""
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
