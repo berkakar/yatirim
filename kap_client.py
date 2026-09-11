@@ -165,7 +165,7 @@ _NON_TICKER_LABELS = {
 }
 
 
-def parse_top_holdings_from_pdf(pdf_bytes: bytes, top_n: int = 6) -> list[tuple[str, float]]:
+def parse_top_holdings_from_pdf(pdf_bytes: bytes, top_n: int = 10) -> list[tuple[str, float]]:
     """"III-FON PORTFÖY DEĞERİ TABLOSU"nu ayrıştırır: her menkul kıymet
     satırının "TOPLAM (FTD GÖRE)" (Toplam Fon Değerine Göre) yüzdesini
     okur, aynı kod altında birden fazla lot varsa toplar, en büyük `top_n`
@@ -240,7 +240,7 @@ def find_latest_report_meta(fund_code: str, fund_name: str, days: int = 365) -> 
     return _report_meta(reports[0])
 
 
-def fetch_holdings_for_report(disclosure_index: int, top_n: int = 6) -> list[tuple[str, float]]:
+def fetch_holdings_for_report(disclosure_index: int, top_n: int = 10) -> list[tuple[str, float]]:
     """Verilen bildirimin ekli PDF'ini indirip en büyük `top_n` yatırım
     aracını (kod, yüzde) olarak döner."""
     download_url, _filename = fetch_attachment_link(disclosure_index)
@@ -248,7 +248,7 @@ def fetch_holdings_for_report(disclosure_index: int, top_n: int = 6) -> list[tup
     return parse_top_holdings_from_pdf(pdf_bytes, top_n=top_n)
 
 
-def get_latest_top_holdings(fund_code: str, fund_name: str, top_n: int = 6, days: int = 365) -> dict:
+def get_latest_top_holdings(fund_code: str, fund_name: str, top_n: int = 10, days: int = 365) -> dict:
     """Uçtan uca: fon kodu+unvanından KAP raporunu bulur, indirir, ayrıştırır.
 
     Döner: {"report_date": "02.09.2026", "report_date_sort": "2026-09-02",

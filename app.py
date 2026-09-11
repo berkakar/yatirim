@@ -1081,7 +1081,7 @@ elif module == "Türk Fonları":
 # ==============================================================================
 elif module == "Fonlarım":
     st.header("💼 Fonlarım")
-    st.caption("Elinizde bulunan fonları kaydedin; her fon için KAP'tan çekilen en büyük 6 yatırım aracının yüzdesini takip edin.")
+    st.caption("Elinizde bulunan fonları kaydedin; her fon için KAP'tan çekilen en büyük 10 yatırım aracının yüzdesini takip edin.")
     render_turk_fonlari_takip(username)
 
 # ==============================================================================

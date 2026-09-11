@@ -1,4 +1,4 @@
-"""Fonlarım modülünde takip edilen fonların en büyük 6 hissesinden biri
+"""Fonlarım modülünde takip edilen fonların en büyük 10 hissesinden biri
 günlük bazda kullanıcının belirlediği eşiğin altına düşerse Telegram
 bildirimi gönderir.
 
@@ -6,13 +6,17 @@ GitHub Actions tarafından BIST işlem saatlerinde periyodik çalıştırılır
 (bkz. .github/workflows/fon_hisse_uyari.yml). Her kullanıcının takip
 listesi (takip_fonlari_<kullanıcı>.json), bildirim ayarları
 (bildirim_ayarlari_<kullanıcı>.json) ve fonların KAP'tan çekilmiş en
-büyük 6 hissesi (kap_portfoy_cache.json) doğrudan repo checkout'undan
+büyük 10 hissesi (kap_portfoy_cache.json) doğrudan repo checkout'undan
 okunur - Streamlit tarafı bunları zaten GitHub'a commit'liyor (bkz.
 turk_fonlari_takip_data.py, bildirim_data.py).
 
-Aynı gün içinde aynı kullanıcı+hisse için tekrar tekrar bildirim
-gönderilmemesi için günlük bir "gönderildi" durumu (bildirim_durumu.json)
-tutulur.
+Aynı durumun tekrar tekrar bildirilmemesi için (ör. 5 dakikada bir aynı
+%-4 düşüş için spam atılmasın diye) her kullanıcı+hisse için en son
+gönderilen düşüş yüzdesi (bildirim_durumu.json) tutulur - bir hisse için
+yeni kontrol, son gönderilenle AYNI yüzdeyi buluyorsa bildirim
+atlanır; yüzde değiştiyse (düşüş derinleştiyse ya da azaldıysa) yeniden
+gönderilir. Hisse eşiğin üzerine çıkıp (düşüş toparlanıp) tekrar
+düşerse, aynı yüzdeye denk gelse bile "yeni" bir olay sayılıp bildirilir.
 
 Run with --once (GitHub Actions workflow'u tarafından kullanılır).
 """
@@ -21,7 +25,7 @@ import glob
 import json
 import os
 import re
-from datetime import date, datetime
+from datetime import datetime
 
 import yfinance as yf
 
@@ -84,13 +88,9 @@ def _daily_change_pct(ticker: str) -> float | None:
     return None
 
 
-def _todays_state() -> dict:
-    state = _load_json(STATE_FILE, {})
-    today = date.today().isoformat()
-    if state.get("date") != today:
-        return {"date": today, "notified": {}}
-    state.setdefault("notified", {})
-    return state
+def _load_state() -> dict:
+    """{"kullanıcı": {"HİSSE": son_gönderilen_yüzde, ...}, ...}"""
+    return _load_json(STATE_FILE, {})
 
 
 def run_once() -> None:
@@ -100,7 +100,7 @@ def run_once() -> None:
         return
 
     portfolio_cache = _load_json("kap_portfoy_cache.json", {})
-    state = _todays_state()
+    state = _load_state()
 
     # username -> {ticker: [(fund_code, weight_pct), ...]}
     user_ticker_funds: dict[str, dict[str, list[tuple[str, float]]]] = {}
@@ -135,43 +135,58 @@ def run_once() -> None:
     if not bot_token:
         log("TELEGRAM_BOT_TOKEN tanımlı değil, bildirim gönderilemeyecek.")
 
+    new_state: dict[str, dict[str, float]] = {}
+
     for username, ticker_funds in user_ticker_funds.items():
         settings = user_settings[username]
         threshold = settings.get("loss_threshold_pct", DEFAULT_LOSS_THRESHOLD_PCT)
-        already_notified = set(state["notified"].get(username, []))
+        prev_notified = state.get(username, {})
 
-        breaches = []
+        # Şu an eşiği aşan tüm hisseler (yüzdesiyle) - hisse toparlanıp
+        # eşiğin üzerine çıktığında burada yer almaz, böylece durumdan da
+        # düşer (bir dahaki düşüşte "yeni" olay sayılır).
+        currently_breaching: dict[str, float] = {}
+        changed = []
         for ticker, funds in ticker_funds.items():
             change = changes.get(ticker)
-            if change is None or change > threshold or ticker in already_notified:
+            if change is None or change > threshold:
                 continue
-            breaches.append((ticker, change, funds))
+            currently_breaching[ticker] = change
+            if prev_notified.get(ticker) != change:
+                changed.append((ticker, change, funds))
 
-        if not breaches:
+        if not changed:
+            new_state[username] = currently_breaching
             continue
 
         lines = [f"⚠️ Fonlarım Uyarısı - Günlük Kayıp Eşiği (%{threshold}) Aşıldı\n"]
-        for ticker, change, funds in sorted(breaches, key=lambda b: b[1]):
+        for ticker, change, funds in sorted(changed, key=lambda c: c[1]):
             fund_desc = ", ".join(f"{code} (%{weight})" for code, weight in funds)
             lines.append(f"• {ticker}: %{change} - {fund_desc}")
         message = "\n".join(lines)
 
+        sent_ok = False
         if not bot_token:
-            log(f"{username} için {len(breaches)} eşik aşımı var ama bot token yok, atlanıyor.")
-            continue
+            log(f"{username} için {len(changed)} değişiklik var ama bot token yok, atlanıyor.")
+        else:
+            try:
+                send_telegram_message(bot_token, settings["telegram_chat_id"], message)
+                sent_ok = True
+            except TelegramError as e:
+                log(f"{username} için Telegram bildirimi gönderilemedi: {e}")
 
-        try:
-            send_telegram_message(bot_token, settings["telegram_chat_id"], message)
-        except TelegramError as e:
-            log(f"{username} için Telegram bildirimi gönderilemedi: {e}")
-            continue
-
-        log(f"{username} için {len(breaches)} hisse bildirimi gönderildi: {[b[0] for b in breaches]}")
-        state["notified"].setdefault(username, [])
-        state["notified"][username].extend(ticker for ticker, _, _ in breaches)
+        if sent_ok:
+            new_state[username] = currently_breaching
+            log(f"{username} için {len(changed)} hisse bildirimi gönderildi: {[c[0] for c in changed]}")
+        else:
+            # Gönderim başarısız oldu - değişen hisseleri eski değerleriyle
+            # bırak ki bir sonraki çalıştırmada tekrar "değişmiş" sayılıp
+            # yeniden denensin; sadece artık eşiği aşmayanları (toparlananları)
+            # durumdan düş.
+            new_state[username] = {t: v for t, v in prev_notified.items() if t in currently_breaching}
 
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+        json.dump(new_state, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@ kaydedip takip edebildiği modülün kalıcılık katmanı.
 İki ayrı veri var:
   - Takip edilen fon listesi: kullanıcıya özel (bkz. config.py'deki
     save_ticker_lists ile aynı GitHub + yerel dosya yedekleme deseni).
-  - KAP'tan çekilen "en büyük 6 yatırım aracı" önbelleği: fon koduna göre,
+  - KAP'tan çekilen "en büyük 10 yatırım aracı" önbelleği: fon koduna göre,
     TÜM kullanıcılar arasında PAYLAŞILAN tek bir dosya (tefas_fonlari_cache.json
     gibi - veri kullanıcıya değil foruna ait). Her fon için gelen yeni rapor,
     eskisini silmeden "reports" listesine eklenir (geçmiş tarihli raporlar

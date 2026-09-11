@@ -1,7 +1,7 @@
 """Kullanıcının elinde bulunan (alım yaptığı) Türk fonlarını kaydedip
 takip edebildiği modül.
 
-Kaydedilen her fon için, fonu oluşturan en büyük 6 yatırım aracının
+Kaydedilen her fon için, fonu oluşturan en büyük 10 yatırım aracının
 yüzdeleri KAP'ın (Kamuyu Aydınlatma Platformu) "Portföy Dağılım Raporu"
 bildiriminden (bkz. kap_client.py) çekilir. Zaten önbellekte olan bir
 rapor tarihi için tekrar KAP'a gidilmez; yeni bir rapor tarihi geldiğinde
@@ -66,9 +66,11 @@ def _render_notification_settings(username: str) -> None:
     st.divider()
     st.subheader("🔔 Bildirim Ayarları")
     st.caption(
-        "Takip ettiğiniz fonların en büyük 6 hissesinden biri günlük bazda belirlediğiniz "
+        "Takip ettiğiniz fonların en büyük 10 hissesinden biri günlük bazda belirlediğiniz "
         "eşiğin altına düşerse Telegram üzerinden bildirim alırsınız. Kontrol, GitHub Actions "
-        "ile BIST işlem saatlerinde periyodik yapılır - anlık değildir."
+        "ile BIST işlem saatlerinde 5 dakikada bir yapılır; bir hissenin düşüş yüzdesi bir "
+        "önceki bildirime göre değişmediyse tekrar bildirim gönderilmez, sadece değiştiğinde "
+        "(derinleştiğinde ya da toparlanıp tekrar düştüğünde) yeniden bildirilir."
     )
 
     settings = st.session_state.bildirim_ayarlari
@@ -138,7 +140,7 @@ def _render_notification_settings(username: str) -> None:
 def render_turk_fonlari_takip(username: str) -> None:
     st.caption(
         "Elinizde bulunan fonları kodlarıyla ekleyin; her fon için KAP'ın periyodik "
-        "\"Portföy Dağılım Raporu\" bildiriminden en büyük 6 yatırım aracının yüzdesi "
+        "\"Portföy Dağılım Raporu\" bildiriminden en büyük 10 yatırım aracının yüzdesi "
         "çekilir. Daha önce çekilmiş bir rapor önbellekte varsa tekrar KAP'a gidilmez; "
         "yeni bir rapor yayınlandığında eskisi silinmeden aynı hücreye ilave satır olarak eklenir."
     )
@@ -219,7 +221,7 @@ def render_turk_fonlari_takip(username: str) -> None:
         column_config={
             "Fon Kodu": st.column_config.TextColumn("Fon Kodu", width="small"),
             "Fon Adı": st.column_config.TextColumn("Fon Adı", width="medium"),
-            "Yatırım Yüzdeleri": st.column_config.TextColumn("Yatırım Yüzdeleri (en büyük 6 yatırım aracı)", width="large"),
+            "Yatırım Yüzdeleri": st.column_config.TextColumn("Yatırım Yüzdeleri (en büyük 10 yatırım aracı)", width="large"),
         },
         use_container_width=True,
         hide_index=True,
