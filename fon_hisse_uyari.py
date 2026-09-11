@@ -29,6 +29,7 @@ from datetime import datetime
 
 import yfinance as yf
 
+from tefas_client import fetch_fund_daily_change_pct
 from telegram_notify import TelegramError, send_telegram_message
 
 STATE_FILE = "bildirim_durumu.json"
@@ -70,7 +71,13 @@ def _latest_holdings(portfolio_cache: dict, fund_code: str) -> list[tuple[str, f
 
 def _daily_change_pct(ticker: str) -> float | None:
     """BIST hissesinin günlük (bir önceki kapanışa göre) değişim yüzdesini
-    döner - piyasa açıksa şu anki fiyatı, kapalıysa son kapanışı kullanır."""
+    döner - piyasa açıksa şu anki fiyatı, kapalıysa son kapanışı kullanır.
+
+    KAP'taki "en büyük yatırım aracı" listesinde bazen bir BIST hissesi
+    değil, aynı portföy yönetim şirketinin başka bir TEFAS fonu (fon
+    içinde fon pozisyonu) çıkabilir - bu ticker'lar Yahoo Finance'te
+    bulunamaz, bu yüzden yfinance başarısız olursa TEFAS fon fiyatı
+    üzerinden aynı hesap yedek olarak denenir."""
     for symbol in (f"{ticker}.IS", ticker):
         try:
             hist = yf.Ticker(symbol).history(period="5d", interval="1d")
@@ -85,7 +92,11 @@ def _daily_change_pct(ticker: str) -> float | None:
         if prev_close == 0:
             continue
         return round((last_close - prev_close) / prev_close * 100, 2)
-    return None
+
+    try:
+        return fetch_fund_daily_change_pct(ticker)
+    except Exception:
+        return None
 
 
 def _load_state() -> dict:

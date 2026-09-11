@@ -107,11 +107,10 @@ def _fetch_chunk(session: requests.Session, start: date, end: date, kind: str) -
     return parsed
 
 
-def fetch_fund_by_code(code: str, lookback_days: int = 10) -> dict | None:
-    """Verilen fon kodunun en güncel fiyat/unvan bilgisini döner (fon yoksa None).
-    Hafta sonu/resmi tatil günlerini atlayabilmek için son `lookback_days` günü
-    tarar, en güncel tarihli satırı döner - aşağıdaki toplu fetch_fund_info'nun
-    aksine (tüm YAT fonları) tek bir fonu (fonKodu filtresiyle) hedefler."""
+def _fetch_fund_rows(code: str, lookback_days: int) -> list[dict]:
+    """Tek bir fon kodu için son `lookback_days` içindeki günlük satırları
+    (tarihe göre eskiden yeniye sıralı) döner - fetch_fund_by_code ve
+    fetch_fund_daily_change_pct'nin paylaştığı istek mantığı."""
     session = requests.Session()
     end = date.today()
     start = end - timedelta(days=lookback_days)
@@ -143,11 +142,33 @@ def fetch_fund_by_code(code: str, lookback_days: int = 10) -> dict | None:
         raise RuntimeError(f"TEFAS API hatası: {err_msg} (kod: {err_code})")
 
     rows = data.get("resultList") or []
-    if not rows:
-        return None
     parsed = [{name: row.get(short) for short, name in INFO_FIELDS.items()} for row in rows]
     parsed.sort(key=lambda r: str(r.get("date") or ""))
-    return parsed[-1]
+    return parsed
+
+
+def fetch_fund_by_code(code: str, lookback_days: int = 10) -> dict | None:
+    """Verilen fon kodunun en güncel fiyat/unvan bilgisini döner (fon yoksa None).
+    Hafta sonu/resmi tatil günlerini atlayabilmek için son `lookback_days` günü
+    tarar, en güncel tarihli satırı döner - aşağıdaki toplu fetch_fund_info'nun
+    aksine (tüm YAT fonları) tek bir fonu (fonKodu filtresiyle) hedefler."""
+    rows = _fetch_fund_rows(code, lookback_days)
+    return rows[-1] if rows else None
+
+
+def fetch_fund_daily_change_pct(code: str, lookback_days: int = 10) -> float | None:
+    """Verilen TEFAS fon kodunun günlük (bir önceki güne göre) fiyat değişim
+    yüzdesini döner - fon bulunamazsa veya en az 2 günlük fiyat verisi yoksa
+    None döner. fon_hisse_uyari.py'de, bir fonun portföyündeki "en büyük
+    yatırım aracı" aslında BIST hissesi değil de başka bir TEFAS fonuysa
+    (ör. bir fon-içinde-fon pozisyonu) yfinance'e yedek olarak kullanılır."""
+    rows = _fetch_fund_rows(code, lookback_days)
+    if len(rows) < 2:
+        return None
+    prev_price, last_price = rows[-2].get("price"), rows[-1].get("price")
+    if not prev_price or not last_price:
+        return None
+    return round((float(last_price) - float(prev_price)) / float(prev_price) * 100, 2)
 
 
 def fetch_fund_info(start: date, end: date, kind: str = "YAT") -> list[dict]:
