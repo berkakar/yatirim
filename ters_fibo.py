@@ -47,6 +47,20 @@ class TersFiboChannel:
         return base - ratio * self.amplitude
 
 
+@dataclass(frozen=True)
+class TersFiboAnalysis:
+    """find_channel'ın döndürdüğü son kanalın yanında, onu oluşturan ara
+    adımları da taşır (pivotlar, zigzag, dip/tepe hatları) - grafik
+    çizimi gibi görselleştirme ihtiyaçları için. bkz. analyze()."""
+    pivots: list[Pivot]
+    zigzag: list[Pivot]
+    highs: list[Pivot]
+    validated_lows: list[Pivot]
+    dip_line: tuple[float, float]   # (slope, intercept)
+    peak_line: tuple[float, float]  # (slope, intercept)
+    channel: TersFiboChannel
+
+
 def _zigzag(pivots: list[Pivot]) -> list[Pivot]:
     """Ardışık aynı yönlü pivotları (üst üste iki tepe/iki dip) daha
     belirgin (daha yüksek tepe / daha düşük dip) olanla birleştirip
@@ -80,9 +94,10 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
     return slope, intercept
 
 
-def find_channel(bars: list[Bar], order: int = 2, symmetry_tolerance: int = 1) -> TersFiboChannel | None:
-    """Verilen bar serisinde Ters Fibo kanalını kurar, yeterli/uygun yapı
-    yoksa None döner."""
+def analyze(bars: list[Bar], order: int = 2, symmetry_tolerance: int = 1) -> TersFiboAnalysis | None:
+    """Ters Fibo kanalını, onu oluşturan ara adımlarla (pivotlar, zigzag,
+    dip/tepe hatları) birlikte döner; yeterli/uygun yapı yoksa None.
+    Sadece son kanal yetiyorsa bkz. find_channel()."""
     pivots = find_pivots(bars, order)
     zz = _zigzag(pivots)
     highs = [p for p in zz if p.kind == "high"]
@@ -124,8 +139,34 @@ def find_channel(bars: list[Bar], order: int = 2, symmetry_tolerance: int = 1) -
         return None  # beklenen yapı (ilk tepe, dönüm noktasından yüksek) bozulmuş
 
     channel_slope = (first_peak.price - turning_price) / (first_peak.index - turning_index)
-    return TersFiboChannel(
+    channel = TersFiboChannel(
         turning_index=turning_index, turning_price=turning_price,
         first_peak_index=first_peak.index, first_peak_price=first_peak.price,
         slope=channel_slope, amplitude=amplitude,
     )
+    return TersFiboAnalysis(
+        pivots=pivots, zigzag=zz, highs=highs, validated_lows=validated_lows,
+        dip_line=dip_fit, peak_line=peak_fit, channel=channel,
+    )
+
+
+def find_channel(bars: list[Bar], order: int = 2, symmetry_tolerance: int = 1) -> TersFiboChannel | None:
+    """Verilen bar serisinde Ters Fibo kanalını kurar, yeterli/uygun yapı
+    yoksa None döner."""
+    result = analyze(bars, order, symmetry_tolerance)
+    return result.channel if result else None
+
+
+def nearest_support_below(
+    channel: TersFiboChannel, index: int, price: float,
+    ratios: tuple[float, ...] = (0.236, 0.382, 0.5, 0.618, 0.786, 1.0),
+) -> tuple[float, float] | None:
+    """Verilen `price`'ın altında kalan kanal seviyelerinden fiyata en
+    yakın olanını (ratio, level) olarak döner - henüz bir dokunuş/alım
+    sinyali oluşmamışsa "muhtemel alım noktası" için kullanılır. Hiçbir
+    seviye fiyatın altında değilse None."""
+    below = [(r, channel.level(r, index)) for r in ratios]
+    below = [(r, lvl) for r, lvl in below if lvl < price]
+    if not below:
+        return None
+    return max(below, key=lambda rl: rl[1])
