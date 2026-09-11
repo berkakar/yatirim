@@ -35,5 +35,42 @@
         ]
       }
     ]
+  },
+  "DOH": {
+    "fund_name": "TERA PORTFÖY DÖRDÜNCÜ HİSSE SENEDİ SERBEST (TL) FON (HİSSE SENEDİ YOĞUN FON)",
+    "reports": [
+      {
+        "report_date": "09.09.2026",
+        "report_date_sort": "2026-09-09",
+        "period_label": "35 2026",
+        "disclosure_index": 1661174,
+        "holdings": [
+          [
+            "DSTKF",
+            21.13
+          ],
+          [
+            "T3B",
+            9.01
+          ],
+          [
+            "TERA",
+            6.67
+          ],
+          [
+            "KARCL",
+            5.23
+          ],
+          [
+            "GESAN",
+            4.98
+          ],
+          [
+            "SELEC",
+            4.77
+          ]
+        ]
+      }
+    ]
   }
 }
