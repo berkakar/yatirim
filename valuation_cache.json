@@ -3304,9 +3304,9 @@
       "Hisse": "MU",
       "Alt Sektör (İş Modeli)": "Semiconductors",
       "Ana Sektör": "Technology",
-      "F/K": 21.1,
-      "PD/DD": 10.46,
-      "FD/FAVÖK": 15.15,
+      "F/K": 22.02,
+      "PD/DD": 10.93,
+      "FD/FAVÖK": 15.86,
       "PEG": 0.14,
       "EPS Büyümesi %": 1368.5,
       "Gelir Büyümesi %": 345.7,
@@ -3322,7 +3322,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-28"
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-13"
   },
   "SNPS": {
     "raw": {
@@ -5104,8 +5104,8 @@
       "Hisse": "XLF",
       "Alt Sektör (İş Modeli)": "Diğer",
       "Ana Sektör": "Diğer",
-      "F/K": 17.0,
-      "PD/DD": 1.71,
+      "F/K": 16.23,
+      "PD/DD": 1.68,
       "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
@@ -5122,7 +5122,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-13"
   },
   "XLE": {
     "raw": {
@@ -5172,7 +5172,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-13"
   },
   "ANET": {
     "raw": {
@@ -5448,5 +5448,105 @@
       "_most_recent_quarter": null
     },
     "cached_at": "2026-09-07"
+  },
+  "ONTO": {
+    "raw": {
+      "Hisse": "ONTO",
+      "Alt Sektör (İş Modeli)": "Semiconductor Equipment & Materials",
+      "Ana Sektör": "Technology",
+      "F/K": 105.34,
+      "PD/DD": 7.17,
+      "FD/FAVÖK": 43.34,
+      "PEG": 0.8,
+      "EPS Büyümesi %": 75.4,
+      "Gelir Büyümesi %": 35.3,
+      "Öz Sermaye Getirisi (ROE) %": 6.83,
+      "Net Kar Marjı %": 11.84,
+      "Brüt Kar Marjı %": 55.49,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": 4.81,
+      "Borç / Özsermaye": 0.77,
+      "Borç / Varlık %": null,
+      "Cari Oran": 9.73,
+      "Likidite Oranı": 8.17,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-13"
+  },
+  "LLY": {
+    "raw": {
+      "Hisse": "LLY",
+      "Alt Sektör (İş Modeli)": "Drug Manufacturers - General",
+      "Ana Sektör": "Healthcare",
+      "F/K": 37.45,
+      "PD/DD": 29.36,
+      "FD/FAVÖK": 24.95,
+      "PEG": 1.1,
+      "EPS Büyümesi %": 26.2,
+      "Gelir Büyümesi %": 47.7,
+      "Öz Sermaye Getirisi (ROE) %": 102.29,
+      "Net Kar Marjı %": 33.53,
+      "Brüt Kar Marjı %": 83.4,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": 20.36,
+      "Borç / Özsermaye": 1.62,
+      "Borç / Varlık %": null,
+      "Cari Oran": 1.35,
+      "Likidite Oranı": 0.68,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-13"
+  },
+  "TE": {
+    "raw": {
+      "Hisse": "TE",
+      "Alt Sektör (İş Modeli)": "Electrical Equipment & Parts",
+      "Ana Sektör": "Industrials",
+      "F/K": null,
+      "PD/DD": 6.41,
+      "FD/FAVÖK": null,
+      "PEG": null,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": 88.4,
+      "Öz Sermaye Getirisi (ROE) %": -124.45,
+      "Net Kar Marjı %": -38.48,
+      "Brüt Kar Marjı %": 5.9,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": -7.93,
+      "Borç / Özsermaye": 2.83,
+      "Borç / Varlık %": null,
+      "Cari Oran": 1.3,
+      "Likidite Oranı": 0.47,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-13"
+  },
+  "DVA": {
+    "raw": {
+      "Hisse": "DVA",
+      "Alt Sektör (İş Modeli)": "Medical Care Facilities",
+      "Ana Sektör": "Healthcare",
+      "F/K": 15.39,
+      "PD/DD": null,
+      "FD/FAVÖK": 9.25,
+      "PEG": 0.44,
+      "EPS Büyümesi %": 55.8,
+      "Gelir Büyümesi %": 5.2,
+      "Öz Sermaye Getirisi (ROE) %": 88.48,
+      "Net Kar Marjı %": 6.05,
+      "Brüt Kar Marjı %": 32.36,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": 7.51,
+      "Borç / Özsermaye": 12.42,
+      "Borç / Varlık %": null,
+      "Cari Oran": 1.47,
+      "Likidite Oranı": 1.33,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-13"
   }
 }
