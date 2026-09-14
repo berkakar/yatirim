@@ -183,12 +183,16 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     edited_weights = pd.DataFrame(columns=["Hisse", "Ağırlık %"])
     if selected_symbols:
+        existing_weights = config.get("weights") or {}
+
         def _default_weight_pct(symbol: str) -> float:
             # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için GERÇEK güncel
             # ağırlığı (yatırılan tutar = adet × ortalama giriş / bütçe) gösterir -
             # böylece bu alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve
             # top-up için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
-            # hisseler için varsayılan 0'dır - siz elle doldurursunuz.
+            # ama daha önce kaydedilmiş bir ağırlığı olan hisseler o kayıtlı
+            # değeri korur. Daha önce hiç kaydedilmemiş (örn. Alım Bölgesi
+            # Tarama'dan yeni aktarılmış) hisseler için varsayılan 0'dır.
             try:
                 position = client.get_position(symbol)
             except Exception:
@@ -196,7 +200,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             if position is not None and budget > 0:
                 invested = float(position["qty"]) * float(position["avg_entry_price"])
                 return round(invested / budget * 100, 2)
-            return 0.0
+            return float(existing_weights.get(symbol, 0.0))
 
         weight_df = pd.DataFrame({
             "Hisse": selected_symbols,
