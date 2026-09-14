@@ -131,14 +131,21 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     # Alım Bölgesi Tarama sayfasından "Aktar" ile gelen hisseler - tek seferlik
     # olarak tüketilir, tekrar bu sayfaya dönüldüğünde normal (kayıtlı) seçim
-    # davranışı bozulmasın diye. Data editor'ün önceki durumu da silinir, aksi
-    # halde önceki oturumdan kalan seçim üzerine yazamaz.
+    # davranışı bozulmasın diye. Aşağıdaki iki data_editor'ün key'i bu sayaca
+    # bağlı: sayaç arttıkça Streamlit onları SIFIRDAN bir widget sayar (eski
+    # satır-indeksine bağlı düzenleme/seçim durumunu miras almaz) - sadece
+    # session_state'teki eski durumu silmeye güvenmek, satır sırası/sayısı
+    # değiştiğinde yanlış satıra eski bir değerin yapışmasına yol açabiliyordu.
+    if "premium_buy_picker_token" not in st.session_state:
+        st.session_state["premium_buy_picker_token"] = 0
+
     pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
     picker_symbols = target_list
     if pending_transfer:
         picker_symbols = list(dict.fromkeys(target_list + pending_transfer))
-        st.session_state.pop("premium_buy_symbol_picker", None)
+        st.session_state["premium_buy_picker_token"] += 1
         st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
+    picker_token = st.session_state["premium_buy_picker_token"]
 
     picker_df = pd.DataFrame({"Hisse": picker_symbols})
     picker_df["Seçili"] = picker_df["Hisse"].isin(current_symbols) | picker_df["Hisse"].isin(pending_transfer)
@@ -147,7 +154,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         column_config={"Seçili": st.column_config.CheckboxColumn(required=True)},
         hide_index=True,
         use_container_width=True,
-        key="premium_buy_symbol_picker",
+        key=f"premium_buy_symbol_picker_{picker_token}",
     )
     selected_symbols = edited_picker[edited_picker["Seçili"]]["Hisse"].tolist()
 
@@ -199,7 +206,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             weight_df,
             hide_index=True,
             use_container_width=True,
-            key="premium_buy_weight_editor",
+            key=f"premium_buy_weight_editor_{picker_token}",
             column_config={"Ağırlık %": st.column_config.NumberColumn(min_value=0.0, max_value=100.0, step=1.0)},
         )
         st.caption(
