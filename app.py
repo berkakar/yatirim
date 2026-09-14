@@ -30,18 +30,17 @@ from backtest import render_backtest
 
 NAV_HOME = "🏠 Özet"
 MODULE_GROUPS = {
-    "🔍 Tarama": ["Fincan-Kulp Tarayıcı", "OBO & TOBO Tarayıcı"],
+    "🔍 Alım Bölgesi Tarama": ["Fincan-Kulp Tarayıcı", "OBO & TOBO Tarayıcı"],
     "📊 Analiz": [
         "Stop Loss Hesaplayıcı",
         "💎 Değerleme & Ucuzluk Skoru",
         "🔄 DTW Zaman Serisi & Benzerlik Analizi",
+        "📐 Hisse Patern Analizi",
         "📊 Bağımsız Hisse Grafiği",
     ],
-    "💼 Portföy": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü"],
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
-    "📐 Hisse Patern": ["📐 Hisse Patern Analizi"],
-    "⚙️ Ayarlar": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
-    "🧪 BackTest": ["BackTest"],
+    "🤖 Algoritmik Ticaret": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest"],
+    "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
 # değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
@@ -155,66 +154,66 @@ if st.session_state.stock_groups:
         key="selected_stock_groups",
     )
 else:
-    st.sidebar.caption("🗂️ Henüz hisse grubunuz yok — Ayarlar'dan oluşturabilirsiniz.")
+    st.sidebar.caption("🗂️ Henüz hisse grubunuz yok — Hisse Liste Düzenleme'den oluşturabilirsiniz.")
 
 st.sidebar.divider()
-st.markdown("""
-<style>
-[data-testid="stSidebar"] [data-testid="stButtonGroup"] > div {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 0.4rem;
-}
-[data-testid="stSidebar"] [data-testid="stButtonGroup"] button {
-    writing-mode: vertical-rl !important;
-    transform: rotate(180deg);
-    white-space: nowrap;
-    width: 2.4rem !important;
-    min-width: 2.4rem !important;
-    max-width: 2.4rem !important;
-    height: auto !important;
-    min-height: 7.5rem !important;
-    padding: 0.5rem 0.3rem !important;
-    font-size: 16.7px !important;
-}
-[data-testid="stSidebar"] [data-testid="stButtonGroup"] button * {
-    writing-mode: inherit !important;
-}
-</style>
-""", unsafe_allow_html=True)
+
 if "nav_category" not in st.session_state:
     st.session_state["nav_category"] = NAV_HOME
+if "open_category" not in st.session_state:
+    st.session_state["open_category"] = None
 
-nav_col_tabs, nav_col_modules = st.sidebar.columns([1, 4], gap="small")
-with nav_col_tabs:
-    category = st.segmented_control(
-        "Kategori", [NAV_HOME] + list(MODULE_GROUPS.keys()),
-        key="nav_category", required=True, label_visibility="collapsed",
+def _select_home():
+    st.session_state["nav_category"] = NAV_HOME
+
+def _toggle_category(cat_name):
+    st.session_state["open_category"] = None if st.session_state["open_category"] == cat_name else cat_name
+
+def _select_module(state_key, cat_name, mod_name):
+    st.session_state[state_key] = mod_name
+    st.session_state["nav_category"] = cat_name
+    st.session_state["open_category"] = cat_name
+
+category = st.session_state["nav_category"]
+
+st.sidebar.button(
+    NAV_HOME, key="navbtn_home", use_container_width=True,
+    type="primary" if category == NAV_HOME else "secondary",
+    on_click=_select_home,
+)
+
+for cat_name, modules_in_category in MODULE_GROUPS.items():
+    module_state_key = f"active_module_{cat_name}"
+    if module_state_key not in st.session_state:
+        st.session_state[module_state_key] = modules_in_category[0]
+
+    open_category = st.session_state["open_category"]
+    is_open = (open_category == cat_name) if open_category is not None else (category == cat_name)
+
+    st.sidebar.button(
+        f"{'▾' if is_open else '▸'} {cat_name}",
+        key=f"navhead_{cat_name}",
+        use_container_width=True,
+        type="primary" if category == cat_name else "secondary",
+        on_click=_toggle_category,
+        args=(cat_name,),
     )
+    if is_open:
+        for mod_name in modules_in_category:
+            st.sidebar.button(
+                "‣ " + MODULE_DISPLAY.get(mod_name, mod_name),
+                key=f"navbtn_{cat_name}_{mod_name}",
+                use_container_width=True,
+                type="primary" if (category == cat_name and st.session_state[module_state_key] == mod_name) else "secondary",
+                on_click=_select_module,
+                args=(module_state_key, cat_name, mod_name),
+            )
 
 if category == NAV_HOME:
     module = NAV_HOME
 else:
-    modules_in_category = MODULE_GROUPS[category]
     module_state_key = f"active_module_{category}"
-    if module_state_key not in st.session_state:
-        st.session_state[module_state_key] = modules_in_category[0]
     module = st.session_state[module_state_key]
-
-    def _select_module(state_key, mod_name):
-        st.session_state[state_key] = mod_name
-
-    with nav_col_modules:
-        for mod_name in modules_in_category:
-            st.button(
-                MODULE_DISPLAY.get(mod_name, mod_name),
-                key=f"navbtn_{category}_{mod_name}",
-                use_container_width=True,
-                type="primary" if mod_name == module else "secondary",
-                on_click=_select_module,
-                args=(module_state_key, mod_name),
-            )
 
 if selected_groups:
     target_list = []
@@ -294,6 +293,7 @@ if module == NAV_HOME:
 
     def _go_to_category(cat_name):
         st.session_state["nav_category"] = cat_name
+        st.session_state["open_category"] = cat_name
 
     nav_cols = st.columns(len(MODULE_GROUPS))
     for col, cat_name in zip(nav_cols, MODULE_GROUPS.keys()):
