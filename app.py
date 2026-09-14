@@ -157,6 +157,24 @@ else:
     st.sidebar.caption("🗂️ Henüz hisse grubunuz yok — Hisse Liste Düzenleme'den oluşturabilirsiniz.")
 
 st.sidebar.divider()
+st.markdown("""
+<style>
+/* Kategori (üst seviye) başlıkları: kalın yazı, alt öğelerden ayrışsın */
+[class*="st-key-navhead_wrap_"] button,
+[class*="st-key-navhead_wrap_"] button p {
+    font-weight: 700 !important;
+}
+/* Modül (alt seviye) öğeleri: girintili ve ince yazı, hiyerarşi belli olsun */
+[class*="st-key-navitem_wrap_"] {
+    padding-left: 1.15rem;
+}
+[class*="st-key-navitem_wrap_"] button,
+[class*="st-key-navitem_wrap_"] button p {
+    font-weight: 400 !important;
+    font-size: 0.87rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 if "nav_category" not in st.session_state:
     st.session_state["nav_category"] = NAV_HOME
@@ -176,13 +194,14 @@ def _select_module(state_key, cat_name, mod_name):
 
 category = st.session_state["nav_category"]
 
-st.sidebar.button(
-    NAV_HOME, key="navbtn_home", use_container_width=True,
-    type="primary" if category == NAV_HOME else "secondary",
-    on_click=_select_home,
-)
+with st.sidebar.container(key="navhead_wrap_home"):
+    st.button(
+        NAV_HOME, key="navbtn_home", use_container_width=True,
+        type="primary" if category == NAV_HOME else "secondary",
+        on_click=_select_home,
+    )
 
-for cat_name, modules_in_category in MODULE_GROUPS.items():
+for ci, (cat_name, modules_in_category) in enumerate(MODULE_GROUPS.items()):
     module_state_key = f"active_module_{cat_name}"
     if module_state_key not in st.session_state:
         st.session_state[module_state_key] = modules_in_category[0]
@@ -190,24 +209,26 @@ for cat_name, modules_in_category in MODULE_GROUPS.items():
     open_category = st.session_state["open_category"]
     is_open = (open_category == cat_name) if open_category is not None else (category == cat_name)
 
-    st.sidebar.button(
-        f"{'▾' if is_open else '▸'} {cat_name}",
-        key=f"navhead_{cat_name}",
-        use_container_width=True,
-        type="primary" if category == cat_name else "secondary",
-        on_click=_toggle_category,
-        args=(cat_name,),
-    )
+    with st.sidebar.container(key=f"navhead_wrap_{ci}"):
+        st.button(
+            f"{'▾' if is_open else '▸'} {cat_name}",
+            key=f"navhead_{cat_name}",
+            use_container_width=True,
+            type="primary" if category == cat_name else "secondary",
+            on_click=_toggle_category,
+            args=(cat_name,),
+        )
     if is_open:
-        for mod_name in modules_in_category:
-            st.sidebar.button(
-                "‣ " + MODULE_DISPLAY.get(mod_name, mod_name),
-                key=f"navbtn_{cat_name}_{mod_name}",
-                use_container_width=True,
-                type="primary" if (category == cat_name and st.session_state[module_state_key] == mod_name) else "secondary",
-                on_click=_select_module,
-                args=(module_state_key, cat_name, mod_name),
-            )
+        for mi, mod_name in enumerate(modules_in_category):
+            with st.sidebar.container(key=f"navitem_wrap_{ci}_{mi}"):
+                st.button(
+                    "‣ " + MODULE_DISPLAY.get(mod_name, mod_name),
+                    key=f"navbtn_{cat_name}_{mod_name}",
+                    use_container_width=True,
+                    type="primary" if (category == cat_name and st.session_state[module_state_key] == mod_name) else "secondary",
+                    on_click=_select_module,
+                    args=(module_state_key, cat_name, mod_name),
+                )
 
 if category == NAV_HOME:
     module = NAV_HOME
