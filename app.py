@@ -9,7 +9,10 @@ import os
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
-from scanner import get_scanner_data, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS
+from scanner import (
+    get_scanner_data, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
+    INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
+)
 from stoploss import get_stoploss_data
 from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
@@ -333,6 +336,20 @@ elif module == "Alım Bölgesi Tarama":
         if col.checkbox(SCAN_TIMEFRAME_LABELS[tf_code], value=(tf_code == "1Day"), key=f"scan_tf_{tf_code}")
     ]
 
+    days_col1, days_col2 = st.columns(2)
+    intraday_days = days_col1.number_input(
+        "15dk / 30dk / 1sa mumlar için geriye gidilecek gün sayısı",
+        min_value=1, max_value=INTRADAY_MAX_DAYS, value=INTRADAY_DEFAULT_DAYS, step=1,
+        key="scan_intraday_days",
+        help=f"Yahoo Finance gün-içi mumlarda en fazla {INTRADAY_MAX_DAYS} gün geriye gidebiliyor.",
+    )
+    daily_days = days_col2.number_input(
+        "1 gün mumlar için geriye gidilecek gün sayısı",
+        min_value=1, max_value=DAILY_MAX_DAYS, value=DAILY_DEFAULT_DAYS, step=1,
+        key="scan_daily_days",
+        help=f"En fazla {DAILY_MAX_DAYS} gün (yaklaşık 2 yıl) geriye gidilebiliyor.",
+    )
+
     if st.button(
         "🚀 Seçili Tarayıcılarla Tara", type="primary",
         disabled=not (use_cup or use_obo) or not selected_timeframes,
@@ -341,8 +358,9 @@ elif module == "Alım Bölgesi Tarama":
             signals = []
             for tf_code in selected_timeframes:
                 tf_label = SCAN_TIMEFRAME_LABELS[tf_code]
+                tf_days = daily_days if tf_code == "1Day" else intraday_days
                 for t in target_list:
-                    df_temp, cup, obo, tobo = get_scanner_data(t, timeframe=tf_code)
+                    df_temp, cup, obo, tobo = get_scanner_data(t, timeframe=tf_code, period_days=tf_days)
                     if df_temp is None or df_temp.empty:
                         continue
                     if use_cup and isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
@@ -407,7 +425,8 @@ elif module == "Alım Bölgesi Tarama":
         active_tf = st.session_state.get("selected_ticker_timeframe") or "1Day"
         st.write("---")
         st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
-        df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t, timeframe=active_tf)
+        active_days = daily_days if active_tf == "1Day" else intraday_days
+        df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t, timeframe=active_tf, period_days=active_days)
         if df is not None and not df.empty:
             viz_bars = {"15Min": 400, "30Min": 300, "1Hour": 250, "1Day": 126}.get(active_tf, 126)
             df_viz = df.iloc[-viz_bars:]

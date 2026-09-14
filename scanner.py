@@ -157,38 +157,49 @@ def detect_tobo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15, 
 SCAN_TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 SCAN_TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
 
-# Her mum periyodu için yfinance interval/period parametreleri. 15m/30m
-# Yahoo tarafında en fazla ~60 gün geriye gidebiliyor, 60m (1 saat) ~730 gün.
-_YF_TIMEFRAME_PARAMS = {
-    "15Min": {"interval": "15m", "period": "60d"},
-    "30Min": {"interval": "30m", "period": "60d"},
-    "1Hour": {"interval": "1h", "period": "730d"},
-    "1Day": {"interval": "1d", "period": "1y"},
-}
+# Her mum periyodu için yfinance interval kodu. Kaç gün geriye gidileceği
+# artık sabit değil - kullanıcı app.py'deki iki text box'tan giriyor
+# (gün-içi periyotlar - 15dk/30dk/1sa - için ortak bir değer, günlük için
+# ayrı bir değer). Yahoo tarafındaki gerçek üst sınırlar: gün-içi ~60 gün,
+# günlük pratikte ~730 gün - varsayılan/maksimumlar buna göre seçildi.
+_YF_INTERVALS = {"15Min": "15m", "30Min": "30m", "1Hour": "1h", "1Day": "1d"}
+INTRADAY_DEFAULT_DAYS = 15
+INTRADAY_MAX_DAYS = 60
+DAILY_DEFAULT_DAYS = 365
+DAILY_MAX_DAYS = 730
 
 
 @st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar, Yahoo engeline takılmaz
-def get_scanner_data(ticker_symbol, timeframe="1Day"):
+def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
     """
     app.py tarafından çağrılan ana fonksiyon.
     Veriyi çeker, temizler ve formasyon analizlerini yapar.
     timeframe: SCAN_TIMEFRAMES içinden biri ("15Min", "30Min", "1Hour", "1Day").
+    period_days: Kaç gün geriye gidileceği. None ise timeframe'e göre varsayılan
+    kullanılır; her durumda ilgili maksimuma (gün-içi 60, günlük 730) sıkıştırılır.
     """
     try:
-        yf_params = _YF_TIMEFRAME_PARAMS.get(timeframe, _YF_TIMEFRAME_PARAMS["1Day"])
+        interval = _YF_INTERVALS.get(timeframe, _YF_INTERVALS["1Day"])
+        if timeframe == "1Day":
+            days = DAILY_DEFAULT_DAYS if period_days is None else int(period_days)
+            days = max(1, min(days, DAILY_MAX_DAYS))
+        else:
+            days = INTRADAY_DEFAULT_DAYS if period_days is None else int(period_days)
+            days = max(1, min(days, INTRADAY_MAX_DAYS))
+        yf_period = f"{days}d"
 
         # BIST hisseleri için otomatik .IS kontrolü
         formatted_ticker = ticker_symbol
 
         # yfinance ile veriyi çek (history kullanımı download'a göre çok daha kararlıdır)
         ticker_obj = yf.Ticker(formatted_ticker)
-        df = ticker_obj.history(period=yf_params["period"], interval=yf_params["interval"])
+        df = ticker_obj.history(period=yf_period, interval=interval)
 
         # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
         if df is None or df.empty or len(df) < 60:
             if not formatted_ticker.endswith(".IS"):
                 ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
-                df = ticker_obj.history(period=yf_params["period"], interval=yf_params["interval"])
+                df = ticker_obj.history(period=yf_period, interval=interval)
 
         # Veri hala boşsa veya yetersizse None dön
         if df is None or df.empty or len(df) < 60:
