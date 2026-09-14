@@ -270,19 +270,43 @@ else:
     module = st.session_state[module_state_key]
 
 if selected_groups:
-    target_list = []
-    for g in selected_groups:
-        target_list.extend(st.session_state.stock_groups.get(g, []))
-    target_list = list(dict.fromkeys(target_list))
-    market = " + ".join(selected_groups)
+    group_tickers = list(dict.fromkeys(
+        t for g in selected_groups for t in st.session_state.stock_groups.get(g, [])
+    ))
+    market_tickers = st.session_state.ticker_lists[market]
 
-    max_len = max((len(st.session_state.stock_groups.get(g, [])) for g in selected_groups), default=0)
-    with st.expander(f"🗂️ Aktif Hisse Grubu Seçimi: **{market}** — Toplam {len(target_list)} hisse", expanded=False):
-        table_data = {
-            g: st.session_state.stock_groups.get(g, []) + [""] * (max_len - len(st.session_state.stock_groups.get(g, [])))
-            for g in selected_groups
-        }
-        st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
+    SCOPE_MARKET_ONLY = f"🌐 Sadece {market} (Piyasanın Tamamı)"
+    SCOPE_MARKET_PLUS_GROUPS = f"🌐+🗂️ {market} + Seçili Gruplar"
+    SCOPE_GROUPS_ONLY = "🗂️ Sadece Seçili Gruplar"
+    group_scope = st.sidebar.radio(
+        "📌 Analiz Kapsamı:",
+        [SCOPE_MARKET_ONLY, SCOPE_MARKET_PLUS_GROUPS, SCOPE_GROUPS_ONLY],
+        index=2,
+        key="stock_group_scope",
+    )
+
+    if group_scope == SCOPE_MARKET_ONLY:
+        target_list = market_tickers
+        scope_label = market
+    elif group_scope == SCOPE_MARKET_PLUS_GROUPS:
+        target_list = list(dict.fromkeys(market_tickers + group_tickers))
+        scope_label = f"{market} + " + " + ".join(selected_groups)
+        market = scope_label
+    else:
+        target_list = group_tickers
+        scope_label = " + ".join(selected_groups)
+        market = scope_label
+
+    with st.expander(f"📌 Aktif Analiz Kapsamı: **{scope_label}** — Toplam {len(target_list)} hisse", expanded=False):
+        if group_scope == SCOPE_MARKET_ONLY:
+            st.caption("ℹ️ Seçili gruplar bu kapsamda kullanılmıyor; sadece piyasanın tam listesi analiz girdisi.")
+        else:
+            max_len = max((len(st.session_state.stock_groups.get(g, [])) for g in selected_groups), default=0)
+            table_data = {
+                g: st.session_state.stock_groups.get(g, []) + [""] * (max_len - len(st.session_state.stock_groups.get(g, [])))
+                for g in selected_groups
+            }
+            st.dataframe(pd.DataFrame(table_data), use_container_width=True, hide_index=True)
 else:
     target_list = st.session_state.ticker_lists[market]
 
