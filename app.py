@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import json
 import os
+from datetime import datetime, timezone
 
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups
 from github_config import read_json_from_github, write_json_to_github
@@ -15,6 +16,7 @@ from scanner import (
 )
 from buy_algorithms import ALGORITHMS, reject_if_marketable
 from backtest_engine import run_backtest
+from backtest_data import append_results, new_run_id
 from stoploss import get_stoploss_data
 from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
@@ -497,6 +499,8 @@ elif module == "Alım Bölgesi Tarama":
             disabled=not selected_backtest_rows, key="scan_run_backtest_btn",
         ):
             progress = st.progress(0.0)
+            run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            new_runs = []
             bt_runs = []
             for i, item in enumerate(selected_backtest_rows):
                 symbol, algo_id, tf_code, bt_days = item["Hisse"], item["algo_id"], item["tf_code"], item["bt_days"]
@@ -507,6 +511,25 @@ elif module == "Alım Bölgesi Tarama":
                         daily_pairs=fetch_daily_pairs(symbol), days_of_data=bt_days, days_before_trading=0,
                         starting_budget=10000.0,
                     )
+                    new_runs.append({
+                        "run_id": new_run_id(symbol, algo_id, tf_code),
+                        "run_at": run_at,
+                        "symbol": symbol,
+                        "algorithm": algo_id,
+                        "timeframe": tf_code,
+                        "days_of_data": bt_days,
+                        "days_before_trading": 0,
+                        "starting_budget": 10000.0,
+                        "final_value": result.final_value,
+                        "pnl": result.pnl,
+                        "pnl_pct": result.pnl_pct,
+                        "stop_loss_enabled": False,
+                        "max_loss_pct": None,
+                        "stop_loss_triggered": result.stop_loss_triggered,
+                        "stop_loss_triggered_at": result.stop_loss_triggered_at,
+                        "trades": [vars(t) for t in result.trades],
+                        "source": "Yahoo Finance",
+                    })
                     bt_runs.append({
                         "Hisse": symbol, "Algoritma": ALGORITHMS[algo_id][0],
                         "Mum Periyodu": SCAN_TIMEFRAME_LABELS[tf_code], "Gün": bt_days,
@@ -514,6 +537,8 @@ elif module == "Alım Bölgesi Tarama":
                     })
                 progress.progress((i + 1) / len(selected_backtest_rows))
             progress.empty()
+            if new_runs:
+                append_results(username, new_runs)
             st.session_state.scan_backtest_runs = bt_runs
             if not bt_runs:
                 st.warning("Seçilenler için veri çekilemediğinden backtest çalıştırılamadı.")
@@ -523,8 +548,9 @@ elif module == "Alım Bölgesi Tarama":
     if 'scan_backtest_runs' in st.session_state and st.session_state.scan_backtest_runs:
         st.subheader("🧪 Backtest Sonuçları")
         st.caption(
-            "Yahoo Finance verisiyle çalışır (Alpaca hesabı gerekmez), bu yüzden Backtest modülünün "
-            "kalıcı geçmişine eklenmez - sadece bu sayfada, bu oturumda gösterilir."
+            "Yahoo Finance verisiyle çalışır (Alpaca hesabı gerekmez) - sonuçlar BackTest modülünün kalıcı "
+            "geçmişine \"Yahoo Finance\" kaynağıyla etiketlenerek ekleniyor, bu yüzden Premium Buy Point "
+            "Portföyü'ndeki hisse bazlı algoritma seçiminde de görünür."
         )
         bt_runs_df = pd.DataFrame(st.session_state.scan_backtest_runs)
         with st.expander(f"Tüm çalıştırmalar ({len(bt_runs_df)})"):
@@ -532,20 +558,25 @@ elif module == "Alım Bölgesi Tarama":
 
         best_df = (
             bt_runs_df.sort_values("K/Z %", ascending=False)
-            .drop_duplicates(subset="Hisse", keep="first")[["Hisse", "K/Z %"]]
+            .drop_duplicates(subset="Hisse", keep="first")[["Hisse", "Algoritma", "Mum Periyodu", "K/Z %"]]
             .rename(columns={"K/Z %": "En Yüksek Karlılık (%)"})
             .reset_index(drop=True)
         )
 
-        bh1, bh2 = st.columns([2, 1.5])
-        bh1.markdown("**Hisse (aktarmak için seç)**")
-        bh2.markdown("**En Yüksek Karlılık (%)**")
+        bh_ratios = [2, 1.8, 1.2, 1.5]
+        bh0, bh1, bh2, bh3 = st.columns(bh_ratios)
+        bh0.markdown("**Hisse (aktarmak için seç)**")
+        bh1.markdown("**Algoritma**")
+        bh2.markdown("**Mum Periyodu**")
+        bh3.markdown("**En Yüksek Karlılık (%)**")
         selected_bt_tickers = []
         for idx, row in best_df.iterrows():
-            r1, r2 = st.columns([2, 1.5])
-            if r1.checkbox(row["Hisse"], key=f"scan_bt_pick_{idx}"):
+            r0, r1, r2, r3 = st.columns(bh_ratios)
+            if r0.checkbox(row["Hisse"], key=f"scan_bt_pick_{idx}"):
                 selected_bt_tickers.append(row["Hisse"])
-            r2.write(row["En Yüksek Karlılık (%)"])
+            r1.write(row["Algoritma"])
+            r2.write(row["Mum Periyodu"])
+            r3.write(row["En Yüksek Karlılık (%)"])
 
         bt_xfer_col1, bt_xfer_col2 = st.columns([3, 2])
         bt_xfer_col1.caption(

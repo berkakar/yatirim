@@ -328,6 +328,7 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
             "stop_loss_triggered": result.stop_loss_triggered,
             "stop_loss_triggered_at": result.stop_loss_triggered_at,
             "trades": [vars(t) for t in result.trades],
+            "source": "Alpaca",
         })
         progress.progress((i + 1) / len(combos))
     progress.empty()
@@ -353,6 +354,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 "Çalıştırma (UTC)": r.get("run_at", ""),
                 "Hisse": r.get("symbol", ""),
                 "Mum Periyodu": TIMEFRAME_LABELS.get(r.get("timeframe"), r.get("timeframe")),
+                "Kaynak": r.get("source") or "Alpaca",
                 "Veri (gün)": r.get("days_of_data"),
                 "İşlem Başlangıcı (gün)": r.get("days_before_trading"),
                 "Başlangıç Bütçe": r.get("starting_budget"),
@@ -391,22 +393,29 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                     st.session_state[chart_state_key] = not st.session_state[chart_state_key]
 
                 if st.session_state[chart_state_key]:
-                    trade_times = [_parse_ts(t["time"]) for t in trades if t.get("time")]
-                    fallback_start = datetime.now(timezone.utc) - timedelta(days=picked_run.get("days_of_data") or 180)
-                    start_dt = min(trade_times + [fallback_start]) - timedelta(days=2)
-                    with st.spinner("Grafik için mum verileri çekiliyor..."):
-                        try:
-                            bars = _fetch_chart_bars(
-                                key_id, secret_key, picked_run.get("symbol"), picked_run.get("timeframe"),
-                                start_dt.date().isoformat(),
-                            )
-                        except Exception as e:
-                            st.error(f"Mum verileri çekilemedi: {e}")
-                            bars = []
-                    _render_trade_detail_chart(
-                        bars, trades, picked_run.get("symbol"),
-                        TIMEFRAME_LABELS.get(picked_run.get("timeframe"), picked_run.get("timeframe")),
-                    )
+                    if (picked_run.get("source") or "Alpaca") != "Alpaca":
+                        st.caption(
+                            "Bu çalıştırma Alpaca dışı bir kaynaktan (örn. Alım Bölgesi Tarama - Yahoo "
+                            "Finance) geldiği için işlem detay grafiği burada gösterilemiyor - mum verisi "
+                            "Alpaca'dan çekiliyor ve o çalıştırmanın kullandığı veriyle eşleşmeyebilir."
+                        )
+                    else:
+                        trade_times = [_parse_ts(t["time"]) for t in trades if t.get("time")]
+                        fallback_start = datetime.now(timezone.utc) - timedelta(days=picked_run.get("days_of_data") or 180)
+                        start_dt = min(trade_times + [fallback_start]) - timedelta(days=2)
+                        with st.spinner("Grafik için mum verileri çekiliyor..."):
+                            try:
+                                bars = _fetch_chart_bars(
+                                    key_id, secret_key, picked_run.get("symbol"), picked_run.get("timeframe"),
+                                    start_dt.date().isoformat(),
+                                )
+                            except Exception as e:
+                                st.error(f"Mum verileri çekilemedi: {e}")
+                                bars = []
+                        _render_trade_detail_chart(
+                            bars, trades, picked_run.get("symbol"),
+                            TIMEFRAME_LABELS.get(picked_run.get("timeframe"), picked_run.get("timeframe")),
+                        )
             else:
                 st.caption("Bu çalıştırmada hiç işlem gerçekleşmedi.")
 

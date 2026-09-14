@@ -140,9 +140,14 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         st.session_state["premium_buy_picker_token"] = 0
 
     pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
-    picker_symbols = target_list
+    # current_symbols (Alpaca'daki gerçek watchlist) her zaman satır listesine
+    # dahil edilir - aksi halde, "Piyasa Seçimi" değişik bir piyasadayken
+    # (veya Aktar ile gelen bir hisse target_list'te hiç yoksa) kaydedilmiş bir
+    # hisse tabloda görünmeyip, bir sonraki "Portföyü Kaydet" tıklamasında
+    # (o an ekranda olmadığı için seçili sayılmayıp) watchlist'ten sessizce
+    # düşerdi - "aktarıyor ama kaydedince kayboluyor" hatasının kök nedeni buydu.
+    picker_symbols = list(dict.fromkeys(target_list + current_symbols + pending_transfer))
     if pending_transfer:
-        picker_symbols = list(dict.fromkeys(target_list + pending_transfer))
         st.session_state["premium_buy_picker_token"] += 1
         st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
     picker_token = st.session_state["premium_buy_picker_token"]
@@ -228,10 +233,12 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     st.subheader("🧠 Hisse Bazlı Algoritma Seçimi")
     st.caption(
-        "Her hisse için, o hissede daha önce BackTest modülünde çalıştırılmış algoritma + mum periyodu "
-        "kombinasyonları K/Z %'ye göre en yüksekten başlayarak listelenir. Seçtiğiniz kombinasyon, o hisse "
-        "için otomatik alım/satımda kullanılır. BackTest sonucu olmayan hisseler, aşağıdaki varsayılan "
-        "algoritma ve mum periyoduyla (30 Dakika) taranır."
+        "Her hisse için, o hissede daha önce BackTest modülünde ya da Alım Bölgesi Tarama'da "
+        "çalıştırılmış algoritma + mum periyodu + veri kaynağı kombinasyonları K/Z %'ye göre en "
+        "yüksekten başlayarak listelenir. Seçtiğiniz kombinasyon, o hisse için otomatik alım/satımda "
+        "kullanılır (canlı alım her durumda Alpaca üzerinden yapılır - kaynak sadece o kombinasyonun "
+        "hangi veriyle geriye dönük test edildiğini gösterir). BackTest sonucu olmayan hisseler, "
+        "aşağıdaki varsayılan algoritma ve mum periyoduyla (30 Dakika) taranır."
     )
     existing_symbol_settings = config.get("symbol_settings") or {}
     symbol_settings: dict[str, dict] = {}
@@ -247,7 +254,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
             options = [
                 f"{ALGORITHMS[c['algorithm']][0]} · {TIMEFRAME_LABELS.get(c['timeframe'], c['timeframe'])} · "
-                f"K/Z %{(c.get('pnl_pct') or 0):.2f}"
+                f"K/Z %{(c.get('pnl_pct') or 0):.2f} · Kaynak: {c.get('source') or 'Alpaca'}"
                 for c in combos
             ]
             saved = existing_symbol_settings.get(symbol) or {}

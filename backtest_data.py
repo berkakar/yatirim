@@ -79,14 +79,19 @@ def group_by_algorithm(results: list[dict]) -> dict[str, list[dict]]:
 
 def best_per_symbol_combo(results: list[dict], symbol: str) -> list[dict]:
     """Bir hisseye ait tüm BackTest çalıştırmalarından, her (algoritma, mum
-    periyodu) kombinasyonu için en yüksek K/Z %'ye sahip çalıştırmayı seçer ve
-    K/Z %'ye göre azalan sırada döner. premium_buy_portfolio.py'de hisse
-    başına en kârlı kombinasyonu ilk sırada göstermek için kullanılır."""
+    periyodu, veri kaynağı) kombinasyonu için en yüksek K/Z %'ye sahip
+    çalıştırmayı seçer ve K/Z %'ye göre azalan sırada döner. Kaynak da
+    anahtarın parçası - aynı algoritma/periyot için hem Alpaca hem Yahoo
+    Finance (Alım Bölgesi Tarama'dan) sonucu varsa ikisi de ayrı seçenek
+    olarak kalır, kullanıcı hangisine güveneceğini kendisi seçer. Eski
+    (source alanı olmayan) kayıtlar "Alpaca" sayılır - o alan eklenmeden
+    önce üretilen tüm sonuçlar zaten Alpaca'dandı. premium_buy_portfolio.py'de
+    hisse başına en kârlı kombinasyonu ilk sırada göstermek için kullanılır."""
     best: dict[tuple, dict] = {}
     for r in results:
         if r.get("symbol") != symbol:
             continue
-        key = (r.get("algorithm"), r.get("timeframe"))
+        key = (r.get("algorithm"), r.get("timeframe"), r.get("source") or "Alpaca")
         pnl = r.get("pnl_pct") or 0
         if key not in best or pnl > (best[key].get("pnl_pct") or 0):
             best[key] = r
