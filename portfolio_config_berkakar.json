@@ -1,16 +1,16 @@
 {
-  "budget": 98594.24,
+  "budget": 77839.22,
   "weights": {
     "AMZN": 12.0,
     "NVDA": 12.0,
-    "INTC": 12.0,
-    "MU": 12.5,
+    "INTC": 14.21,
+    "MU": 14.04,
     "NXPI": 12.5,
     "NOW": 12.5,
     "TTWO": 12.5,
     "SKHY": 1.12
   },
-  "algorithm": "demand_zone",
+  "algorithm": "trend_pullback",
   "symbol_settings": {
     "NVDA": {
       "algorithm": "breakout_volume",
