@@ -129,8 +129,19 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     st.subheader("🎯 Portföy Seçimi")
     st.caption("Bu listedeki hisseler için premium buy point (demand zone) taranır ve fiyat oraya ulaştığında otomatik alım yapılır.")
 
-    picker_df = pd.DataFrame({"Hisse": target_list})
-    picker_df["Seçili"] = picker_df["Hisse"].isin(current_symbols)
+    # Alım Bölgesi Tarama sayfasından "Aktar" ile gelen hisseler - tek seferlik
+    # olarak tüketilir, tekrar bu sayfaya dönüldüğünde normal (kayıtlı) seçim
+    # davranışı bozulmasın diye. Data editor'ün önceki durumu da silinir, aksi
+    # halde önceki oturumdan kalan seçim üzerine yazamaz.
+    pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
+    picker_symbols = target_list
+    if pending_transfer:
+        picker_symbols = list(dict.fromkeys(target_list + pending_transfer))
+        st.session_state.pop("premium_buy_symbol_picker", None)
+        st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
+
+    picker_df = pd.DataFrame({"Hisse": picker_symbols})
+    picker_df["Seçili"] = picker_df["Hisse"].isin(current_symbols) | picker_df["Hisse"].isin(pending_transfer)
     edited_picker = st.data_editor(
         picker_df,
         column_config={"Seçili": st.column_config.CheckboxColumn(required=True)},
@@ -165,16 +176,12 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     edited_weights = pd.DataFrame(columns=["Hisse", "Ağırlık %"])
     if selected_symbols:
-        existing_weights = config.get("weights") or {}
-        equal_share = round(100 / len(selected_symbols), 2)
-
         def _default_weight_pct(symbol: str) -> float:
-            # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için, kayıtlı/
-            # varsayılan bir sayı yerine GERÇEK güncel ağırlığı (yatırılan
-            # tutar = adet × ortalama giriş / bütçe) gösterir - böylece bu
-            # alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve top-up
-            # için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
-            # hisseler eskisi gibi kayıtlı ağırlığa veya eşit paylaşıma düşer.
+            # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için GERÇEK güncel
+            # ağırlığı (yatırılan tutar = adet × ortalama giriş / bütçe) gösterir -
+            # böylece bu alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve
+            # top-up için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
+            # hisseler için varsayılan 0'dır - siz elle doldurursunuz.
             try:
                 position = client.get_position(symbol)
             except Exception:
@@ -182,7 +189,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             if position is not None and budget > 0:
                 invested = float(position["qty"]) * float(position["avg_entry_price"])
                 return round(invested / budget * 100, 2)
-            return float(existing_weights.get(symbol, equal_share))
+            return 0.0
 
         weight_df = pd.DataFrame({
             "Hisse": selected_symbols,

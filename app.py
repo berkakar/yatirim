@@ -30,7 +30,7 @@ from backtest import render_backtest
 
 NAV_HOME = "🏠 Özet"
 MODULE_GROUPS = {
-    "🔍 Alım Bölgesi Tarama": ["Fincan-Kulp Tarayıcı", "OBO & TOBO Tarayıcı"],
+    "🔍 Alım Bölgesi Tarama": ["Alım Bölgesi Tarama"],
     "📊 Analiz": [
         "Stop Loss Hesaplayıcı",
         "💎 Değerleme & Ucuzluk Skoru",
@@ -45,8 +45,7 @@ MODULE_GROUPS = {
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
 # değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
 MODULE_DISPLAY = {
-    "Fincan-Kulp Tarayıcı": "🔍 Fincan-Kulp Tarayıcı",
-    "OBO & TOBO Tarayıcı": "📉 OBO & TOBO Tarayıcı",
+    "Alım Bölgesi Tarama": "🔍 Alım Bölgesi Tarama",
     "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
     "Türk Fonları": "🇹🇷 Türk Fonları",
     "Fonlarım": "💼 Fonlarım",
@@ -297,17 +296,10 @@ if module == NAV_HOME:
 
     st.divider()
     st.subheader("🎯 Bu Oturumdaki Son Tarama Sonuçları")
-    sc1, sc2 = st.columns(2)
-    with sc1:
-        if 'cup_signals' in st.session_state:
-            st.metric("Fincan-Kulp Sinyali", len(st.session_state.cup_signals))
-        else:
-            st.info("Fincan-Kulp Tarayıcı bu oturumda henüz çalıştırılmadı.")
-    with sc2:
-        if 'obo_signals' in st.session_state:
-            st.metric("OBO / TOBO Sinyali", len(st.session_state.obo_signals))
-        else:
-            st.info("OBO & TOBO Tarayıcı bu oturumda henüz çalıştırılmadı.")
+    if 'scan_signals' in st.session_state:
+        st.metric("Alım Bölgesi Sinyali", len(st.session_state.scan_signals))
+    else:
+        st.info("Alım Bölgesi Tarama bu oturumda henüz çalıştırılmadı.")
 
     st.divider()
     st.subheader("🚀 Hızlı Erişim")
@@ -324,38 +316,72 @@ if module == NAV_HOME:
         )
 
 # ==============================================================================
-# 1. MODÜL: FİNCAN-KULP TARAYICI
+# 1. MODÜL: ALIM BÖLGESİ TARAMA (Fincan-Kulp + OBO/TOBO birleşik)
 # ==============================================================================
-elif module == "Fincan-Kulp Tarayıcı":
-    st.header("🔍 Fincan-Kulp Tarayıcı")
-    st.caption("Aşağıdaki butona basarak seçili piyasadaki formasyonları taratabilirsiniz.")
-    
-    if st.button("🚀 Fincan-Kulp Listesini Tara", type="primary"):
+elif module == "Alım Bölgesi Tarama":
+    st.header("🔍 Alım Bölgesi Tarama")
+    st.caption("Taramak istediğiniz formasyon(lar)ı seçip aşağıdaki butona basın.")
+
+    scan_cb1, scan_cb2 = st.columns(2)
+    use_cup = scan_cb1.checkbox("Fincan-Kulp", value=True, key="scan_use_cup")
+    use_obo = scan_cb2.checkbox("OBO & TOBO", value=True, key="scan_use_obo")
+
+    if st.button("🚀 Seçili Tarayıcılarla Tara", type="primary", disabled=not (use_cup or use_obo)):
         with st.spinner(f'{market} listesi taranıyor...'):
             signals = []
             for t in target_list:
-                df_temp, cup, _, _ = get_scanner_data(t)
-                if df_temp is not None and not df_temp.empty and cup is not None:
-                    if isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
-                        if t not in signals:
-                            signals.append(t)
-            st.session_state.cup_signals = signals
+                df_temp, cup, obo, tobo = get_scanner_data(t)
+                if df_temp is None or df_temp.empty:
+                    continue
+                if use_cup and isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
+                    signals.append({"Hisse": t, "Tarayıcı Türü": "Fincan-Kulp", "Mum Seviyesi": round(float(cup['D']['Close']), 2)})
+                if use_obo:
+                    if isinstance(obo, dict) and all(k in obo for k in ['left_shoulder', 'head', 'right_shoulder']):
+                        signals.append({"Hisse": t, "Tarayıcı Türü": "OBO", "Mum Seviyesi": round(float(obo['right_shoulder']['Close']), 2)})
+                    elif isinstance(tobo, dict) and all(k in tobo for k in ['left_shoulder', 'head', 'right_shoulder']):
+                        signals.append({"Hisse": t, "Tarayıcı Türü": "TOBO", "Mum Seviyesi": round(float(tobo['right_shoulder']['Close']), 2)})
+            st.session_state.scan_signals = signals
 
-    if 'cup_signals' in st.session_state and st.session_state.cup_signals:
-        st.subheader("🎯 Bulunan Fincan-Kulp Formasyonları")
-        cols = st.columns(min(len(st.session_state.cup_signals), 5))
-        for idx, t_sig in enumerate(st.session_state.cup_signals):
+    if 'scan_signals' in st.session_state and st.session_state.scan_signals:
+        st.subheader("🎯 Bulunan Formasyonlar")
+        scan_results_df = pd.DataFrame(st.session_state.scan_signals)
+        scan_event = st.dataframe(
+            scan_results_df, use_container_width=True, hide_index=True,
+            on_select="rerun", selection_mode="multi-row", key="scan_results_table",
+        )
+        selected_idx = list(scan_event.selection.rows) if scan_event and scan_event.selection else []
+        selected_scan_tickers = scan_results_df.iloc[selected_idx]["Hisse"].tolist() if selected_idx else []
+
+        xfer_col1, xfer_col2 = st.columns([3, 2])
+        xfer_col1.caption(
+            f"✅ {len(selected_scan_tickers)} hisse seçili."
+            if selected_scan_tickers else "Aktarmak istediğiniz satırları yukarıdaki tablodan seçin."
+        )
+        if xfer_col2.button(
+            "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
+            disabled=not selected_scan_tickers,
+        ):
+            st.session_state["premium_buy_pending_transfer"] = selected_scan_tickers
+            st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
+            st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
+            st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
+            st.rerun()
+
+        st.divider()
+        cols = st.columns(min(len(scan_results_df), 5))
+        for idx, row in scan_results_df.iterrows():
             col_idx = idx % 5
-            if cols[col_idx].button(f"📊 {t_sig}", key=f"btn_cup_{idx}_{t_sig}"):
+            t_sig = row["Hisse"]
+            if cols[col_idx].button(f"📊 {t_sig} ({row['Tarayıcı Türü']})", key=f"btn_scan_{idx}_{t_sig}"):
                 render_chart_for(t_sig)
-    elif 'cup_signals' in st.session_state:
+    elif 'scan_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         st.write("---")
         st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}**")
-        df, cup_pat, _, _ = get_scanner_data(active_t)
+        df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t)
         if df is not None and not df.empty:
             df_viz = df.iloc[-126:]
             fig = go.Figure(data=[go.Candlestick(
@@ -375,62 +401,6 @@ elif module == "Fincan-Kulp Tarayıcı":
                     mode='lines+markers+text', name='Kulp',
                     line=dict(color='#ff5e62', width=3, dash='dash'), text=['', 'D'], textposition="bottom center"
                 ))
-            fig.update_layout(title=f"{active_t} - Fincan Kulp Grafiği", template="plotly_dark", height=500, xaxis_rangeslider_visible=False)
-            st.plotly_chart(fig, use_container_width=True)
-
-
-# ==============================================================================
-# 2. MODÜL: OBO & TOBO TARAYICI
-# ==============================================================================
-elif module == "OBO & TOBO Tarayıcı":
-    st.header("📉 Omuz Baş Omuz (OBO) & Ters OBO Tarayıcı")
-    st.caption("Aşağıdaki butona basarak seçili piyasadaki formasyonları taratabilirsiniz.")
-    
-    if st.button("🚀 OBO & TOBO Listesini Tara", type="primary"):
-        with st.spinner(f'{market} listesi taranıyor...'):
-            signals = []
-            for t in target_list:
-                df_temp, _, obo, tobo = get_scanner_data(t)
-                if df_temp is None or df_temp.empty or 'Close' not in df_temp.columns:
-                    continue
-                form_type = None
-                if obo is not None and isinstance(obo, dict) and all(k in obo for k in ['left_shoulder', 'head', 'right_shoulder']):
-                    form_type = "OBO"
-                elif tobo is not None and isinstance(tobo, dict) and all(k in tobo for k in ['left_shoulder', 'head', 'right_shoulder']):
-                    form_type = "TOBO"
-                
-                if form_type:
-                    item = {"ticker": t, "type": form_type}
-                    if item not in signals:
-                        signals.append(item)
-                        
-            st.session_state.obo_signals = signals
-
-    if 'obo_signals' in st.session_state and st.session_state.obo_signals:
-        st.subheader("📉 Bulunan OBO / TOBO Formasyonları")
-        cols = st.columns(min(len(st.session_state.obo_signals), 5))
-        for idx, sig_item in enumerate(st.session_state.obo_signals):
-            col_idx = idx % 5
-            t_sig = sig_item["ticker"]
-            f_type = sig_item["type"]
-            label = f"{t_sig} ({'⚠️ OBO' if f_type == 'OBO' else '🚀 TOBO'})"
-
-            if cols[col_idx].button(label, key=f"btn_obo_{idx}_{t_sig}"):
-                render_chart_for(t_sig)
-    elif 'obo_signals' in st.session_state:
-        st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
-
-    if st.session_state.show_chart and st.session_state.selected_ticker:
-        active_t = st.session_state.selected_ticker
-        st.write("---")
-        st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}**")
-        df, _, obo_pat, tobo_pat = get_scanner_data(active_t)
-        if df is not None and not df.empty:
-            df_viz = df.iloc[-126:]
-            fig = go.Figure(data=[go.Candlestick(
-                x=df_viz['Date'], open=df_viz['Open'], high=df_viz['High'],
-                low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
-            )])
             if obo_pat and isinstance(obo_pat, dict) and all(k in obo_pat for k in ['left_shoulder', 'head', 'right_shoulder']):
                 ls, h, rs = obo_pat['left_shoulder'], obo_pat['head'], obo_pat['right_shoulder']
                 fig.add_trace(go.Scatter(
@@ -447,12 +417,12 @@ elif module == "OBO & TOBO Tarayıcı":
                     mode='lines+markers+text', name='TOBO',
                     line=dict(color='#00ff66', width=3), text=['Sol', 'Baş', 'Sağ'], textposition="bottom center"
                 ))
-            fig.update_layout(title=f"{active_t} - OBO/TOBO Grafiği", template="plotly_dark", height=500, xaxis_rangeslider_visible=False)
+            fig.update_layout(title=f"{active_t} - Alım Bölgesi Grafiği", template="plotly_dark", height=500, xaxis_rangeslider_visible=False)
             st.plotly_chart(fig, use_container_width=True)
 
 
 # ==============================================================================
-# 3. MODÜL: STOP LOSS HESAPLAYICI
+# 2. MODÜL: STOP LOSS HESAPLAYICI
 # ==============================================================================
 elif module == "Stop Loss Hesaplayıcı":
     st.header("🛡️ Risk Yönetimi: Stop Loss & EMA Analizi")
@@ -524,7 +494,7 @@ elif module == "Stop Loss Hesaplayıcı":
             st.dataframe(zebra_style(df_res), use_container_width=True, hide_index=True)
 
 # ==============================================================================
-# 4. MODÜL: DEĞERLEME & UCUZLUK SKORU (MİKRO İŞ MODELİ GRUPLAMALI)
+# 3. MODÜL: DEĞERLEME & UCUZLUK SKORU (MİKRO İŞ MODELİ GRUPLAMALI)
 # ==============================================================================
 elif module == "💎 Değerleme & Ucuzluk Skoru":
     st.header("💎 Temel Analiz: Mikro İş Modeline Göre Değerleme")
@@ -634,7 +604,7 @@ Tek istisna **Borç/Özsermaye**'ydi: negatif özsermayeyi yanlışlıkla "düş
 """)
 
 # ==============================================================================
-# 5. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
+# 4. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
 # ==============================================================================
 elif module == "📊 Bağımsız Hisse Grafiği":
     st.header("📊 Bağımsız Hisse Senedi Grafiği İnceleme")
@@ -670,7 +640,7 @@ elif module == "📊 Bağımsız Hisse Grafiği":
 
 
 # ==============================================================================
-# 6. MODÜL: HİSSE LİSTELERİNİ YÖNET
+# 5. MODÜL: HİSSE LİSTELERİNİ YÖNET
 # ==============================================================================
 elif module == "⚙️ Hisse Listelerini Yönet":
     st.header("⚙️ Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
@@ -746,7 +716,7 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         st.rerun()
 
 # ==============================================================================
-# 7. MODÜL: HİSSE GRUPLARINI YÖNET
+# 6. MODÜL: HİSSE GRUPLARINI YÖNET
 # ==============================================================================
 elif module == "🗂️ Hisse Gruplarını Yönet":
     st.header("🗂️ Hisse Gruplarını Yönetme ve Kalıcı Kaydetme")
@@ -1074,7 +1044,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                 st.plotly_chart(fig, use_container_width=True)
 
 # ==============================================================================
-# 8. MODÜL: ALPACA CANLI POZİSYONLAR
+# 7. MODÜL: ALPACA CANLI POZİSYONLAR
 # ==============================================================================
 elif module == "🦙 Alpaca Canlı Pozisyonlar":
     st.header("🦙 Alpaca Canlı Pozisyonlar")
@@ -1082,7 +1052,7 @@ elif module == "🦙 Alpaca Canlı Pozisyonlar":
     render_alpaca_dashboard(username)
 
 # ==============================================================================
-# 9. MODÜL: PREMIUM BUY POINT PORTFÖYÜ
+# 8. MODÜL: PREMIUM BUY POINT PORTFÖYÜ
 # ==============================================================================
 elif module == "🎯 Premium Buy Point Portföyü":
     st.header("🎯 Premium Buy Point Portföyü")
@@ -1090,7 +1060,7 @@ elif module == "🎯 Premium Buy Point Portföyü":
     render_premium_buy_portfolio(target_list, username)
 
 # ==============================================================================
-# 10. MODÜL: TÜRK FONLARI
+# 9. MODÜL: TÜRK FONLARI
 # ==============================================================================
 elif module == "Türk Fonları":
     st.header("🇹🇷 Türk Fonları")
@@ -1106,7 +1076,7 @@ elif module == "Fonlarım":
     render_turk_fonlari_takip(username)
 
 # ==============================================================================
-# 11. MODÜL: HİSSE PATERN ANALİZİ
+# 10. MODÜL: HİSSE PATERN ANALİZİ
 # ==============================================================================
 elif module == "📐 Hisse Patern Analizi":
     st.header("📐 Hisse Patern Analizi")
@@ -1114,7 +1084,7 @@ elif module == "📐 Hisse Patern Analizi":
     render_hisse_patern(target_list)
 
 # ==============================================================================
-# 12. MODÜL: BACKTEST
+# 11. MODÜL: BACKTEST
 # ==============================================================================
 elif module == "BackTest":
     st.header("🧪 BackTest")
