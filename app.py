@@ -10,9 +10,10 @@ from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import (
-    get_scanner_data, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
+    get_scanner_data, bars_from_df, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
 )
+from buy_algorithms import ALGORITHMS, reject_if_marketable
 from stoploss import get_stoploss_data
 from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
@@ -329,6 +330,13 @@ elif module == "Alım Bölgesi Tarama":
     use_cup = scan_cb1.checkbox("Fincan-Kulp", value=True, key="scan_use_cup")
     use_obo = scan_cb2.checkbox("OBO & TOBO", value=True, key="scan_use_obo")
 
+    st.caption("Alım Sinyali Algoritmaları (opsiyonel - Premium Buy Point Portföyü'ndekiyle aynı algoritmalar)")
+    algo_cols = st.columns(len(ALGORITHMS))
+    selected_algo_ids = [
+        algo_id for col, algo_id in zip(algo_cols, ALGORITHMS.keys())
+        if col.checkbox(ALGORITHMS[algo_id][0], value=False, key=f"scan_algo_{algo_id}")
+    ]
+
     st.caption("Mum Periyodu")
     tf_cols = st.columns(len(SCAN_TIMEFRAMES))
     selected_timeframes = [
@@ -352,7 +360,7 @@ elif module == "Alım Bölgesi Tarama":
 
     if st.button(
         "🚀 Seçili Tarayıcılarla Tara", type="primary",
-        disabled=not (use_cup or use_obo) or not selected_timeframes,
+        disabled=not (use_cup or use_obo or selected_algo_ids) or not selected_timeframes,
     ):
         with st.spinner(f'{market} listesi taranıyor...'):
             signals = []
@@ -366,19 +374,39 @@ elif module == "Alım Bölgesi Tarama":
                     if use_cup and isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
                         signals.append({
                             "Hisse": t, "Tarayıcı Türü": "Fincan-Kulp", "Mum Periyodu": tf_label,
-                            "_tf_code": tf_code, "Mum Seviyesi": round(float(cup['D']['Close']), 2),
+                            "_tf_code": tf_code, "_kind": "pattern", "Mum Seviyesi": round(float(cup['D']['Close']), 2),
                         })
                     if use_obo:
                         if isinstance(obo, dict) and all(k in obo for k in ['left_shoulder', 'head', 'right_shoulder']):
                             signals.append({
                                 "Hisse": t, "Tarayıcı Türü": "OBO", "Mum Periyodu": tf_label,
-                                "_tf_code": tf_code, "Mum Seviyesi": round(float(obo['right_shoulder']['Close']), 2),
+                                "_tf_code": tf_code, "_kind": "pattern", "Mum Seviyesi": round(float(obo['right_shoulder']['Close']), 2),
                             })
                         elif isinstance(tobo, dict) and all(k in tobo for k in ['left_shoulder', 'head', 'right_shoulder']):
                             signals.append({
                                 "Hisse": t, "Tarayıcı Türü": "TOBO", "Mum Periyodu": tf_label,
-                                "_tf_code": tf_code, "Mum Seviyesi": round(float(tobo['right_shoulder']['Close']), 2),
+                                "_tf_code": tf_code, "_kind": "pattern", "Mum Seviyesi": round(float(tobo['right_shoulder']['Close']), 2),
                             })
+                    if selected_algo_ids:
+                        bars = bars_from_df(df_temp)
+                        current_price = float(df_temp['Close'].iloc[-1])
+                        # "trend_pullback" günlük SMA(200) filtresi için günlük kapanışlara
+                        # ihtiyaç duyuyor - bu tek algoritma seçilmediyse gereksiz bir ekstra
+                        # (günlük) veri çekimi yapmaya gerek yok.
+                        daily_closes = None
+                        if tf_code == "1Day":
+                            daily_closes = df_temp['Close'].tolist()
+                        elif "trend_pullback" in selected_algo_ids:
+                            daily_df, _, _, _ = get_scanner_data(t, timeframe="1Day", period_days=daily_days)
+                            daily_closes = daily_df['Close'].tolist() if daily_df is not None else None
+                        for algo_id in selected_algo_ids:
+                            algo_label, algo_fn = ALGORITHMS[algo_id]
+                            sig = reject_if_marketable(algo_fn(bars, daily_closes), current_price)
+                            if sig is not None:
+                                signals.append({
+                                    "Hisse": t, "Tarayıcı Türü": algo_label, "Mum Periyodu": tf_label,
+                                    "_tf_code": tf_code, "_kind": "algo", "Mum Seviyesi": round(float(sig.price), 2),
+                                })
             st.session_state.scan_signals = signals
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
@@ -400,6 +428,9 @@ elif module == "Alım Bölgesi Tarama":
             if c5.button("📊", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
                 st.session_state.selected_ticker = row["Hisse"]
                 st.session_state.selected_ticker_timeframe = row["_tf_code"]
+                st.session_state.selected_ticker_signal = {
+                    "kind": row["_kind"], "label": row["Tarayıcı Türü"], "price": row["Mum Seviyesi"],
+                }
                 st.session_state.show_chart = True
 
         st.divider()
@@ -463,6 +494,13 @@ elif module == "Alım Bölgesi Tarama":
                     mode='lines+markers+text', name='TOBO',
                     line=dict(color='#00ff66', width=3), text=['Sol', 'Baş', 'Sağ'], textposition="bottom center"
                 ))
+            active_signal = st.session_state.get("selected_ticker_signal") or {}
+            if active_signal.get("kind") == "algo" and active_signal.get("price") is not None:
+                fig.add_hline(
+                    y=active_signal["price"], line_dash="dot", line_color="#ffd166",
+                    annotation_text=f"{active_signal.get('label', 'Alım Sinyali')}: {active_signal['price']}",
+                    annotation_position="bottom right",
+                )
             fig.update_layout(
                 title=f"{active_t} ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)}) - Alım Bölgesi Grafiği",
                 template="plotly_dark", height=500, xaxis_rangeslider_visible=False,

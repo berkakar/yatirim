@@ -4,6 +4,19 @@ import numpy as np
 import streamlit as st
 from scipy.signal import argrelextrema
 
+from structure import Bar
+
+
+def bars_from_df(df: pd.DataFrame) -> list[Bar]:
+    """get_scanner_data'nın döndürdüğü OHLCV DataFrame'i, buy_algorithms.py'deki
+    (Alpaca/BackTest ile paylaşılan) algoritmaların beklediği Bar listesine
+    çevirir - böylece aynı algoritmalar yfinance verisi üzerinde de çalışabilir."""
+    return [
+        Bar(t=row.Date.isoformat(), o=float(row.Open), h=float(row.High), l=float(row.Low),
+            c=float(row.Close), v=float(row.Volume))
+        for row in df.itertuples(index=False)
+    ]
+
 # ------------------------------------------------------------------------------
 # FORMASYON TESPİT FONKSİYONLARI (Kendi mevcut algoritmalarınızı buraya koyun)
 # ------------------------------------------------------------------------------
