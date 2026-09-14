@@ -182,6 +182,47 @@ DAILY_DEFAULT_DAYS = 365
 DAILY_MAX_DAYS = 730
 
 
+def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
+    """get_scanner_data ve fetch_daily_pairs'in ortak veri çekme/temizleme
+    mantığı: BIST .IS fallback'i, sütun normalizasyonu, saat dilimi
+    temizliği. Temiz bir OHLCV DataFrame döner, yetersiz/boş veride None."""
+    formatted_ticker = ticker_symbol
+
+    ticker_obj = yf.Ticker(formatted_ticker)
+    df = ticker_obj.history(period=period, interval=interval)
+
+    # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
+    if df is None or df.empty or len(df) < min_rows:
+        if not formatted_ticker.endswith(".IS"):
+            ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
+            df = ticker_obj.history(period=period, interval=interval)
+
+    if df is None or df.empty or len(df) < min_rows:
+        return None
+
+    # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir
+    # (günlük periyotta index adı 'Date', gün-içi periyotlarda 'Datetime' olur)
+    df = df.reset_index()
+    df = df.rename(columns={df.columns[0]: "Date"})
+
+    # Sütun isimlerini standartlaştır (Date, Open, High, Low, Close, Volume)
+    df.columns = [str(col).capitalize() for col in df.columns]
+
+    required_cols = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
+    if not all(col in df.columns for col in required_cols):
+        return None
+
+    # Tarih formatını düzelt ve saat dilimini temizle
+    df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
+
+    # Kapanış fiyatı eksik olan satırları sil
+    df = df.dropna(subset=['Close'])
+
+    if len(df) < min_rows:
+        return None
+    return df
+
+
 @st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar, Yahoo engeline takılmaz
 def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
     """
@@ -199,44 +240,9 @@ def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
         else:
             days = INTRADAY_DEFAULT_DAYS if period_days is None else int(period_days)
             days = max(1, min(days, INTRADAY_MAX_DAYS))
-        yf_period = f"{days}d"
 
-        # BIST hisseleri için otomatik .IS kontrolü
-        formatted_ticker = ticker_symbol
-
-        # yfinance ile veriyi çek (history kullanımı download'a göre çok daha kararlıdır)
-        ticker_obj = yf.Ticker(formatted_ticker)
-        df = ticker_obj.history(period=yf_period, interval=interval)
-
-        # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
-        if df is None or df.empty or len(df) < 60:
-            if not formatted_ticker.endswith(".IS"):
-                ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
-                df = ticker_obj.history(period=yf_period, interval=interval)
-
-        # Veri hala boşsa veya yetersizse None dön
-        if df is None or df.empty or len(df) < 60:
-            return None, None, None, None
-
-        # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir
-        # (günlük periyotta index adı 'Date', gün-içi periyotlarda 'Datetime' olur)
-        df = df.reset_index()
-        df = df.rename(columns={df.columns[0]: "Date"})
-
-        # Sütun isimlerini standartlaştır (Date, Open, High, Low, Close, Volume)
-        df.columns = [str(col).capitalize() for col in df.columns]
-
-        required_cols = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']
-        if not all(col in df.columns for col in required_cols):
-            return None, None, None, None
-
-        # Tarih formatını düzelt ve saat dilimini temizle
-        df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
-        
-        # Kapanış fiyatı eksik olan satırları sil
-        df = df.dropna(subset=['Close'])
-
-        if len(df) < 60:
+        df = _fetch_yf_ohlcv(ticker_symbol, f"{days}d", interval)
+        if df is None:
             return None, None, None, None
 
         # --- FORMASYON ANALİZLERİ ---
@@ -248,3 +254,19 @@ def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
 
     except Exception as e:
         return None, None, None, None
+
+
+@st.cache_data(ttl=1800)
+def fetch_daily_pairs(ticker_symbol):
+    """Trend/SMA200 filtreleri (buy_algorithms.trend_pullback, backtest_engine'deki
+    EMA trend filtresi) için gereken [(tarih, kapanış), ...] listesini döner - bu
+    filtreler yüzlerce günlük bağlam istediğinden (bkz. backtest.py'deki
+    DAILY_TREND_LOOKBACK_DAYS), tarama/backtest gün sayısı üst sınırlarından
+    (DAILY_MAX_DAYS) bağımsız olarak elde olan tüm günlük geçmiş ("max") çekilir.
+    Tarihe göre artan sırada döner, veri yoksa boş liste."""
+    df = _fetch_yf_ohlcv(ticker_symbol, "max", "1d", min_rows=1)
+    if df is None:
+        return []
+    pairs = [(row.Date.date(), float(row.Close)) for row in df.itertuples(index=False)]
+    pairs.sort(key=lambda p: p[0])
+    return pairs

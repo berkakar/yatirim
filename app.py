@@ -10,10 +10,11 @@ from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
 from scanner import (
-    get_scanner_data, bars_from_df, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
+    get_scanner_data, bars_from_df, fetch_daily_pairs, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
 )
 from buy_algorithms import ALGORITHMS, reject_if_marketable
+from backtest_engine import run_backtest
 from stoploss import get_stoploss_data
 from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
@@ -405,27 +406,62 @@ elif module == "Alım Bölgesi Tarama":
                             if sig is not None:
                                 signals.append({
                                     "Hisse": t, "Tarayıcı Türü": algo_label, "Mum Periyodu": tf_label,
-                                    "_tf_code": tf_code, "_kind": "algo", "Mum Seviyesi": round(float(sig.price), 2),
+                                    "_tf_code": tf_code, "_kind": "algo", "_algo_id": algo_id,
+                                    "Mum Seviyesi": round(float(sig.price), 2),
                                 })
+            # Yeni bir tarama, eski sonuç tablosundaki satır sayısını/sırasını
+            # değiştirebilir - "scan_pick_<index>" gibi pozisyona bağlı eski
+            # seçim/backtest-gün durumları yeni (alakasız) satırlara yapışmasın
+            # diye temizlenir. Eski backtest sonuçları da artık bu taramaya ait
+            # değil, onlar da silinir.
+            stale_prefixes = ("scan_pick_", "scan_bt_days_", "scan_bt_pick_")
+            for key in list(st.session_state.keys()):
+                if key.startswith(stale_prefixes) or key == "scan_select_all":
+                    del st.session_state[key]
+            st.session_state.pop("scan_backtest_runs", None)
             st.session_state.scan_signals = signals
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
         st.subheader("🎯 Bulunan Formasyonlar")
         scan_results_df = pd.DataFrame(st.session_state.scan_signals)
 
-        head_cols = st.columns([2, 1.6, 1.3, 1.3, 0.8])
-        for col, label in zip(head_cols, ["Hisse (aktarmak için seç)", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi", "Grafik"]):
+        def _toggle_all_scan_rows():
+            val = st.session_state.get("scan_select_all", False)
+            for i in range(len(scan_results_df)):
+                st.session_state[f"scan_pick_{i}"] = val
+
+        st.checkbox("Tümünü seç", key="scan_select_all", on_change=_toggle_all_scan_rows)
+
+        col_ratios = [2, 1.5, 1.1, 1.1, 1.4, 0.7]
+        head_cols = st.columns(col_ratios)
+        for col, label in zip(head_cols, ["Hisse (seç)", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi", "Backtest Gün Sayısı", "Grafik"]):
             col.markdown(f"**{label}**")
 
         selected_scan_tickers = []
+        selected_backtest_rows = []
         for idx, row in scan_results_df.iterrows():
-            c1, c2, c3, c4, c5 = st.columns([2, 1.6, 1.3, 1.3, 0.8])
-            if c1.checkbox(row["Hisse"], key=f"scan_pick_{idx}"):
+            c1, c2, c3, c4, c5, c6 = st.columns(col_ratios)
+            picked = c1.checkbox(row["Hisse"], key=f"scan_pick_{idx}")
+            if picked:
                 selected_scan_tickers.append(row["Hisse"])
             c2.write(row["Tarayıcı Türü"])
             c3.write(row["Mum Periyodu"])
             c4.write(row["Mum Seviyesi"])
-            if c5.button("📊", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
+            is_algo_row = row["_kind"] == "algo"
+            if is_algo_row:
+                bt_max = DAILY_MAX_DAYS if row["_tf_code"] == "1Day" else INTRADAY_MAX_DAYS
+                bt_days = c5.number_input(
+                    f"{row['Hisse']} backtest gün sayısı", min_value=1, max_value=bt_max, value=bt_max, step=1,
+                    key=f"scan_bt_days_{idx}", label_visibility="collapsed",
+                )
+                if picked:
+                    selected_backtest_rows.append({
+                        "Hisse": row["Hisse"], "algo_id": row["_algo_id"], "tf_code": row["_tf_code"],
+                        "bt_days": int(bt_days),
+                    })
+            else:
+                c5.caption("— (grafik formasyonu, backtest yok)")
+            if c6.button("📊", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
                 st.session_state.selected_ticker = row["Hisse"]
                 st.session_state.selected_ticker_timeframe = row["_tf_code"]
                 st.session_state.selected_ticker_signal = {
@@ -441,15 +477,90 @@ elif module == "Alım Bölgesi Tarama":
         )
         if xfer_col2.button(
             "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
-            disabled=not selected_scan_tickers,
+            disabled=not selected_scan_tickers, key="scan_xfer_signals_btn",
         ):
             st.session_state["premium_buy_pending_transfer"] = list(dict.fromkeys(selected_scan_tickers))
             st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
             st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
             st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
             st.rerun()
+
+        st.divider()
+        bt_col1, bt_col2 = st.columns([3, 2])
+        bt_col1.caption(
+            f"🧪 {len(selected_backtest_rows)} algoritma sinyali seçili."
+            if selected_backtest_rows
+            else "Backtest çalıştırmak için algoritma sinyali veren satırlardan seçim yapın (grafik formasyonları - Fincan-Kulp/OBO/TOBO - için backtest yok)."
+        )
+        if bt_col2.button(
+            "🧪 Seçilenler İçin Backtest Çalıştır", use_container_width=True,
+            disabled=not selected_backtest_rows, key="scan_run_backtest_btn",
+        ):
+            progress = st.progress(0.0)
+            bt_runs = []
+            for i, item in enumerate(selected_backtest_rows):
+                symbol, algo_id, tf_code, bt_days = item["Hisse"], item["algo_id"], item["tf_code"], item["bt_days"]
+                df_bt, _, _, _ = get_scanner_data(symbol, timeframe=tf_code, period_days=bt_days)
+                if df_bt is not None and not df_bt.empty:
+                    result = run_backtest(
+                        symbol=symbol, algorithm=algo_id, timeframe=tf_code, bars=bars_from_df(df_bt),
+                        daily_pairs=fetch_daily_pairs(symbol), days_of_data=bt_days, days_before_trading=0,
+                        starting_budget=10000.0,
+                    )
+                    bt_runs.append({
+                        "Hisse": symbol, "Algoritma": ALGORITHMS[algo_id][0],
+                        "Mum Periyodu": SCAN_TIMEFRAME_LABELS[tf_code], "Gün": bt_days,
+                        "K/Z %": result.pnl_pct, "İşlem Sayısı": len(result.trades),
+                    })
+                progress.progress((i + 1) / len(selected_backtest_rows))
+            progress.empty()
+            st.session_state.scan_backtest_runs = bt_runs
+            if not bt_runs:
+                st.warning("Seçilenler için veri çekilemediğinden backtest çalıştırılamadı.")
     elif 'scan_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
+
+    if 'scan_backtest_runs' in st.session_state and st.session_state.scan_backtest_runs:
+        st.subheader("🧪 Backtest Sonuçları")
+        st.caption(
+            "Yahoo Finance verisiyle çalışır (Alpaca hesabı gerekmez), bu yüzden Backtest modülünün "
+            "kalıcı geçmişine eklenmez - sadece bu sayfada, bu oturumda gösterilir."
+        )
+        bt_runs_df = pd.DataFrame(st.session_state.scan_backtest_runs)
+        with st.expander(f"Tüm çalıştırmalar ({len(bt_runs_df)})"):
+            st.dataframe(bt_runs_df, use_container_width=True, hide_index=True)
+
+        best_df = (
+            bt_runs_df.sort_values("K/Z %", ascending=False)
+            .drop_duplicates(subset="Hisse", keep="first")[["Hisse", "K/Z %"]]
+            .rename(columns={"K/Z %": "En Yüksek Karlılık (%)"})
+            .reset_index(drop=True)
+        )
+
+        bh1, bh2 = st.columns([2, 1.5])
+        bh1.markdown("**Hisse (aktarmak için seç)**")
+        bh2.markdown("**En Yüksek Karlılık (%)**")
+        selected_bt_tickers = []
+        for idx, row in best_df.iterrows():
+            r1, r2 = st.columns([2, 1.5])
+            if r1.checkbox(row["Hisse"], key=f"scan_bt_pick_{idx}"):
+                selected_bt_tickers.append(row["Hisse"])
+            r2.write(row["En Yüksek Karlılık (%)"])
+
+        bt_xfer_col1, bt_xfer_col2 = st.columns([3, 2])
+        bt_xfer_col1.caption(
+            f"✅ {len(selected_bt_tickers)} hisse seçili."
+            if selected_bt_tickers else "Aktarmak istediğiniz hisseleri yukarıdaki kutulardan seçin."
+        )
+        if bt_xfer_col2.button(
+            "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
+            disabled=not selected_bt_tickers, key="scan_bt_xfer_btn",
+        ):
+            st.session_state["premium_buy_pending_transfer"] = list(dict.fromkeys(selected_bt_tickers))
+            st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
+            st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
+            st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
+            st.rerun()
 
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
