@@ -17,7 +17,8 @@ Ters Fibo ("eğik/ters Fibonacci kanalı") tespiti - ekran görüntüsündeki
     hattıdır; aynı eğimde, dikeyde bu iki nokta arasındaki mesafenin
     Fibonacci oranları kadar ötelenmiş paralel hatlar bir kanal
     oluşturur. Standart (yatay) Fibonacci bantlarının aksine bantlar bir
-    trend hattının eğimini takip ettiği için "Ters Fibo" adı kullanılıyor.
+    trend hattının eğimini takip ettiği için "Eğimli Ters Fibo" adı
+    kullanılıyor.
 
 Not: demand_zones.py'deki benzer nota bakınız - bu, elle çizilen, görsel
 yargıya dayanan bir kurulumun mekanik bir yaklaşımıdır; fotoğraftaki

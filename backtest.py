@@ -17,7 +17,7 @@ from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_regular_hours_bars
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
 from backtest_engine import run_backtest
-from buy_algorithms import ALGORITHMS, ters_fibo_signal
+from buy_algorithms import ALGORITHMS, egimli_ters_fibo_signal
 from structure import Bar
 from ters_fibo import analyze as ters_fibo_analyze
 from ters_fibo import nearest_support_below
@@ -158,7 +158,7 @@ def _render_trade_detail_chart(bars: list[Bar], trades: list[dict], symbol: str,
 # ratio -> (renk, çizgi stili) - 0 kanalın ana referans hattı (ilk tepe - dönüm
 # noktası), pozitifler destek tarafında (aşağı ötelenmiş), negatifler direnç
 # tarafında (yukarı ötelenmiş) genişleme seviyeleri.
-_TERS_FIBO_CHART_LEVELS = (
+_EGIMLI_TERS_FIBO_CHART_LEVELS = (
     (-1.0, "#1d3557"), (-0.618, "#457b9d"), (-0.382, "#8ecae6"), (-0.236, "#a8dadc"),
     (0.0, "#ffffff"),
     (0.236, "#ffe066"), (0.382, "#ffc300"), (0.5, "#ffb703"), (0.618, "#fb8500"),
@@ -166,18 +166,18 @@ _TERS_FIBO_CHART_LEVELS = (
 )
 
 
-def _render_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
-    """Ters Fibo algoritmasının kurduğu yapıyı - tepe/dip pivotları, dip
-    ve tepe hatları, dönüm noktası, tüm Fibonacci kanal hatları ve
-    (varsa) muhtemel/gerçekleşmiş alım noktasını - tek bir grafikte
-    gösterir. bkz. ters_fibo.py."""
+def _render_egimli_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
+    """Eğimli Ters Fibo algoritmasının kurduğu yapıyı - tepe/dip
+    pivotları, dip ve tepe hatları, dönüm noktası, tüm Fibonacci kanal
+    hatları ve (varsa) muhtemel/gerçekleşmiş alım noktasını - tek bir
+    grafikte gösterir. bkz. ters_fibo.py."""
     if not bars:
         st.warning("Grafik için mum verisi bulunamadı.")
         return
 
     analysis = ters_fibo_analyze(bars)
     if analysis is None:
-        st.info("Bu veri için Ters Fibo yapısı kurulamadı (yeterli tepe/dip simetrisi bulunamadı).")
+        st.info("Bu veri için Eğimli Ters Fibo yapısı kurulamadı (yeterli tepe/dip simetrisi bulunamadı).")
         return
 
     n = len(bars)
@@ -235,7 +235,7 @@ def _render_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
         marker=dict(symbol="star", size=14, color="#f4a300", line=dict(color="#000000", width=1)),
     ))
 
-    for ratio, color in _TERS_FIBO_CHART_LEVELS:
+    for ratio, color in _EGIMLI_TERS_FIBO_CHART_LEVELS:
         fig.add_trace(go.Scatter(
             x=xs, y=[channel.level(ratio, x) for x in xs], mode="lines",
             name=f"Fib {ratio:g}", line=dict(color=color, width=1, dash="dash"), opacity=0.85,
@@ -243,7 +243,7 @@ def _render_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
 
     last_index = n - 1
     last_bar = bars[-1]
-    signal = ters_fibo_signal(bars)
+    signal = egimli_ters_fibo_signal(bars)
     if signal is not None:
         fig.add_trace(go.Scatter(
             x=[last_index], y=[signal.price], mode="markers+text", name="Alım Sinyali",
@@ -267,13 +267,13 @@ def _render_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
     x_margin = max(5, int(0.15 * n))
     x_range = [-x_margin, (n - 1) + x_margin]
     price_values = [b.h for b in bars] + [b.l for b in bars]
-    for ratio, _color in _TERS_FIBO_CHART_LEVELS:
+    for ratio, _color in _EGIMLI_TERS_FIBO_CHART_LEVELS:
         price_values += [channel.level(ratio, 0), channel.level(ratio, n - 1)]
     y_min, y_max = min(price_values), max(price_values)
     y_pad = (y_max - y_min) * 0.08 or 1.0
 
     fig.update_layout(
-        title=f"{symbol} - Ters Fibo Analizi ({timeframe_label})",
+        title=f"{symbol} - Eğimli Ters Fibo Analizi ({timeframe_label})",
         template="plotly_dark", height=700, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         xaxis=dict(range=x_range), yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
@@ -503,16 +503,16 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
             picked = st.selectbox("İşlem detayı için bir çalıştırma seç", options, key=f"bt_detail_pick_{algo_id}")
             picked_run = runs[options.index(picked)]
 
-            if algo_id == "ters_fibo":
+            if algo_id == "egimli_ters_fibo":
                 fibo_chart_key = f"bt_show_fibo_chart_{algo_id}"
                 if fibo_chart_key not in st.session_state:
                     st.session_state[fibo_chart_key] = False
-                if st.button("📐 Ters Fibo Analiz Grafiği", key=f"bt_fibo_chart_btn_{algo_id}"):
+                if st.button("📐 Eğimli Ters Fibo Analiz Grafiği", key=f"bt_fibo_chart_btn_{algo_id}"):
                     st.session_state[fibo_chart_key] = not st.session_state[fibo_chart_key]
 
                 if st.session_state[fibo_chart_key]:
                     fallback_start = datetime.now(timezone.utc) - timedelta(days=(picked_run.get("days_of_data") or 180) + 5)
-                    with st.spinner("Ters Fibo grafiği için mum verileri çekiliyor..."):
+                    with st.spinner("Eğimli Ters Fibo grafiği için mum verileri çekiliyor..."):
                         try:
                             fibo_bars = _fetch_chart_bars(
                                 key_id, secret_key, picked_run.get("symbol"), picked_run.get("timeframe"),
@@ -521,7 +521,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                         except Exception as e:
                             st.error(f"Mum verileri çekilemedi: {e}")
                             fibo_bars = []
-                    _render_ters_fibo_chart(
+                    _render_egimli_ters_fibo_chart(
                         fibo_bars, picked_run.get("symbol"),
                         TIMEFRAME_LABELS.get(picked_run.get("timeframe"), picked_run.get("timeframe")),
                     )

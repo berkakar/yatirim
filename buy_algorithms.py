@@ -161,13 +161,13 @@ def breakout_volume_signal(bars: list[Bar], daily_closes: list[float] | None = N
     )
 
 
-TERS_FIBO_RATIOS = (0.382, 0.5, 0.618, 0.786)
-TERS_FIBO_TOUCH_TOLERANCE_PCT = 0.005
+EGIMLI_TERS_FIBO_RATIOS = (0.382, 0.5, 0.618, 0.786)
+EGIMLI_TERS_FIBO_TOUCH_TOLERANCE_PCT = 0.005
 
 
-def ters_fibo_signal(bars: list[Bar], daily_closes: list[float] | None = None,
-                      order: int = 2, symmetry_tolerance: int = 1) -> BuySignal | None:
-    """Ters Fibo: tepe/dip simetrisiyle bulunan "dönüm noktası" ile
+def egimli_ters_fibo_signal(bars: list[Bar], daily_closes: list[float] | None = None,
+                             order: int = 2, symmetry_tolerance: int = 1) -> BuySignal | None:
+    """Eğimli Ters Fibo: tepe/dip simetrisiyle bulunan "dönüm noktası" ile
     pencerede en solda kalan ilk tepe arasındaki hattın eğiminde çizilen
     paralel Fibonacci kanalı (bkz. ters_fibo.py). Günlük mumlarla
     kullanılmak üzere tasarlandı (BackTest'te "1 Gün" periyodu seçilerek
@@ -184,15 +184,15 @@ def ters_fibo_signal(bars: list[Bar], daily_closes: list[float] | None = None,
         return None  # konfirmasyon mumu yeşil değil
 
     last_index = len(bars) - 1
-    for ratio in TERS_FIBO_RATIOS:
+    for ratio in EGIMLI_TERS_FIBO_RATIOS:
         level = channel.level(ratio, last_index)
         if level <= 0:
             continue
-        tolerance = level * TERS_FIBO_TOUCH_TOLERANCE_PCT
+        tolerance = level * EGIMLI_TERS_FIBO_TOUCH_TOLERANCE_PCT
         if last.l <= level + tolerance and last.c >= level:
             return BuySignal(
-                algorithm="ters_fibo", price=round(last.c, 2),
-                reason=f"Ters Fibo kanalı {ratio:.3f} destek hattına değip yeşil kapandı",
+                algorithm="egimli_ters_fibo", price=round(last.c, 2),
+                reason=f"Eğimli Ters Fibo kanalı {ratio:.3f} destek hattına değip yeşil kapandı",
                 style="pullback",
             )
     return None
@@ -203,7 +203,7 @@ ALGORITHMS = {
     "trend_pullback": ("Trend İçi Dinamik Düzeltme", trend_pullback_signal),
     "volatility_support": ("Oynaklığa Duyarlı Dinamik Destek", volatility_support_signal),
     "breakout_volume": ("Kırılım + Hacim İvmesi", breakout_volume_signal),
-    "ters_fibo": ("Ters Fibo (Eğik Fibonacci Kanalı)", ters_fibo_signal),
+    "egimli_ters_fibo": ("Eğimli Ters Fibo", egimli_ters_fibo_signal),
 }
 DEFAULT_ALGORITHM = "demand_zone"
 
