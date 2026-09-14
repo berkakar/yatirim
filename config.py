@@ -32,6 +32,8 @@ DEFAULT_NYSE = [
     "XLV", "MAGS", "XLF", "NOW", "TE", "BE", "PLTR", "SOFI", "LLY"
 ]
 
+MARKETS = ["NASDAQ 100", "NYSE", "BIST 100"]
+
 DEFAULT_BIST_100 = [
     "THYAO.IS", "GARAN.IS", "EREGL.IS", "ASELS.IS", "KCHOL.IS", "AKBNK.IS", "SISE.IS", 
     "ISCTR.IS", "TUPRS.IS", "BIMAS.IS", "PETKM.IS", "YKBNK.IS", "PGSUS.IS", "SAHOL.IS", 
@@ -152,6 +154,51 @@ def save_stock_groups(groups_dict, username):
 
     with open(group_file, 'w', encoding='utf-8') as f:
         json.dump(groups_dict, f, ensure_ascii=False, indent=4)
+
+
+def _group_market_file(username):
+    return f"custom_stock_group_markets_{username}.json"
+
+
+def load_group_markets(username):
+    """Kullanıcının hisse gruplarının hangi piyasayla (NASDAQ 100 / NYSE / BIST 100)
+    ilişkilendirildiğini tutan eşlemeyi (grup adı -> piyasa adı) yükler. Bu, hisse
+    gruplarının piyasadan bağımsız serbestçe oluşturulmasının önüne geçip, gruplar
+    arasında anlamlı (aynı piyasaya ait) analizler yapılabilmesini sağlar. Önce
+    GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
+    market_file = _group_market_file(username)
+    data = None
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, market_file, {})
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(market_file):
+        try:
+            with open(market_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+
+    return data or {}
+
+
+def save_group_markets(group_markets, username):
+    """Hisse grubu -> piyasa eşlemesini kalıcı olması için GitHub'a commit'ler
+    (mümkün olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_stock_groups
+    için aynı gerekçe."""
+    market_file = _group_market_file(username)
+    token = st.secrets.get("GITHUB_TOKEN")
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, market_file, group_markets, f"Update stock group markets ({username})")
+        except Exception as e:
+            st.warning(f"⚠️ Hisse grubu-piyasa eşlemesi GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
+    with open(market_file, 'w', encoding='utf-8') as f:
+        json.dump(group_markets, f, ensure_ascii=False, indent=4)
 
 
 def _capital_file(username):
