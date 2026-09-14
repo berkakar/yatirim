@@ -9,7 +9,7 @@ import os
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
-from scanner import get_scanner_data
+from scanner import get_scanner_data, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS
 from stoploss import get_stoploss_data
 from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
 from dtw_analysis import (
@@ -320,70 +320,97 @@ if module == NAV_HOME:
 # ==============================================================================
 elif module == "Alım Bölgesi Tarama":
     st.header("🔍 Alım Bölgesi Tarama")
-    st.caption("Taramak istediğiniz formasyon(lar)ı seçip aşağıdaki butona basın.")
+    st.caption("Taramak istediğiniz formasyon(lar)ı ve mum periyodu/periyotlarını seçip aşağıdaki butona basın.")
 
     scan_cb1, scan_cb2 = st.columns(2)
     use_cup = scan_cb1.checkbox("Fincan-Kulp", value=True, key="scan_use_cup")
     use_obo = scan_cb2.checkbox("OBO & TOBO", value=True, key="scan_use_obo")
 
-    if st.button("🚀 Seçili Tarayıcılarla Tara", type="primary", disabled=not (use_cup or use_obo)):
+    st.caption("Mum Periyodu")
+    tf_cols = st.columns(len(SCAN_TIMEFRAMES))
+    selected_timeframes = [
+        tf_code for col, tf_code in zip(tf_cols, SCAN_TIMEFRAMES)
+        if col.checkbox(SCAN_TIMEFRAME_LABELS[tf_code], value=(tf_code == "1Day"), key=f"scan_tf_{tf_code}")
+    ]
+
+    if st.button(
+        "🚀 Seçili Tarayıcılarla Tara", type="primary",
+        disabled=not (use_cup or use_obo) or not selected_timeframes,
+    ):
         with st.spinner(f'{market} listesi taranıyor...'):
             signals = []
-            for t in target_list:
-                df_temp, cup, obo, tobo = get_scanner_data(t)
-                if df_temp is None or df_temp.empty:
-                    continue
-                if use_cup and isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
-                    signals.append({"Hisse": t, "Tarayıcı Türü": "Fincan-Kulp", "Mum Seviyesi": round(float(cup['D']['Close']), 2)})
-                if use_obo:
-                    if isinstance(obo, dict) and all(k in obo for k in ['left_shoulder', 'head', 'right_shoulder']):
-                        signals.append({"Hisse": t, "Tarayıcı Türü": "OBO", "Mum Seviyesi": round(float(obo['right_shoulder']['Close']), 2)})
-                    elif isinstance(tobo, dict) and all(k in tobo for k in ['left_shoulder', 'head', 'right_shoulder']):
-                        signals.append({"Hisse": t, "Tarayıcı Türü": "TOBO", "Mum Seviyesi": round(float(tobo['right_shoulder']['Close']), 2)})
+            for tf_code in selected_timeframes:
+                tf_label = SCAN_TIMEFRAME_LABELS[tf_code]
+                for t in target_list:
+                    df_temp, cup, obo, tobo = get_scanner_data(t, timeframe=tf_code)
+                    if df_temp is None or df_temp.empty:
+                        continue
+                    if use_cup and isinstance(cup, dict) and all(k in cup for k in ['A', 'B', 'C', 'D']):
+                        signals.append({
+                            "Hisse": t, "Tarayıcı Türü": "Fincan-Kulp", "Mum Periyodu": tf_label,
+                            "_tf_code": tf_code, "Mum Seviyesi": round(float(cup['D']['Close']), 2),
+                        })
+                    if use_obo:
+                        if isinstance(obo, dict) and all(k in obo for k in ['left_shoulder', 'head', 'right_shoulder']):
+                            signals.append({
+                                "Hisse": t, "Tarayıcı Türü": "OBO", "Mum Periyodu": tf_label,
+                                "_tf_code": tf_code, "Mum Seviyesi": round(float(obo['right_shoulder']['Close']), 2),
+                            })
+                        elif isinstance(tobo, dict) and all(k in tobo for k in ['left_shoulder', 'head', 'right_shoulder']):
+                            signals.append({
+                                "Hisse": t, "Tarayıcı Türü": "TOBO", "Mum Periyodu": tf_label,
+                                "_tf_code": tf_code, "Mum Seviyesi": round(float(tobo['right_shoulder']['Close']), 2),
+                            })
             st.session_state.scan_signals = signals
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
         st.subheader("🎯 Bulunan Formasyonlar")
         scan_results_df = pd.DataFrame(st.session_state.scan_signals)
-        scan_event = st.dataframe(
-            scan_results_df, use_container_width=True, hide_index=True,
-            on_select="rerun", selection_mode="multi-row", key="scan_results_table",
-        )
-        selected_idx = list(scan_event.selection.rows) if scan_event and scan_event.selection else []
-        selected_scan_tickers = scan_results_df.iloc[selected_idx]["Hisse"].tolist() if selected_idx else []
 
+        head_cols = st.columns([2, 1.6, 1.3, 1.3, 0.8])
+        for col, label in zip(head_cols, ["Hisse (aktarmak için seç)", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi", "Grafik"]):
+            col.markdown(f"**{label}**")
+
+        selected_scan_tickers = []
+        for idx, row in scan_results_df.iterrows():
+            c1, c2, c3, c4, c5 = st.columns([2, 1.6, 1.3, 1.3, 0.8])
+            if c1.checkbox(row["Hisse"], key=f"scan_pick_{idx}"):
+                selected_scan_tickers.append(row["Hisse"])
+            c2.write(row["Tarayıcı Türü"])
+            c3.write(row["Mum Periyodu"])
+            c4.write(row["Mum Seviyesi"])
+            if c5.button("📊", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
+                st.session_state.selected_ticker = row["Hisse"]
+                st.session_state.selected_ticker_timeframe = row["_tf_code"]
+                st.session_state.show_chart = True
+
+        st.divider()
         xfer_col1, xfer_col2 = st.columns([3, 2])
         xfer_col1.caption(
             f"✅ {len(selected_scan_tickers)} hisse seçili."
-            if selected_scan_tickers else "Aktarmak istediğiniz satırları yukarıdaki tablodan seçin."
+            if selected_scan_tickers else "Aktarmak istediğiniz hisseleri yukarıdaki kutulardan seçin."
         )
         if xfer_col2.button(
             "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
             disabled=not selected_scan_tickers,
         ):
-            st.session_state["premium_buy_pending_transfer"] = selected_scan_tickers
+            st.session_state["premium_buy_pending_transfer"] = list(dict.fromkeys(selected_scan_tickers))
             st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
             st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
             st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
             st.rerun()
-
-        st.divider()
-        cols = st.columns(min(len(scan_results_df), 5))
-        for idx, row in scan_results_df.iterrows():
-            col_idx = idx % 5
-            t_sig = row["Hisse"]
-            if cols[col_idx].button(f"📊 {t_sig} ({row['Tarayıcı Türü']})", key=f"btn_scan_{idx}_{t_sig}"):
-                render_chart_for(t_sig)
     elif 'scan_signals' in st.session_state:
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
+        active_tf = st.session_state.get("selected_ticker_timeframe") or "1Day"
         st.write("---")
-        st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}**")
-        df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t)
+        st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
+        df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t, timeframe=active_tf)
         if df is not None and not df.empty:
-            df_viz = df.iloc[-126:]
+            viz_bars = {"15Min": 400, "30Min": 300, "1Hour": 250, "1Day": 126}.get(active_tf, 126)
+            df_viz = df.iloc[-viz_bars:]
             fig = go.Figure(data=[go.Candlestick(
                 x=df_viz['Date'], open=df_viz['Open'], high=df_viz['High'],
                 low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
@@ -417,7 +444,10 @@ elif module == "Alım Bölgesi Tarama":
                     mode='lines+markers+text', name='TOBO',
                     line=dict(color='#00ff66', width=3), text=['Sol', 'Baş', 'Sağ'], textposition="bottom center"
                 ))
-            fig.update_layout(title=f"{active_t} - Alım Bölgesi Grafiği", template="plotly_dark", height=500, xaxis_rangeslider_visible=False)
+            fig.update_layout(
+                title=f"{active_t} ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)}) - Alım Bölgesi Grafiği",
+                template="plotly_dark", height=500, xaxis_rangeslider_visible=False,
+            )
             st.plotly_chart(fig, use_container_width=True)
 
 

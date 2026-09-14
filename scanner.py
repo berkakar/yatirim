@@ -150,33 +150,55 @@ def detect_tobo(df, order=10, symmetry_threshold=0.1, min_head_prominence=0.15, 
 # ------------------------------------------------------------------------------
 # APP.PY'NİN BEKLEDİĞİ ANA FONKSİYON (ÖNBELLEKLİ VE GÜVENLİ)
 # ------------------------------------------------------------------------------
+# BackTest modülündeki (backtest.py) TIMEFRAME_LABELS ile aynı etiketler -
+# uygulama genelinde tutarlılık için. Burada ayrıca tanımlanır (import
+# edilmez) çünkü backtest.py çok daha ağır bağımlılıklar (Alpaca client vb.)
+# sürükler ve scanner.py'nin bunlara ihtiyacı yok.
+SCAN_TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
+SCAN_TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
+
+# Her mum periyodu için yfinance interval/period parametreleri. 15m/30m
+# Yahoo tarafında en fazla ~60 gün geriye gidebiliyor, 60m (1 saat) ~730 gün.
+_YF_TIMEFRAME_PARAMS = {
+    "15Min": {"interval": "15m", "period": "60d"},
+    "30Min": {"interval": "30m", "period": "60d"},
+    "1Hour": {"interval": "1h", "period": "730d"},
+    "1Day": {"interval": "1d", "period": "1y"},
+}
+
+
 @st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar, Yahoo engeline takılmaz
-def get_scanner_data(ticker_symbol):
+def get_scanner_data(ticker_symbol, timeframe="1Day"):
     """
     app.py tarafından çağrılan ana fonksiyon.
     Veriyi çeker, temizler ve formasyon analizlerini yapar.
+    timeframe: SCAN_TIMEFRAMES içinden biri ("15Min", "30Min", "1Hour", "1Day").
     """
     try:
+        yf_params = _YF_TIMEFRAME_PARAMS.get(timeframe, _YF_TIMEFRAME_PARAMS["1Day"])
+
         # BIST hisseleri için otomatik .IS kontrolü
         formatted_ticker = ticker_symbol
-        
+
         # yfinance ile veriyi çek (history kullanımı download'a göre çok daha kararlıdır)
         ticker_obj = yf.Ticker(formatted_ticker)
-        df = ticker_obj.history(period="1y", interval="1d")
-        
+        df = ticker_obj.history(period=yf_params["period"], interval=yf_params["interval"])
+
         # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
         if df is None or df.empty or len(df) < 60:
             if not formatted_ticker.endswith(".IS"):
                 ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
-                df = ticker_obj.history(period="1y", interval="1d")
+                df = ticker_obj.history(period=yf_params["period"], interval=yf_params["interval"])
 
         # Veri hala boşsa veya yetersizse None dön
         if df is None or df.empty or len(df) < 60:
             return None, None, None, None
 
-        # Indeks olan 'Date' sütununu normal sütun yap
+        # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir
+        # (günlük periyotta index adı 'Date', gün-içi periyotlarda 'Datetime' olur)
         df = df.reset_index()
-        
+        df = df.rename(columns={df.columns[0]: "Date"})
+
         # Sütun isimlerini standartlaştır (Date, Open, High, Low, Close, Volume)
         df.columns = [str(col).capitalize() for col in df.columns]
 
