@@ -1,5 +1,5 @@
 {
-  "budget": 77839.22,
+  "budget": 100275.16,
   "weights": {
     "AMZN": 12.0,
     "NVDA": 12.0,
@@ -13,7 +13,7 @@
   "algorithm": "trend_pullback",
   "symbol_settings": {
     "NVDA": {
-      "algorithm": "breakout_volume",
+      "algorithm": "demand_zone",
       "timeframe": "30Min"
     },
     "INTC": {
