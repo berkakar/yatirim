@@ -11,12 +11,14 @@ okunur - Streamlit tarafı bunları zaten GitHub'a commit'liyor (bkz.
 turk_fonlari_takip_data.py, bildirim_data.py).
 
 Aynı durumun tekrar tekrar bildirilmemesi için (ör. 5 dakikada bir aynı
-%-4 düşüş için spam atılmasın diye) her kullanıcı+hisse için en son
-gönderilen düşüş yüzdesi (bildirim_durumu.json) tutulur - bir hisse için
-yeni kontrol, son gönderilenle AYNI yüzdeyi buluyorsa bildirim
-atlanır; yüzde değiştiyse (düşüş derinleştiyse ya da azaldıysa) yeniden
-gönderilir. Hisse eşiğin üzerine çıkıp (düşüş toparlanıp) tekrar
-düşerse, aynı yüzdeye denk gelse bile "yeni" bir olay sayılıp bildirilir.
+düşüşler için spam atılmasın diye) her kullanıcının o an eşiği aşan TÜM
+hisselerinin anlık görüntüsü (bildirim_durumu.json) tutulur - bu görüntü
+bir önceki gönderilen bildirimle birebir AYNI ise (hiçbir hisse eklenmedi/
+çıkmadı, hiçbir yüzde değişmedi) yeni bildirim gönderilmez; en ufak bir
+fark olursa (yeni bir hisse eşiği aştı, biri toparlandı, ya da mevcut
+birinin yüzdesi değişti) o anki TÜM eşiği aşan hisseleri içeren tam bir
+bildirim gönderilir - böylece kullanıcı her bildirimde fonun o anki
+tüm düşüş tablosunu görür, sadece son değişen tek hisseyi değil.
 
 Run with --once (GitHub Actions workflow'u tarafından kullanılır).
 """
@@ -153,32 +155,33 @@ def run_once() -> None:
         threshold = settings.get("loss_threshold_pct", DEFAULT_LOSS_THRESHOLD_PCT)
         prev_notified = state.get(username, {})
 
-        # Şu an eşiği aşan tüm hisseler (yüzdesiyle) - hisse toparlanıp
+        # Şu an eşiği aşan TÜM hisseler (yüzdesiyle) - hisse toparlanıp
         # eşiğin üzerine çıktığında burada yer almaz, böylece durumdan da
-        # düşer (bir dahaki düşüşte "yeni" olay sayılır).
+        # düşer (bir dahaki düşüşte "yeni" olay sayılır). Bildirim, bu
+        # bütün listeyi (sadece değişen hisseyi değil) içerir - "değişiklik"
+        # bütün olarak önceki bildirimle aynı olup olmamasına bakılarak
+        # belirlenir, yoksa kullanıcı aynı anda düşen başka hisseleri
+        # göremiyordu.
         currently_breaching: dict[str, float] = {}
-        changed = []
         for ticker, funds in ticker_funds.items():
             change = changes.get(ticker)
             if change is None or change > threshold:
                 continue
             currently_breaching[ticker] = change
-            if prev_notified.get(ticker) != change:
-                changed.append((ticker, change, funds))
 
-        if not changed:
+        if currently_breaching == prev_notified:
             new_state[username] = currently_breaching
             continue
 
         lines = [f"⚠️ Fonlarım Uyarısı - Günlük Kayıp Eşiği (%{threshold}) Aşıldı\n"]
-        for ticker, change, funds in sorted(changed, key=lambda c: c[1]):
-            fund_desc = ", ".join(f"{code} (%{weight})" for code, weight in funds)
+        for ticker, change in sorted(currently_breaching.items(), key=lambda c: c[1]):
+            fund_desc = ", ".join(f"{code} (%{weight})" for code, weight in ticker_funds[ticker])
             lines.append(f"• {ticker}: %{change} - {fund_desc}")
         message = "\n".join(lines)
 
         sent_ok = False
         if not bot_token:
-            log(f"{username} için {len(changed)} değişiklik var ama bot token yok, atlanıyor.")
+            log(f"{username} için {len(currently_breaching)} hisse eşik altında ama bot token yok, atlanıyor.")
         else:
             try:
                 send_telegram_message(bot_token, settings["telegram_chat_id"], message)
@@ -188,13 +191,11 @@ def run_once() -> None:
 
         if sent_ok:
             new_state[username] = currently_breaching
-            log(f"{username} için {len(changed)} hisse bildirimi gönderildi: {[c[0] for c in changed]}")
+            log(f"{username} için {len(currently_breaching)} hisse bildirimi gönderildi: {list(currently_breaching)}")
         else:
-            # Gönderim başarısız oldu - değişen hisseleri eski değerleriyle
-            # bırak ki bir sonraki çalıştırmada tekrar "değişmiş" sayılıp
-            # yeniden denensin; sadece artık eşiği aşmayanları (toparlananları)
-            # durumdan düş.
-            new_state[username] = {t: v for t, v in prev_notified.items() if t in currently_breaching}
+            # Gönderim başarısız oldu - durumu ilerletme ki bir sonraki
+            # çalıştırmada tekrar "değişmiş" sayılıp yeniden denensin.
+            new_state[username] = prev_notified
 
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(new_state, f, ensure_ascii=False, indent=2)

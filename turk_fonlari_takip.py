@@ -67,10 +67,11 @@ def _render_notification_settings(username: str) -> None:
     st.subheader("🔔 Bildirim Ayarları")
     st.caption(
         "Takip ettiğiniz fonların en büyük 10 hissesinden biri günlük bazda belirlediğiniz "
-        "eşiğin altına düşerse Telegram üzerinden bildirim alırsınız. Kontrol, GitHub Actions "
-        "ile BIST işlem saatlerinde 5 dakikada bir yapılır; bir hissenin düşüş yüzdesi bir "
-        "önceki bildirime göre değişmediyse tekrar bildirim gönderilmez, sadece değiştiğinde "
-        "(derinleştiğinde ya da toparlanıp tekrar düştüğünde) yeniden bildirilir."
+        "eşiğin altına düşerse Telegram üzerinden bildirim alırsınız - bildirim, o an eşiği "
+        "aşan TÜM hisseleri birlikte listeler. Kontrol, GitHub Actions ile BIST işlem "
+        "saatlerinde 5 dakikada bir yapılır; bu liste bir önceki bildirimle birebir aynıysa "
+        "tekrar gönderilmez, en ufak bir değişiklik (yeni bir hisse eklenmesi, biri "
+        "toparlanması ya da bir yüzdenin değişmesi) olursa güncel tam liste yeniden gönderilir."
     )
 
     settings = st.session_state.bildirim_ayarlari
