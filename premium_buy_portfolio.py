@@ -223,6 +223,13 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             "tutarın (adet × ortalama giriş) toplam bütçeye oranı olarak otomatik gelir - kaydetmeden önce "
             "istediğiniz gibi değiştirebilirsiniz."
         )
+        st.caption(
+            "ℹ️ Zaten açık bir pozisyonu olan hissede ağırlığı düşürmek Alpaca'da otomatik satış/azaltma "
+            "yapmaz - sistem mevcut hisseleri satıp portföyü yeni ağırlığa küçültmez. Tek etkisi, o hisseye "
+            "artık ilave alım yapılmamasıdır (yatırılan tutar zaten yeni hedefin üzerinde kaldığı sürece); "
+            "pozisyon, kendi stop-loss'u (Trailing Stop modülü) tetiklenene ya da elle kapatılana kadar "
+            "olduğu gibi açık kalır."
+        )
         total_weight = edited_weights["Ağırlık %"].sum()
         if abs(total_weight - 100) < 0.01:
             st.caption(f"Toplam ağırlık: %{total_weight:.1f}")
