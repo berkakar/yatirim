@@ -8,8 +8,8 @@ from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
 from otomatik_alim_satim_core import (
     DEFAULT_ALGORITHM_ID, DEFAULT_DAYS_BEFORE_TRADING, DEFAULT_DAYS_OF_DATA, DEFAULT_MAX_CANDIDATES,
-    DEFAULT_MIN_BACKTEST_PROFIT_PCT, TIMEFRAME_LABELS, build_universe, filter_profitable,
-    narrow_by_momentum, run_backtests, scan_universe,
+    DEFAULT_MIN_BACKTEST_PROFIT_PCT, DEFAULT_MOMENTUM_LOOKBACK_DAYS, TIMEFRAME_LABELS, build_universe,
+    filter_profitable, narrow_by_momentum, run_backtests, scan_universe,
 )
 from ui_style import zebra_style
 
@@ -117,19 +117,31 @@ def render_otomatik_alim_satim(username: str):
         display_cols = ["Hisse", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi"]
         st.dataframe(zebra_style(pd.DataFrame(scan_rows)[display_cols]), use_container_width=True, hide_index=True)
 
+        momentum_lookback_days = st.number_input(
+            "Ek algoritmik filtre kaç gün geriye dönük uygulansın",
+            min_value=1, max_value=180,
+            value=int(config.get("momentum_lookback_days") or DEFAULT_MOMENTUM_LOOKBACK_DAYS),
+            step=1,
+            key="oas_momentum_lookback_days",
+            help="RSI14/RSI21 ve EMA50/EMA200 kesişimlerinin aranacağı geriye dönük gün sayısı.",
+        )
+
         if st.button("🧭 Ek Algoritma ile Daralt (RSI14/RSI21 + EMA50/EMA200)"):
-            with st.spinner("Son bir haftadaki momentum teyidi kontrol ediliyor..."):
-                st.session_state["oas_candidates"] = narrow_by_momentum(client, scan_rows, DEFAULT_MAX_CANDIDATES)
+            with st.spinner(f"Son {int(momentum_lookback_days)} gündeki momentum teyidi kontrol ediliyor..."):
+                st.session_state["oas_candidates"] = narrow_by_momentum(
+                    client, scan_rows, DEFAULT_MAX_CANDIDATES, int(momentum_lookback_days),
+                )
             st.session_state.pop("oas_backtest_rows", None)
 
     candidates = st.session_state.get("oas_candidates")
     if candidates is not None:
+        used_lookback_days = int(st.session_state.get("oas_momentum_lookback_days", DEFAULT_MOMENTUM_LOOKBACK_DAYS))
         st.subheader(f"🎯 Daraltılmış Adaylar ({len(candidates)}/{DEFAULT_MAX_CANDIDATES})")
         st.caption(
-            "Son 5 işlem günü içinde RSI14'ün RSI21'i YUKARI kesmesi VE EMA50'nin EMA200'ü yukarı "
-            "kesmesi (\"Golden Cross\") olaylarını BİRLİKTE gösteren hisseler - iki bağımsız momentum "
-            "sinyalinin aynı pencerede teyidi. Bu sıkı bir filtredir, bazı taramalarda 0 aday çıkması "
-            "beklenir; 10, üst sınırdır."
+            f"Son {used_lookback_days} gün içinde RSI14'ün RSI21'i YUKARI kesmesi VE EMA50'nin EMA200'ü "
+            "yukarı kesmesi (\"Golden Cross\") olaylarını BİRLİKTE gösteren hisseler - iki bağımsız "
+            "momentum sinyalinin aynı pencerede teyidi. Bu sıkı bir filtredir, kısa bir pencerede bazı "
+            "taramalarda 0 aday çıkması beklenir; 10, üst sınırdır."
         )
         if not candidates:
             st.info("Bu kriterlere uyan hisse bulunamadı.")
@@ -219,6 +231,7 @@ def render_otomatik_alim_satim(username: str):
             "timeframes": selected_timeframes,
             "min_backtest_profit_pct": DEFAULT_MIN_BACKTEST_PROFIT_PCT,
             "max_candidates": DEFAULT_MAX_CANDIDATES,
+            "momentum_lookback_days": int(st.session_state.get("oas_momentum_lookback_days", DEFAULT_MOMENTUM_LOOKBACK_DAYS)),
         })
         _save_config(GITHUB_REPO, github_token, new_config, username)
         st.success("Ayarlar kaydedildi.")
