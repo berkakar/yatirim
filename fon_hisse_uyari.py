@@ -31,6 +31,7 @@ import json
 import os
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
@@ -48,6 +49,8 @@ DEFAULT_LOSS_THRESHOLD_PCT = -3.0
 # okuma güvenilmeyip bu tur için atlanır, bir sonraki kontrolde düzelmiş
 # haliyle tekrar denenir.
 _MAX_PLAUSIBLE_DAILY_PCT = 10.5
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 _USER_RE = re.compile(r"^takip_fonlari_(.+)\.json$")
 
@@ -91,7 +94,14 @@ def _daily_change_pct(ticker: str) -> float | None:
     değil, aynı portföy yönetim şirketinin başka bir TEFAS fonu (fon
     içinde fon pozisyonu) çıkabilir - bu ticker'lar Yahoo Finance'te
     bulunamaz, bu yüzden yfinance başarısız olursa TEFAS fon fiyatı
-    üzerinden aynı hesap yedek olarak denenir."""
+    üzerinden aynı hesap yedek olarak denenir.
+
+    Son satırın gerçekten BUGÜNE (İstanbul tarihine) ait olduğu da ayrıca
+    doğrulanır - piyasa henüz açılmamışsa ya da veri akışı gecikmişse
+    yfinance'in son iki satırı aslında dünkü ve önceki günkü kapanış
+    olabilir; bunu sessizce "bugünkü değişim" diye etiketlemek yerine bu
+    turu atlayıp bir sonraki kontrolde tekrar denenir."""
+    today = datetime.now(TR_TZ).date()
     for symbol in (f"{ticker}.IS", ticker):
         try:
             hist = yf.Ticker(symbol).history(period="5d", interval="1d")
@@ -101,6 +111,8 @@ def _daily_change_pct(ticker: str) -> float | None:
             continue
         closes = hist["Close"].dropna()
         if len(closes) < 2:
+            continue
+        if closes.index[-1].date() != today:
             continue
         prev_close, last_close = float(closes.iloc[-2]), float(closes.iloc[-1])
         if prev_close == 0:
