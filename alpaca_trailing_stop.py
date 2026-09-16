@@ -71,6 +71,7 @@ from zoneinfo import ZoneInfo
 import requests
 from dotenv import load_dotenv
 
+from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from indicators import atr, ema
 from structure import Bar, validated_trailing_level
@@ -120,6 +121,10 @@ EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS = float(os.environ.get("TRADE_EXTENDED_HOURS
 # dosyası ve TELEGRAM_BOT_TOKEN secret'ı - ayrı bir konfigürasyona gerek yok.
 NOTIFICATION_SETTINGS_PATH = "bildirim_ayarlari_berkakar.json"
 
+# get_management_start'ın sembol başına cache'lediği "earliest_stop_at" -
+# bkz. get_management_start'ın docstring'i.
+MANAGEMENT_START_CACHE_PATH = "alpaca_position_management_cache_berkakar.json"
+
 ET = ZoneInfo("America/New_York")
 
 
@@ -157,12 +162,27 @@ def _timeframe_duration(timeframe: str) -> timedelta:
 
 def get_regular_hours_bars(
     client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
+    cache_file: str | None = None,
 ) -> list[Bar]:
-    raw_bars = client.get_raw_bars(symbol, timeframe, start.isoformat())
+    """`cache_file` verilirse (GitHub Actions cron script'leri), bar'lar
+    alpaca_bars_cache üzerinden - sadece eksik/oluşum-halindeki kısmı Alpaca'dan
+    çekilerek - alınır; aksi halde (ör. Streamlit'in interaktif önizlemesi)
+    bugünkü gibi doğrudan tam pencere çekilir. cache_file'lı yol, birden fazla
+    çağıranın (ör. bu script ile alpaca_buy_points.py) FARKLI `start`
+    pencereleri istediği aynı sembol+timeframe için önbellekten fazlasını
+    döndürebileceğinden, aşağıdaki `ts >= start` filtresi her iki yolda da
+    isteneni aşan bar'ları eler."""
+    if cache_file is not None:
+        raw_bars = get_cached_raw_bars(client, cache_file, symbol, timeframe, start)
+    else:
+        raw_bars = client.get_raw_bars(symbol, timeframe, start.isoformat())
 
     bars = []
     for b in raw_bars:
-        ts = _parse_iso(b["t"]).astimezone(ET)
+        ts_utc = _parse_iso(b["t"])
+        if ts_utc < start:
+            continue
+        ts = ts_utc.astimezone(ET)
         if ts.weekday() >= 5:
             continue
         if not (9, 30) <= (ts.hour, ts.minute) < (16, 0):
@@ -179,6 +199,7 @@ def get_regular_hours_bars(
 
 def get_bars_for_timeframe(
     client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
+    cache_file: str | None = None,
 ) -> list[Bar]:
     """get_regular_hours_bars'ın "1Day" için de güvenli hali: günlük barlar
     için get_regular_hours_bars KULLANILMAZ - "regular hours" (09:30-16:00 ET)
@@ -190,23 +211,80 @@ def get_bars_for_timeframe(
     Premium Buy Point karşılaştırma tablosunda satırının görünmesine - yol
     açar. `timeframe` per-sembol ayardan geldiği ve kullanıcı "1 Gün"ü
     seçebildiği için (BackTest, Otomatik Alım/Satım modüllerinde), bu ayrım
-    her per-sembol bar çekiminde şart."""
+    her per-sembol bar çekiminde şart.
+
+    `cache_file` verilirse (bkz. get_regular_hours_bars), "1Day" dalı da
+    kendi verisini DAILY_BARS_CACHE_PATH üzerinden alır (check_trend_filter/
+    _get_daily_closes ile aynı önbellek) - çağıran taraf hangi cache_file'ı
+    geçerse geçsin, günlük bar'lar her zaman günlük cache'te tutulur; bu
+    parametre sadece "önbellekleme açık mı" sinyalini taşır."""
     if timeframe == "1Day":
-        raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
+        if cache_file is not None:
+            raw = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", start)
+            raw = [b for b in raw if _parse_iso(b["t"]) >= start]
+        else:
+            raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
         return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
-    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=exclude_forming)
+    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=exclude_forming, cache_file=cache_file)
+
+
+def _load_management_start_cache() -> dict:
+    if not os.path.exists(MANAGEMENT_START_CACHE_PATH):
+        return {}
+    with open(MANAGEMENT_START_CACHE_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _save_management_start_cache(cache: dict) -> None:
+    with open(MANAGEMENT_START_CACHE_PATH, "w", encoding="utf-8") as f:
+        json.dump(cache, f, ensure_ascii=False, indent=2)
+
+
+def prune_management_start_cache(open_symbols: set[str]) -> None:
+    """Artık açık pozisyonu olmayan sembollerin cache'lenmiş
+    "earliest_stop_at"ını temizler - aksi halde bir pozisyon kapanıp
+    (muhtemelen haftalar sonra) yeniden açıldığında, get_management_start
+    ESKİ pozisyonun ilk stop'unun zaman damgasını yeni pozisyona
+    uygulayabilir, yapı analizinin gereğinden çok daha eskiye
+    dayanmasına yol açardı. run_once, her pass başında güncel açık
+    pozisyon setiyle bunu çağırır."""
+    cache = _load_management_start_cache()
+    stale = [s for s in cache if s not in open_symbols]
+    if not stale:
+        return
+    for s in stale:
+        del cache[s]
+    _save_management_start_cache(cache)
 
 
 def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) -> datetime:
     """The earlier of `lookback_days` ago and when we first started
     managing this position's stop - whichever is more recent wins, so
     structure from before we ever held the trade can't anchor the
-    reference point."""
+    reference point.
+
+    Pozisyon açık kaldığı sürece bu pozisyonun "earliest_stop_at"ı hiç
+    değişmez (bir pozisyonun ilk stop'u sadece bir kez, açılışında
+    kurulur; sonraki trail'ler zaman içinde geriye gitmez) - bu yüzden
+    sadece o kısım cache'lenir ve get_stop_order_history'nin tekrar tekrar
+    (her pass'te, her açık pozisyon için) çağrılması önlenir.
+    `default_start` ise `lookback_days`'e göre kayan (canlı) bir pencere
+    olduğu için HER ÇAĞRIDA taze hesaplanır - aksi halde lookback_days'ten
+    uzun süredir açık bir pozisyon için pencere donmuş kalırdı."""
     default_start = datetime.now(timezone.utc) - timedelta(days=lookback_days)
-    history = client.get_stop_order_history(symbol, limit=200)
-    if not history:
+
+    cache = _load_management_start_cache()
+    cached = cache.get(symbol)
+    if cached is not None:
+        earliest = _parse_iso(cached["earliest_stop_at"]) if cached.get("earliest_stop_at") else None
+    else:
+        history = client.get_stop_order_history(symbol, limit=200)
+        earliest = min((_parse_iso(o["created_at"]) for o in history), default=None)
+        cache[symbol] = {"earliest_stop_at": earliest.isoformat() if earliest else None}
+        _save_management_start_cache(cache)
+
+    if earliest is None:
         return default_start
-    earliest = min(_parse_iso(o["created_at"]) for o in history)
     return max(default_start, earliest)
 
 
@@ -218,8 +296,8 @@ def check_trend_filter(client: AlpacaClient, symbol: str, side: str) -> bool:
         return True
 
     start = datetime.now(timezone.utc) - timedelta(days=TREND_EMA_PERIOD * 4)
-    raw_bars = client.get_raw_bars(symbol, "1Day", start.isoformat())
-    closes = [b["c"] for b in raw_bars]
+    raw_bars = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", start)
+    closes = [b["c"] for b in raw_bars if _parse_iso(b["t"]) >= start]
     trend_ema = ema(closes, TREND_EMA_PERIOD)
     if trend_ema is None:
         return True
@@ -311,7 +389,7 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
     stop_order_id = stop_order["id"]
 
     management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, management_start)
+    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, management_start, cache_file=INTRADAY_BARS_CACHE_PATH)
     if not bars:
         log(f"{symbol}: no regular-hours bars available, skipping.")
         return
@@ -553,6 +631,7 @@ def run_once(client: AlpacaClient) -> None:
         return
 
     positions = [p for p in client.get_all_positions() if p.get("asset_class") == "us_equity"]
+    prune_management_start_cache({p["symbol"] for p in positions})
     if not positions:
         log("No open equity positions.")
         return

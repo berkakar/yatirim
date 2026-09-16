@@ -274,16 +274,22 @@ class AlpacaClient:
         r.raise_for_status()
         return r.json()
 
+    def get_symbol_fills_since(self, symbol: str, after_iso: str) -> list[dict]:
+        """get_symbol_fills'in mutlak bir 'after' zaman damgası alan hali -
+        alpaca_realized_pnl_cache.py, son kontrolden bu yana geçen fill'leri
+        artımlı çekmek için kullanır (tüm lookback penceresini değil)."""
+        r = self._get("/orders", params={
+            "status": "all", "symbols": symbol, "after": after_iso, "direction": "asc", "limit": 500,
+        })
+        r.raise_for_status()
+        return [o for o in r.json() if o["status"] == "filled" and o.get("filled_avg_price")]
+
     def get_symbol_fills(self, symbol: str, days: int) -> list[dict]:
         """Bu sembol için son `days` gün içinde dolan (filled) emirler, dolum
         zamanına göre artan sırada - compute_realized_loss'un alış/satış
         eşleştirmesi için kullanılır."""
         after = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        r = self._get("/orders", params={
-            "status": "all", "symbols": symbol, "after": after, "direction": "asc", "limit": 500,
-        })
-        r.raise_for_status()
-        return [o for o in r.json() if o["status"] == "filled" and o.get("filled_avg_price")]
+        return self.get_symbol_fills_since(symbol, after)
 
     def compute_realized_loss(self, symbol: str, lookback_days: int = 90) -> float:
         """Son `lookback_days` gün içinde bu sembol için kapanmış (alış+satış
