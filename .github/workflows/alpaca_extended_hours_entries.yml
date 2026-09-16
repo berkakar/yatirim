@@ -22,6 +22,13 @@ on:
     - cron: "*/10 20-23 * * 1-5"  # ~16:00-19:59 ET after-hours
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
+concurrency:
+  group: alpaca-extended-hours-entries
+  cancel-in-progress: false
+
 jobs:
   scan:
     runs-on: ubuntu-latest
@@ -42,3 +49,26 @@ jobs:
           APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
           APCA_API_DATA_URL: https://data.alpaca.markets/v2
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
+      # alpaca_trailing_stop.yml'deki aynı state cache'lerinin (management_start
+      # hariç - o sadece manage_position/trailing-stop tarafında kullanılıyor)
+      # bu workflow'un dokunduğu kısmı - bkz. o dosyadaki commit adımının notu.
+      - name: Commit and push updated Alpaca state cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in alpaca_realized_pnl_cache_berkakar.json alpaca_daily_bars_cache_berkakar.json alpaca_intraday_bars_cache_berkakar.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No cache changes to commit."
+          else
+            git commit -m "Update Alpaca automation state cache"
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
+          fi

@@ -79,11 +79,13 @@ config["stop_loss_enabled"] / config["max_loss_pct"] (set in
 premium_buy_portfolio.py, same UI as the BackTest module's "Zarar Kes") add
 a portfolio-wide circuit breaker on top of that per-trade stop: before
 placing a new entry for a symbol, check_symbol compares that symbol's
-realized loss over the last STOP_LOSS_LOOKBACK_DAYS days (alpaca_client.
-AlpacaClient.compute_realized_loss, paired from its own fill history) against
-its allocated budget (budget * weight_pct). Past the threshold, no new buy
-is placed for that symbol - it stays in cash - though any already-open
-position keeps being managed by its own stop as usual.
+realized loss over the last STOP_LOSS_LOOKBACK_DAYS days (alpaca_realized_pnl_cache.
+get_cached_realized_loss - same FIFO pairing as alpaca_client.compute_realized_loss,
+but incrementally cached so it doesn't re-fetch the whole lookback window's
+order history from Alpaca on every pass) against its allocated budget (budget
+* weight_pct). Past the threshold, no new buy is placed for that symbol - it
+stays in cash - though any already-open position keeps being managed by its
+own stop as usual.
 
 Run with --once (used by the GitHub Actions workflow, as an earlier step
 than the trailing-stop pass).
@@ -113,7 +115,9 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
+from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars, parse_iso
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
     INITIAL_STOP_PCT, extended_hours_session, get_regular_hours_bars, load_telegram_settings,
     load_top_up_stop_mode, TIMEFRAME, log,
@@ -158,6 +162,20 @@ def load_local_config() -> dict:
         return json.load(f)
 
 
+def _get_daily_closes(client: AlpacaClient, symbol: str) -> list[float]:
+    """trend_pullback algoritmasının günlük SMA(200) kontrolü için - cache'li
+    (alpaca_daily_bars_cache_berkakar.json) günlük bar'lardan kapanışları
+    çıkarır. Günlük bar sadece günde bir kez kapandığı için, bu pencere
+    Alpaca'dan gün içindeki her pass'te değil, sadece yeni bir gün açıldığında
+    yeniden çekilir."""
+    daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
+    try:
+        daily_bars = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", daily_start)
+        return [b["c"] for b in daily_bars if parse_iso(b["t"]) >= daily_start]
+    except Exception:
+        return []
+
+
 def check_symbol(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
     max_loss_pct: float | None = None, available_cash: float | None = None,
@@ -200,7 +218,7 @@ def check_symbol(
         return 0.0
 
     if max_loss_pct and position is None:
-        realized_loss = client.compute_realized_loss(symbol, STOP_LOSS_LOOKBACK_DAYS)
+        realized_loss = get_cached_realized_loss(client, symbol, STOP_LOSS_LOOKBACK_DAYS)
         loss_pct = realized_loss / dollar_amount * 100
         if loss_pct >= max_loss_pct:
             log(f"{symbol}: zarar kes tetiklendi (gerçekleşen zarar %{loss_pct:.2f} >= %{max_loss_pct:g} eşik), "
@@ -214,17 +232,13 @@ def check_symbol(
             return 0.0  # bütçe henüz yatırılan tutarı aşmıyor, ilave alıma gerek yok
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+    bars = get_regular_hours_bars(
+        client, symbol, timeframe, start, exclude_forming=True, cache_file=INTRADAY_BARS_CACHE_PATH,
+    )
     if not bars:
         return 0.0
 
-    daily_closes = None
-    if algorithm == "trend_pullback":
-        daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
-        try:
-            daily_closes = [b["c"] for b in client.get_raw_bars(symbol, "1Day", daily_start.isoformat())]
-        except Exception:
-            daily_closes = []
+    daily_closes = _get_daily_closes(client, symbol) if algorithm == "trend_pullback" else None
 
     _, algo_fn = ALGORITHMS[algorithm]
     signal = algo_fn(bars, daily_closes)
@@ -401,23 +415,19 @@ def check_symbol_extended_hours_entry(
         return 0.0, None
 
     if max_loss_pct:
-        realized_loss = client.compute_realized_loss(symbol, STOP_LOSS_LOOKBACK_DAYS)
+        realized_loss = get_cached_realized_loss(client, symbol, STOP_LOSS_LOOKBACK_DAYS)
         loss_pct = realized_loss / dollar_amount * 100
         if loss_pct >= max_loss_pct:
             return 0.0, None
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+    bars = get_regular_hours_bars(
+        client, symbol, timeframe, start, exclude_forming=True, cache_file=INTRADAY_BARS_CACHE_PATH,
+    )
     if not bars:
         return 0.0, None
 
-    daily_closes = None
-    if algorithm == "trend_pullback":
-        daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
-        try:
-            daily_closes = [b["c"] for b in client.get_raw_bars(symbol, "1Day", daily_start.isoformat())]
-        except Exception:
-            daily_closes = []
+    daily_closes = _get_daily_closes(client, symbol) if algorithm == "trend_pullback" else None
 
     _, algo_fn = ALGORITHMS[algorithm]
     signal = algo_fn(bars, daily_closes)
