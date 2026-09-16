@@ -1,0 +1,163 @@
+{
+  "symbols": {
+    "AMZN": {
+      "last_checked_at": "2026-09-16T22:31:10.948690+00:00",
+      "fills": [
+        {
+          "id": "5057abdf-f78b-4668-bf4b-f2d9834e553d",
+          "side": "buy",
+          "filled_avg_price": "253.7125",
+          "filled_qty": "4",
+          "filled_at": "2026-09-01T13:35:37.463563Z"
+        },
+        {
+          "id": "7f5f78a3-6985-465a-9261-89873a14414e",
+          "side": "sell",
+          "filled_avg_price": "255.35",
+          "filled_qty": "4",
+          "filled_at": "2026-09-08T13:33:39.686971Z"
+        }
+      ]
+    },
+    "MSFT": {
+      "last_checked_at": "2026-09-16T22:31:11.532737+00:00",
+      "fills": []
+    },
+    "MU": {
+      "last_checked_at": "2026-09-16T22:31:11.760526+00:00",
+      "fills": [
+        {
+          "id": "359ec2da-b68a-40c2-b55a-c8341a29eec5",
+          "side": "buy",
+          "filled_avg_price": "930.63",
+          "filled_qty": "1",
+          "filled_at": "2026-09-03T13:34:51.224053Z"
+        },
+        {
+          "id": "f29a46be-a109-4645-ad14-dc248069c4ac",
+          "side": "sell",
+          "filled_avg_price": "990.12",
+          "filled_qty": "1",
+          "filled_at": "2026-09-10T13:30:36.923893Z"
+        },
+        {
+          "id": "9421d0b0-bf31-4ca7-8780-f46df2e936fa",
+          "side": "buy",
+          "filled_avg_price": "910.925",
+          "filled_qty": "12",
+          "filled_at": "2026-09-14T13:34:51.270596Z"
+        },
+        {
+          "id": "74c5aeb5-bbf9-4509-a75c-dc450bfdac17",
+          "side": "sell",
+          "filled_avg_price": "926.388333",
+          "filled_qty": "12",
+          "filled_at": "2026-09-14T22:51:10.015443Z"
+        }
+      ]
+    },
+    "NOW": {
+      "last_checked_at": "2026-09-16T22:31:12.099616+00:00",
+      "fills": [
+        {
+          "id": "91ecacd6-a348-495b-8c1f-4d491f5b0954",
+          "side": "buy",
+          "filled_avg_price": "138.95",
+          "filled_qty": "8",
+          "filled_at": "2026-09-02T14:16:59.521486Z"
+        },
+        {
+          "id": "82dc5270-9d5f-4046-84d3-862b313001fd",
+          "side": "sell",
+          "filled_avg_price": "136.84375",
+          "filled_qty": "8",
+          "filled_at": "2026-09-02T17:53:03.017781Z"
+        },
+        {
+          "id": "3ee9458d-e8fc-479c-a14f-f37a5793e916",
+          "side": "buy",
+          "filled_avg_price": "135.29",
+          "filled_qty": "9",
+          "filled_at": "2026-09-08T13:33:09.791974Z"
+        },
+        {
+          "id": "1468a36d-4727-4fc4-920b-a040a4e5c176",
+          "side": "sell",
+          "filled_avg_price": "133.24",
+          "filled_qty": "9",
+          "filled_at": "2026-09-08T18:26:40.768404Z"
+        }
+      ]
+    },
+    "NXPI": {
+      "last_checked_at": "2026-09-16T22:31:12.625745+00:00",
+      "fills": [
+        {
+          "id": "346018e7-5d3f-457c-8e31-cfc341ec1a16",
+          "side": "buy",
+          "filled_avg_price": "222.994",
+          "filled_qty": "5",
+          "filled_at": "2026-09-03T14:08:26.280129Z"
+        },
+        {
+          "id": "91d59328-a6ed-45d2-88f3-3f416ea598e9",
+          "side": "sell",
+          "filled_avg_price": "222.92",
+          "filled_qty": "5",
+          "filled_at": "2026-09-08T19:28:31.115263Z"
+        },
+        {
+          "id": "99a932af-0f9c-45ce-a8d5-1243057c8ca2",
+          "side": "buy",
+          "filled_avg_price": "224.86",
+          "filled_qty": "55",
+          "filled_at": "2026-09-09T18:20:27.855636Z"
+        },
+        {
+          "id": "e39a87f2-b03b-46a8-8d35-169ce79fabd3",
+          "side": "sell",
+          "filled_avg_price": "218.637273",
+          "filled_qty": "55",
+          "filled_at": "2026-09-10T13:32:46.215701Z"
+        },
+        {
+          "id": "4683ddb8-556f-4ee3-bd8b-0690e1549a27",
+          "side": "buy",
+          "filled_avg_price": "224.67",
+          "filled_qty": "55",
+          "filled_at": "2026-09-15T17:38:40.871584Z"
+        },
+        {
+          "id": "590b6d3b-5f8e-4468-b027-e8adceae7529",
+          "side": "sell",
+          "filled_avg_price": "221.04",
+          "filled_qty": "55",
+          "filled_at": "2026-09-16T18:35:42.175951Z"
+        }
+      ]
+    },
+    "SKHY": {
+      "last_checked_at": "2026-09-16T22:31:12.818035+00:00",
+      "fills": [
+        {
+          "id": "c7b3af04-9486-4ee2-9cef-ca8f8cc0f472",
+          "side": "buy",
+          "filled_avg_price": "158.295714",
+          "filled_qty": "7",
+          "filled_at": "2026-09-03T13:36:30.238875Z"
+        },
+        {
+          "id": "1cf9a84a-b70e-48af-8fab-0381c4a97eaa",
+          "side": "sell",
+          "filled_avg_price": "177.117143",
+          "filled_qty": "7",
+          "filled_at": "2026-09-14T13:32:35.999263Z"
+        }
+      ]
+    },
+    "TTWO": {
+      "last_checked_at": "2026-09-16T22:31:13.691935+00:00",
+      "fills": []
+    }
+  }
+}
