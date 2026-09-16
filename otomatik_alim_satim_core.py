@@ -28,6 +28,7 @@ DEFAULT_DAYS_OF_DATA = 180
 DEFAULT_DAYS_BEFORE_TRADING = 0
 DEFAULT_MIN_BACKTEST_PROFIT_PCT = 10.0
 DEFAULT_MAX_CANDIDATES = 10
+DEFAULT_MOMENTUM_LOOKBACK_DAYS = 30
 DEFAULT_ALGORITHM_ID = next(iter(ALGORITHMS))
 
 
@@ -114,10 +115,13 @@ def scan_universe(
     return rows
 
 
-def narrow_by_momentum(client: AlpacaClient, signal_rows: list[dict], max_candidates: int = DEFAULT_MAX_CANDIDATES) -> list[dict]:
-    """Son bir haftada RSI14/RSI21 VE EMA50/EMA200 kesişimini BİRLİKTE
-    gösteren en fazla `max_candidates` hisseyi (satırını) döner - bkz.
-    momentum_filter.py."""
+def narrow_by_momentum(
+    client: AlpacaClient, signal_rows: list[dict], max_candidates: int = DEFAULT_MAX_CANDIDATES,
+    lookback_days: int = DEFAULT_MOMENTUM_LOOKBACK_DAYS,
+) -> list[dict]:
+    """Son `lookback_days` gün içinde RSI14/RSI21 VE EMA50/EMA200 kesişimini
+    BİRLİKTE gösteren en fazla `max_candidates` hisseyi (satırını) döner -
+    bkz. momentum_filter.py."""
     scored = []
     checked_tickers: dict[str, list[float]] = {}
     for row in signal_rows:
@@ -127,7 +131,7 @@ def narrow_by_momentum(client: AlpacaClient, signal_rows: list[dict], max_candid
                 checked_tickers[ticker] = _daily_closes(client, ticker, DAILY_LOOKBACK_DAYS)
             except Exception:
                 checked_tickers[ticker] = []
-        signal = momentum_confirmation(checked_tickers[ticker])
+        signal = momentum_confirmation(checked_tickers[ticker], lookback_days)
         if signal is not None:
             scored.append((row, signal))
     return select_top_candidates(scored, max_candidates)
@@ -243,7 +247,10 @@ def run_pipeline(username: str, client: AlpacaClient, cfg: dict) -> dict:
     signal_rows = scan_universe(
         client, universe, cfg.get("algorithms") or [DEFAULT_ALGORITHM_ID], cfg.get("timeframes") or ["1Day"],
     )
-    candidates = narrow_by_momentum(client, signal_rows, cfg.get("max_candidates", DEFAULT_MAX_CANDIDATES))
+    candidates = narrow_by_momentum(
+        client, signal_rows, cfg.get("max_candidates", DEFAULT_MAX_CANDIDATES),
+        cfg.get("momentum_lookback_days", DEFAULT_MOMENTUM_LOOKBACK_DAYS),
+    )
     cash_allocation = float(cfg.get("cash_allocation") or 0)
 
     backtest_results = run_backtests(client, candidates, cash_allocation, username)

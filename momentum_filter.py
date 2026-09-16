@@ -1,12 +1,14 @@
 """Otomatik Alım/Satım modülünün "ek algoritma" ile hisse kümesini daraltma
-adımı: son bir haftalık pencerede RSI14/RSI21 kesişimi VE EMA50/EMA200
-"golden cross" olayının BİRLİKTE (aynı pencerede) gerçekleştiği hisseleri
-işaretler - iki bağımsız momentum sinyalinin teyidi (confluence), literatürde
-tekil bir göstergeye göre daha az yalancı sinyal üreten bir yaklaşım.
+adımı: kullanıcının belirlediği gün sayısı kadar geriye dönük bir pencerede
+(varsayılan 30 gün) RSI14/RSI21 kesişimi VE EMA50/EMA200 "golden cross"
+olayının BİRLİKTE (aynı pencerede) gerçekleştiği hisseleri işaretler - iki
+bağımsız momentum sinyalinin teyidi (confluence), literatürde tekil bir
+göstergeye göre daha az yalancı sinyal üreten bir yaklaşım.
 
 Bu kasıtlı olarak sıkı bir filtre: günlük EMA50/EMA200 kesişimi seyrek bir
-olay olduğundan bazı taramalarda 0 aday çıkması beklenir - `select_top_
-candidates` en fazla `max_candidates` döner, garanti bir sayı değil."""
+olay olduğundan, pencere kısa tutulursa bazı taramalarda 0 aday çıkması
+beklenir - `select_top_candidates` en fazla `max_candidates` döner, garanti
+bir sayı değil."""
 
 from dataclasses import dataclass
 
@@ -38,7 +40,7 @@ def _bullish_cross_days_ago(fast: list[float | None], slow: list[float | None], 
     return None
 
 
-def momentum_confirmation(daily_closes: list[float], lookback_days: int = 5) -> MomentumSignal | None:
+def momentum_confirmation(daily_closes: list[float], lookback_days: int = 30) -> MomentumSignal | None:
     """`daily_closes` (kronolojik sırada, en az EMA200 için ~200+ gün) üzerinde
     RSI14/RSI21 ve EMA50/EMA200 serilerini hesaplar; son `lookback_days` işlem
     günü içinde HER İKİ kesişim de (RSI14>RSI21'e geçiş VE EMA50>EMA200'e
