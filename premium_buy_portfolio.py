@@ -140,6 +140,12 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         st.session_state["premium_buy_picker_token"] = 0
 
     pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
+    # Otomatik Alım/Satım modülünden aktarılan hisseler için önerilen algoritma/mum
+    # periyodu ve ($ bazlı) ağırlık ipuçları - Alım Bölgesi Tarama'nın Aktar akışı
+    # bunları hiç set etmediği için (boş dict), aşağıdaki varsayılan hesaplama mantığı
+    # o akış için değişmeden kalır.
+    pending_symbol_settings = st.session_state.pop("premium_buy_pending_symbol_settings", None) or {}
+    pending_weight_dollars = st.session_state.pop("premium_buy_pending_weight_dollars", None) or {}
     # current_symbols (Alpaca'daki gerçek watchlist) her zaman satır listesine
     # dahil edilir - aksi halde, "Piyasa Seçimi" değişik bir piyasadayken
     # (veya Aktar ile gelen bir hisse target_list'te hiç yoksa) kaydedilmiş bir
@@ -205,6 +211,8 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             if position is not None and budget > 0:
                 invested = float(position["qty"]) * float(position["avg_entry_price"])
                 return round(invested / budget * 100, 2)
+            if symbol in pending_weight_dollars and budget > 0:
+                return round(pending_weight_dollars[symbol] / budget * 100, 2)
             return float(existing_weights.get(symbol, 0.0))
 
         weight_df = pd.DataFrame({
@@ -264,7 +272,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
                 f"K/Z %{(c.get('pnl_pct') or 0):.2f} · Kaynak: {c.get('source') or 'Alpaca'}"
                 for c in combos
             ]
-            saved = existing_symbol_settings.get(symbol) or {}
+            saved = pending_symbol_settings.get(symbol) or existing_symbol_settings.get(symbol) or {}
             default_idx = 0
             for i, c in enumerate(combos):
                 if c["algorithm"] == saved.get("algorithm") and c["timeframe"] == saved.get("timeframe"):
