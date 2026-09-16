@@ -177,6 +177,26 @@ def get_regular_hours_bars(
     return bars
 
 
+def get_bars_for_timeframe(
+    client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
+) -> list[Bar]:
+    """get_regular_hours_bars'ın "1Day" için de güvenli hali: günlük barlar
+    için get_regular_hours_bars KULLANILMAZ - "regular hours" (09:30-16:00 ET)
+    penceresi gün içi barlar için anlamlı, günlük barın kendi zaman damgasına
+    (Alpaca'da genelde 00:00 ET) uygulanınca bu pencereye hiçbir zaman
+    girmediğinden TÜM barları yanlışlıkla eler (boş liste döner). Bir sembolün
+    seçili mum periyodu "1Day" olduğunda bu, o sembol için sinyal/fiyat hiç
+    hesaplanamamasına - dolayısıyla ne canlı alım emri verilmesine ne de
+    Premium Buy Point karşılaştırma tablosunda satırının görünmesine - yol
+    açar. `timeframe` per-sembol ayardan geldiği ve kullanıcı "1 Gün"ü
+    seçebildiği için (BackTest, Otomatik Alım/Satım modüllerinde), bu ayrım
+    her per-sembol bar çekiminde şart."""
+    if timeframe == "1Day":
+        raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
+        return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
+    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=exclude_forming)
+
+
 def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) -> datetime:
     """The earlier of `lookback_days` ago and when we first started
     managing this position's stop - whichever is more recent wins, so

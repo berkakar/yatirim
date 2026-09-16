@@ -5,7 +5,7 @@ import streamlit as st
 
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import format_order_row, TR_TZ
-from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME
+from alpaca_trailing_stop import get_bars_for_timeframe, TIMEFRAME
 from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
@@ -31,7 +31,7 @@ def _render_buy_point_table(
         timeframe = settings.get("timeframe") or TIMEFRAME
 
         start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
-        bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+        bars = get_bars_for_timeframe(client, symbol, timeframe, start, exclude_forming=True)
         if not bars:
             continue
         try:
