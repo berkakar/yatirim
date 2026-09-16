@@ -1,7 +1,10 @@
 """TEFAS'tan günlük fon verisini çekip önbelleği (tefas_fonlari_cache.json)
-günceller. GitHub Actions tarafından günde bir kez, TEFAS'ın fiyatları
-tamamladığı saatten (~19:00 TRT) 10 dakika sonra çalıştırılır - bkz.
-.github/workflows/tefas_fonlari.yml.
+günceller. GitHub Actions tarafından günde 3 kez (09:00, 13:00 ve TEFAS'ın
+fiyatları tamamladığı saatten ~10 dakika sonra, 19:10 TRT) çalıştırılır -
+bkz. .github/workflows/tefas_fonlari.yml. Günün ilk iki çalıştırmasında
+henüz yeni bir TEFAS günü yayınlanmamışsa (normal durum budur) önbellek
+değişmeden döner; bu sayede fiyatlar beklenenden erken/geç yayınlansa
+bile en kısa sürede yakalanır.
 
 Çekilen ham veri (fiyat, fon toplam değeri, geçmiş) ile hesaplanmış tablo
 (5/10/15/30 iş günlük fiyat ve hacim değişim %) aynı JSON dosyasında

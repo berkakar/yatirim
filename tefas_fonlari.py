@@ -1,7 +1,7 @@
 """Türk Fonları modülü - TEFAS'tan günlük çekilen (bkz. tefas_fetch.py,
-GitHub Actions ile günde 1 kez) Hisse Senedi Yoğun / Değişken / Mutlak
-Getiri / İstatistiksel Arbitraj fonlarının fiyat ve hacim (fon toplam
-değeri) değişim tablosunu gösterir.
+GitHub Actions ile günde 3 kez: sabah, öğlen, akşam) Hisse Senedi Yoğun /
+Değişken / Mutlak Getiri / İstatistiksel Arbitraj fonlarının fiyat ve
+hacim (fon toplam değeri) değişim tablosunu gösterir.
 
 Bu modül TEFAS'a hiç istek atmaz - sadece tefas_fetch.py'nin GitHub'a
 commit'lediği önbellek dosyasını (tefas_fonlari_cache.json) okur, bu yüzden
@@ -80,9 +80,10 @@ def _build_column_config() -> dict:
 def render_turk_fonlari():
     st.caption(
         "Kategori, fon unvanındaki anahtar kelimelere göre otomatik belirlenir. "
-        "Veriler günde 1 kez, TEFAS fiyatlarını tamamladıktan 10 dakika sonra "
-        "otomatik güncellenir - \"X Günlük\" ifadeleri iş günü sayısını belirtir "
-        "(TEFAS hafta sonu/tatil günleri veri yayınlamaz)."
+        "Veriler günde 3 kez (sabah, öğlen, TEFAS fiyatlarını tamamladıktan 10 dakika "
+        "sonra akşam) otomatik kontrol edilir, yeni bir TEFAS günü yayınlandığında "
+        "güncellenir - \"X Günlük\" ifadeleri iş günü sayısını belirtir (TEFAS hafta "
+        "sonu/tatil günleri veri yayınlamaz)."
     )
 
     cache = load_cache()
@@ -92,7 +93,7 @@ def render_turk_fonlari():
     if not table:
         st.info(
             "Henüz önbelleklenmiş veri yok - ilk otomatik çalıştırma bekleniyor "
-            f"(bkz. `{CACHE_FILE}`, GitHub Actions ile günde 1 kez güncellenir)."
+            f"(bkz. `{CACHE_FILE}`, GitHub Actions ile günde 3 kez güncellenir)."
         )
         return
 
