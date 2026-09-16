@@ -40,6 +40,15 @@ from telegram_notify import TelegramError, send_telegram_message
 STATE_FILE = "bildirim_durumu.json"
 DEFAULT_LOSS_THRESHOLD_PCT = -3.0
 
+# BIST'te bir hissenin tek günde hareket edebileceği marj (taban/tavan,
+# devre kesici) ~%10 - bunun belirgin şekilde üzerindeki bir okuma gerçek
+# bir fiyat hareketi olamaz, Yahoo Finance'in intraday akışındaki geçici
+# hatalı bir tick'tir (özellikle açılışta/açılış seansı otururken
+# görülüyor - birkaç dakika içinde kendi kendine düzeliyor). Böyle bir
+# okuma güvenilmeyip bu tur için atlanır, bir sonraki kontrolde düzelmiş
+# haliyle tekrar denenir.
+_MAX_PLAUSIBLE_DAILY_PCT = 10.5
+
 _USER_RE = re.compile(r"^takip_fonlari_(.+)\.json$")
 
 
@@ -96,12 +105,18 @@ def _daily_change_pct(ticker: str) -> float | None:
         prev_close, last_close = float(closes.iloc[-2]), float(closes.iloc[-1])
         if prev_close == 0:
             continue
-        return round((last_close - prev_close) / prev_close * 100, 2)
+        pct = round((last_close - prev_close) / prev_close * 100, 2)
+        if abs(pct) > _MAX_PLAUSIBLE_DAILY_PCT:
+            continue
+        return pct
 
     try:
-        return fetch_fund_daily_change_pct(ticker)
+        pct = fetch_fund_daily_change_pct(ticker)
     except Exception:
         return None
+    if pct is not None and abs(pct) > _MAX_PLAUSIBLE_DAILY_PCT:
+        return None
+    return pct
 
 
 def _load_state() -> dict:
