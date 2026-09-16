@@ -194,15 +194,14 @@ def render_otomatik_alim_satim(username: str):
                 if not selected_backtest_rows:
                     st.error("Aktarmak için en az bir hisse seçin.")
                 else:
-                    n = len(selected_backtest_rows)
-                    dollar_per_symbol = float(cash_allocation) / n if n else 0.0
+                    # Ağırlık burada hesaplanmıyor - Premium Buy Point Portföyü sayfası,
+                    # toplam bütçenin DAHA ÖNCE yüzdesi belirlenmiş hisselere ayrılan
+                    # kısmını düşüp kalanı aktarılan hisse sayısına eşit bölerek kendi
+                    # hesaplıyor (bkz. premium_buy_portfolio.py _default_weight_pct).
                     st.session_state["premium_buy_pending_transfer"] = [r["symbol"] for r in selected_backtest_rows]
                     st.session_state["premium_buy_pending_symbol_settings"] = {
                         r["symbol"]: {"algorithm": r["algorithm"], "timeframe": r["timeframe"]}
                         for r in selected_backtest_rows
-                    }
-                    st.session_state["premium_buy_pending_weight_dollars"] = {
-                        r["symbol"]: dollar_per_symbol for r in selected_backtest_rows
                     }
                     st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
                     st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"

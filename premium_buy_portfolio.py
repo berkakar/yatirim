@@ -150,13 +150,11 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     new_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
     # Otomatik Alım/Satım modülünden aktarılan hisseler için önerilen algoritma/mum
-    # periyodu ve ($ bazlı) ağırlık ipuçları - Alım Bölgesi Tarama'nın Aktar akışı
-    # bunları hiç set etmediği için (boş dict), aşağıdaki varsayılan hesaplama mantığı
-    # o akış için değişmeden kalır. Bu ikisi (transfer_carry'nin aksine) sadece
-    # widget'ın İLK oluşturulduğu anda okunuyor, o yüzden tek seferlik tüketimleri
-    # sorun değil.
+    # periyodu - Alım Bölgesi Tarama'nın Aktar akışı bunu hiç set etmediği için
+    # (boş dict), aşağıdaki varsayılan hesaplama mantığı o akış için değişmeden
+    # kalır. Bu, transfer_carry'nin aksine sadece widget'ın İLK oluşturulduğu
+    # anda okunuyor, o yüzden tek seferlik tüketimi sorun değil.
     pending_symbol_settings = st.session_state.pop("premium_buy_pending_symbol_settings", None) or {}
-    pending_weight_dollars = st.session_state.pop("premium_buy_pending_weight_dollars", None) or {}
 
     if new_transfer:
         st.session_state["premium_buy_transfer_carry"] = list(
@@ -217,14 +215,26 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     if selected_symbols:
         existing_weights = config.get("weights") or {}
 
+        # Yeni aktarılan hisselerin ağırlığı: toplam bütçenin, DAHA ÖNCE
+        # portföy yüzdesi belirlenmiş (bu aktarımdaki semboller HARİÇ)
+        # hisselere ayrılan kısmı düşüldükten sonra kalan payı, aktarılan
+        # hisse sayısına eşit bölerek (toplam bütçeye göre yüzde olarak)
+        # hesaplanır - örn. mevcut hisseler zaten %70 kullanıyorsa ve 3 yeni
+        # hisse aktarıldıysa, her biri kalan %30'un üçte birini (%10) alır.
+        already_allocated_pct = sum(
+            existing_weights.get(s, 0.0) for s in selected_symbols if s not in pending_transfer
+        )
+        remaining_pct = max(0.0, 100.0 - already_allocated_pct)
+        new_transfer_weight_pct = round(remaining_pct / len(pending_transfer), 2) if pending_transfer else 0.0
+
         def _default_weight_pct(symbol: str) -> float:
             # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için GERÇEK güncel
             # ağırlığı (yatırılan tutar = adet × ortalama giriş / bütçe) gösterir -
             # böylece bu alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve
             # top-up için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
             # ama daha önce kaydedilmiş bir ağırlığı olan hisseler o kayıtlı
-            # değeri korur. Daha önce hiç kaydedilmemiş (örn. Alım Bölgesi
-            # Tarama'dan yeni aktarılmış) hisseler için varsayılan 0'dır.
+            # değeri korur. Yeni aktarılan (henüz pozisyonu/kayıtlı ağırlığı
+            # olmayan) hisseler kalan payın eşit bölüşümünü alır.
             try:
                 position = client.get_position(symbol)
             except Exception:
@@ -232,8 +242,8 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             if position is not None and budget > 0:
                 invested = float(position["qty"]) * float(position["avg_entry_price"])
                 return round(invested / budget * 100, 2)
-            if symbol in pending_weight_dollars and budget > 0:
-                return round(pending_weight_dollars[symbol] / budget * 100, 2)
+            if symbol in pending_transfer:
+                return new_transfer_weight_pct
             return float(existing_weights.get(symbol, 0.0))
 
         weight_df = pd.DataFrame({

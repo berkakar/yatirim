@@ -193,7 +193,7 @@ def filter_profitable(results: list[dict], min_pct: float = DEFAULT_MIN_BACKTEST
     return [r for r in results if (r.get("pnl_pct") or 0) > min_pct]
 
 
-def merge_into_portfolio(username: str, selected_rows: list[dict], cash_allocation: float, client: AlpacaClient) -> dict:
+def merge_into_portfolio(username: str, selected_rows: list[dict], client: AlpacaClient) -> dict:
     """SADECE günlük otomatik koşu (`run_pipeline`) tarafından kullanılır -
     portfolio_config_<username>.json'ı yerel dosyadan okur/yazar (GitHub
     Actions kendi checkout'undan okur, workflow'un commit adımı geri
@@ -201,7 +201,13 @@ def merge_into_portfolio(username: str, selected_rows: list[dict], cash_allocati
     premium-buy-portfolio-<username> watchlist'ini var olan sembollerle
     birleştirir. Etkileşimli (Streamlit) akış bunu ÇAĞIRMAZ - o, kullanıcının
     "Portföyü Kaydet" butonuna kadar hiçbir şeyi kalıcı yapmaz (Alım Bölgesi
-    Tarama'nın Aktar akışıyla aynı davranış)."""
+    Tarama'nın Aktar akışıyla aynı davranış).
+
+    Yeni sembollerin ağırlığı: toplam bütçenin, DAHA ÖNCE yüzdesi belirlenmiş
+    (bu turda yeniden atanan semboller hariç) hisselere ayrılan kısmı
+    düşüldükten sonra kalan payı, yeni sembol sayısına eşit bölerek (toplam
+    bütçeye göre yüzde olarak) hesaplanır - premium_buy_portfolio.py'deki
+    manuel Aktar akışıyla aynı mantık."""
     config_path = f"portfolio_config_{username}.json"
     if os.path.exists(config_path):
         with open(config_path, encoding="utf-8") as f:
@@ -211,15 +217,24 @@ def merge_into_portfolio(username: str, selected_rows: list[dict], cash_allocati
 
     symbols = list(dict.fromkeys(r["symbol"] for r in selected_rows))
     n = len(symbols)
-    budget = float(config.get("budget") or 0) or cash_allocation
-    dollar_per_symbol = cash_allocation / n if n else 0.0
-    weight_pct = round(dollar_per_symbol / budget * 100, 2) if budget else 0.0
+
+    budget = float(config.get("budget") or 0)
+    if not budget:
+        try:
+            budget = float(client.get_account()["cash"])
+        except Exception:
+            budget = 0.0
 
     weights = dict(config.get("weights") or {})
     symbol_settings = dict(config.get("symbol_settings") or {})
+
+    already_allocated_pct = sum(pct for sym, pct in weights.items() if sym not in symbols)
+    remaining_pct = max(0.0, 100.0 - already_allocated_pct)
+    new_weight_pct = round(remaining_pct / n, 2) if n else 0.0
+
     for row in selected_rows:
         symbol = row["symbol"]
-        weights[symbol] = weight_pct
+        weights[symbol] = new_weight_pct
         symbol_settings[symbol] = {"algorithm": row["algorithm"], "timeframe": row["timeframe"]}
 
     config["budget"] = budget
@@ -257,7 +272,7 @@ def run_pipeline(username: str, client: AlpacaClient, cfg: dict) -> dict:
     profitable = filter_profitable(backtest_results, cfg.get("min_backtest_profit_pct", DEFAULT_MIN_BACKTEST_PROFIT_PCT))
 
     if profitable:
-        merge_into_portfolio(username, profitable, cash_allocation, client)
+        merge_into_portfolio(username, profitable, client)
 
     return {
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
