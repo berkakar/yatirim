@@ -14,7 +14,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import get_regular_hours_bars
+from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import new_run_id
 from backtest_engine import run_backtest
 from buy_algorithms import ALGORITHMS, compute_all_signals, reject_if_marketable
@@ -33,10 +33,7 @@ DEFAULT_ALGORITHM_ID = next(iter(ALGORITHMS))
 
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
-    if timeframe == "1Day":
-        raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
-        return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
-    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+    return get_bars_for_timeframe(client, symbol, timeframe, start, exclude_forming=True)
 
 
 def _daily_closes(client: AlpacaClient, symbol: str, days: int) -> list[float]:
