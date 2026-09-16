@@ -3,7 +3,10 @@ günlük bazda kullanıcının belirlediği eşiğin altına düşerse Telegram
 bildirimi gönderir.
 
 GitHub Actions tarafından BIST işlem saatlerinde periyodik çalıştırılır
-(bkz. .github/workflows/fon_hisse_uyari.yml). Her kullanıcının takip
+(bkz. .github/workflows/fon_hisse_uyari.yml) - günde 2 kez tetiklenip her
+seferinde ~4 saat boyunca bu scripti 5 dakikada bir --once ile çağıran bir
+döngü şeklinde, çünkü GitHub'ın kendi */5 schedule event'i pratikte
+güvenilir çalışmıyor (saatler süren boşluklar bırakabiliyor). Her kullanıcının takip
 listesi (takip_fonlari_<kullanıcı>.json), bildirim ayarları
 (bildirim_ayarlari_<kullanıcı>.json) ve fonların KAP'tan çekilmiş en
 büyük 10 hissesi (kap_portfoy_cache.json) doğrudan repo checkout'undan
