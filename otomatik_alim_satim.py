@@ -164,6 +164,18 @@ def render_otomatik_alim_satim(username: str):
         if not backtest_rows:
             st.info("Hiçbir aday %10'un üzerinde kârlılık göstermedi.")
         else:
+            # backtest_rows her "Backtest Uygula" tıklamasında değişebilir (farklı
+            # aday sayısı/sırası) - picker'ın key'i sabit kalsaydı, Streamlit eski
+            # çalıştırmadan kalan satır seçimlerini yeni satırlara yanlış eşleyebilirdi
+            # (premium_buy_portfolio.py'deki aynı sorunun aynı çözümü: sayaç arttıkça
+            # widget'ı SIFIRDAN saydırmak).
+            if "oas_backtest_picker_token" not in st.session_state:
+                st.session_state["oas_backtest_picker_token"] = 0
+            if st.session_state.get("oas_backtest_rows_token_source") is not backtest_rows:
+                st.session_state["oas_backtest_picker_token"] += 1
+                st.session_state["oas_backtest_rows_token_source"] = backtest_rows
+            picker_token = st.session_state["oas_backtest_picker_token"]
+
             df = pd.DataFrame(backtest_rows)[["symbol", "algorithm", "timeframe", "pnl_pct", "final_value"]].copy()
             df["algorithm"] = df["algorithm"].map(lambda a: ALGORITHMS[a][0])
             df["timeframe"] = df["timeframe"].map(lambda tf: TIMEFRAME_LABELS.get(tf, tf))
@@ -174,7 +186,7 @@ def render_otomatik_alim_satim(username: str):
                 column_config={"Seçili": st.column_config.CheckboxColumn(required=True)},
                 hide_index=True,
                 use_container_width=True,
-                key="oas_backtest_picker",
+                key=f"oas_backtest_picker_{picker_token}",
             )
             selected_backtest_rows = [backtest_rows[i] for i in edited.index[edited["Seçili"]]]
 

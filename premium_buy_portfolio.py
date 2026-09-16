@@ -138,14 +138,38 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # değiştiğinde yanlış satıra eski bir değerin yapışmasına yol açabiliyordu.
     if "premium_buy_picker_token" not in st.session_state:
         st.session_state["premium_buy_picker_token"] = 0
+    # Aktarılan hisseler kaydedilene kadar (yani gerçekten watchlist'e yazılana
+    # kadar) burada "taşınır" - session_state.pop ile TEK SEFERLİK tüketilseydi,
+    # kullanıcı Kaydet'e basmadan önce sayfada başka bir widget'la etkileşime
+    # girdiğinde (örn. ağırlığı düzenlerken - ki sayfa tam olarak bunu istiyor)
+    # bu, current_symbols/target_list'te henüz olmayan yeni hisseleri
+    # picker_symbols'tan sessizce düşürüyordu ("aktarıldı ama kaydedilince hiçbir
+    # şey olmadı" hatasının kök nedeni buydu).
+    if "premium_buy_transfer_carry" not in st.session_state:
+        st.session_state["premium_buy_transfer_carry"] = []
 
-    pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
+    new_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
     # Otomatik Alım/Satım modülünden aktarılan hisseler için önerilen algoritma/mum
     # periyodu ve ($ bazlı) ağırlık ipuçları - Alım Bölgesi Tarama'nın Aktar akışı
     # bunları hiç set etmediği için (boş dict), aşağıdaki varsayılan hesaplama mantığı
-    # o akış için değişmeden kalır.
+    # o akış için değişmeden kalır. Bu ikisi (transfer_carry'nin aksine) sadece
+    # widget'ın İLK oluşturulduğu anda okunuyor, o yüzden tek seferlik tüketimleri
+    # sorun değil.
     pending_symbol_settings = st.session_state.pop("premium_buy_pending_symbol_settings", None) or {}
     pending_weight_dollars = st.session_state.pop("premium_buy_pending_weight_dollars", None) or {}
+
+    if new_transfer:
+        st.session_state["premium_buy_transfer_carry"] = list(
+            dict.fromkeys(st.session_state["premium_buy_transfer_carry"] + new_transfer)
+        )
+        st.session_state["premium_buy_picker_token"] += 1
+        st.success(
+            f"✅ {len(new_transfer)} hisse aktarıldı: {', '.join(new_transfer)} — aşağıda seçili "
+            "olarak işaretlendi. **Bu henüz kaydedilmedi**: portföye eklemek için ağırlıkları/algoritmaları "
+            "gözden geçirip sayfanın altındaki 💾 Portföyü Kaydet butonuna basmanız gerekiyor."
+        )
+    pending_transfer = st.session_state["premium_buy_transfer_carry"]
+
     # current_symbols (Alpaca'daki gerçek watchlist) her zaman satır listesine
     # dahil edilir - aksi halde, "Piyasa Seçimi" değişik bir piyasadayken
     # (veya Aktar ile gelen bir hisse target_list'te hiç yoksa) kaydedilmiş bir
@@ -153,9 +177,6 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # (o an ekranda olmadığı için seçili sayılmayıp) watchlist'ten sessizce
     # düşerdi - "aktarıyor ama kaydedince kayboluyor" hatasının kök nedeni buydu.
     picker_symbols = list(dict.fromkeys(target_list + current_symbols + pending_transfer))
-    if pending_transfer:
-        st.session_state["premium_buy_picker_token"] += 1
-        st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
     picker_token = st.session_state["premium_buy_picker_token"]
 
     picker_df = pd.DataFrame({"Hisse": picker_symbols})
@@ -352,6 +373,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             )
         else:
             client.set_watchlist_symbols(watchlist["id"], selected_symbols)
+            st.session_state["premium_buy_transfer_carry"] = []
             new_config = {
                 "budget": float(budget),
                 "weights": weights_map,
