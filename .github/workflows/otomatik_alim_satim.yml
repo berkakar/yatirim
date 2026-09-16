@@ -1,0 +1,57 @@
+name: Otomatik Alım/Satım
+
+# Otomatik Alım/Satım modülünde (Streamlit) kullanıcı "günde 1 kez otomatik
+# çalıştır" kutusunu işaretlediğinde otomatik_alim_satim_config_berkakar.json'a
+# yazılan ayarlarla, bu workflow günde 1 kez (piyasa açılışından önce) tarama →
+# RSI14/RSI21 + EMA50/EMA200 momentum daraltması → backtest → %10 üzeri kârlılık
+# filtresi → Premium Buy Point Portföyü'ne aktarım pipeline'ını
+# (otomatik_alim_satim_runner.py) çalıştırır. Gerçek alım/satım emirleri, bu
+# adımın güncellediği portföyü zaten her 5 dakikada bir tarayan
+# alpaca_trailing_stop.yml / alpaca_buy_points.py tarafından yürütülür - bu
+# workflow sadece o botların kullandığı watchlist/config'i günceller.
+#
+# Cron saati UTC'dir; 07:00 UTC, alpaca_extended_hours_entries.yml'nin
+# pre-market penceresinden (08:00 UTC) önce, o günün taraması/portföyü hazır
+# olsun diye seçildi.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python otomatik_alim_satim_runner.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+
+      - name: Commit and push updated config/portfolio/backtest state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in otomatik_alim_satim_config_berkakar.json portfolio_config_berkakar.json backtest_results_berkakar.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update Otomatik Alım/Satım state"
+            git push
+          fi

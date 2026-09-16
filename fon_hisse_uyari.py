@@ -3,7 +3,10 @@ günlük bazda kullanıcının belirlediği eşiğin altına düşerse Telegram
 bildirimi gönderir.
 
 GitHub Actions tarafından BIST işlem saatlerinde periyodik çalıştırılır
-(bkz. .github/workflows/fon_hisse_uyari.yml). Her kullanıcının takip
+(bkz. .github/workflows/fon_hisse_uyari.yml) - günde 2 kez tetiklenip her
+seferinde ~4 saat boyunca bu scripti 5 dakikada bir --once ile çağıran bir
+döngü şeklinde, çünkü GitHub'ın kendi */5 schedule event'i pratikte
+güvenilir çalışmıyor (saatler süren boşluklar bırakabiliyor). Her kullanıcının takip
 listesi (takip_fonlari_<kullanıcı>.json), bildirim ayarları
 (bildirim_ayarlari_<kullanıcı>.json) ve fonların KAP'tan çekilmiş en
 büyük 10 hissesi (kap_portfoy_cache.json) doğrudan repo checkout'undan
@@ -28,6 +31,7 @@ import json
 import os
 import re
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
@@ -36,6 +40,17 @@ from telegram_notify import TelegramError, send_telegram_message
 
 STATE_FILE = "bildirim_durumu.json"
 DEFAULT_LOSS_THRESHOLD_PCT = -3.0
+
+# BIST'te bir hissenin tek günde hareket edebileceği marj (taban/tavan,
+# devre kesici) ~%10 - bunun belirgin şekilde üzerindeki bir okuma gerçek
+# bir fiyat hareketi olamaz, Yahoo Finance'in intraday akışındaki geçici
+# hatalı bir tick'tir (özellikle açılışta/açılış seansı otururken
+# görülüyor - birkaç dakika içinde kendi kendine düzeliyor). Böyle bir
+# okuma güvenilmeyip bu tur için atlanır, bir sonraki kontrolde düzelmiş
+# haliyle tekrar denenir.
+_MAX_PLAUSIBLE_DAILY_PCT = 10.5
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 _USER_RE = re.compile(r"^takip_fonlari_(.+)\.json$")
 
@@ -79,7 +94,14 @@ def _daily_change_pct(ticker: str) -> float | None:
     değil, aynı portföy yönetim şirketinin başka bir TEFAS fonu (fon
     içinde fon pozisyonu) çıkabilir - bu ticker'lar Yahoo Finance'te
     bulunamaz, bu yüzden yfinance başarısız olursa TEFAS fon fiyatı
-    üzerinden aynı hesap yedek olarak denenir."""
+    üzerinden aynı hesap yedek olarak denenir.
+
+    Son satırın gerçekten BUGÜNE (İstanbul tarihine) ait olduğu da ayrıca
+    doğrulanır - piyasa henüz açılmamışsa ya da veri akışı gecikmişse
+    yfinance'in son iki satırı aslında dünkü ve önceki günkü kapanış
+    olabilir; bunu sessizce "bugünkü değişim" diye etiketlemek yerine bu
+    turu atlayıp bir sonraki kontrolde tekrar denenir."""
+    today = datetime.now(TR_TZ).date()
     for symbol in (f"{ticker}.IS", ticker):
         try:
             hist = yf.Ticker(symbol).history(period="5d", interval="1d")
@@ -90,15 +112,23 @@ def _daily_change_pct(ticker: str) -> float | None:
         closes = hist["Close"].dropna()
         if len(closes) < 2:
             continue
+        if closes.index[-1].date() != today:
+            continue
         prev_close, last_close = float(closes.iloc[-2]), float(closes.iloc[-1])
         if prev_close == 0:
             continue
-        return round((last_close - prev_close) / prev_close * 100, 2)
+        pct = round((last_close - prev_close) / prev_close * 100, 2)
+        if abs(pct) > _MAX_PLAUSIBLE_DAILY_PCT:
+            continue
+        return pct
 
     try:
-        return fetch_fund_daily_change_pct(ticker)
+        pct = fetch_fund_daily_change_pct(ticker)
     except Exception:
         return None
+    if pct is not None and abs(pct) > _MAX_PLAUSIBLE_DAILY_PCT:
+        return None
+    return pct
 
 
 def _load_state() -> dict:

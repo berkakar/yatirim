@@ -119,7 +119,7 @@ from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, g
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
-    INITIAL_STOP_PCT, extended_hours_session, get_regular_hours_bars, load_telegram_settings,
+    INITIAL_STOP_PCT, extended_hours_session, get_bars_for_timeframe, load_telegram_settings,
     load_top_up_stop_mode, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
@@ -232,7 +232,7 @@ def check_symbol(
             return 0.0  # bütçe henüz yatırılan tutarı aşmıyor, ilave alıma gerek yok
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(
+    bars = get_bars_for_timeframe(
         client, symbol, timeframe, start, exclude_forming=True, cache_file=INTRADAY_BARS_CACHE_PATH,
     )
     if not bars:
@@ -421,7 +421,7 @@ def check_symbol_extended_hours_entry(
             return 0.0, None
 
     start = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(
+    bars = get_bars_for_timeframe(
         client, symbol, timeframe, start, exclude_forming=True, cache_file=INTRADAY_BARS_CACHE_PATH,
     )
     if not bars:

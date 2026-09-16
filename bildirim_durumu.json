@@ -1,10 +1,16 @@
 {
   "berkakar": {
-    "TRHOL": -1.44,
+    "TERA": -10.0,
+    "KARCL": -10.0,
+    "TRHOL": -10.0,
     "ANELE": -10.0,
-    "SELEC": -9.95,
-    "YKBNK": -3.17,
-    "THYAO": -1.35,
-    "TKNKA": -2.36
+    "SELEC": -9.94,
+    "TEHOL": -10.0,
+    "ALKLC": -10.0,
+    "YKBNK": -7.38,
+    "THYAO": -4.29,
+    "DSTKF": -10.0,
+    "GESAN": -9.95,
+    "TKNKA": -9.96
   }
 }

@@ -197,6 +197,37 @@ def get_regular_hours_bars(
     return bars
 
 
+def get_bars_for_timeframe(
+    client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
+    cache_file: str | None = None,
+) -> list[Bar]:
+    """get_regular_hours_bars'ın "1Day" için de güvenli hali: günlük barlar
+    için get_regular_hours_bars KULLANILMAZ - "regular hours" (09:30-16:00 ET)
+    penceresi gün içi barlar için anlamlı, günlük barın kendi zaman damgasına
+    (Alpaca'da genelde 00:00 ET) uygulanınca bu pencereye hiçbir zaman
+    girmediğinden TÜM barları yanlışlıkla eler (boş liste döner). Bir sembolün
+    seçili mum periyodu "1Day" olduğunda bu, o sembol için sinyal/fiyat hiç
+    hesaplanamamasına - dolayısıyla ne canlı alım emri verilmesine ne de
+    Premium Buy Point karşılaştırma tablosunda satırının görünmesine - yol
+    açar. `timeframe` per-sembol ayardan geldiği ve kullanıcı "1 Gün"ü
+    seçebildiği için (BackTest, Otomatik Alım/Satım modüllerinde), bu ayrım
+    her per-sembol bar çekiminde şart.
+
+    `cache_file` verilirse (bkz. get_regular_hours_bars), "1Day" dalı da
+    kendi verisini DAILY_BARS_CACHE_PATH üzerinden alır (check_trend_filter/
+    _get_daily_closes ile aynı önbellek) - çağıran taraf hangi cache_file'ı
+    geçerse geçsin, günlük bar'lar her zaman günlük cache'te tutulur; bu
+    parametre sadece "önbellekleme açık mı" sinyalini taşır."""
+    if timeframe == "1Day":
+        if cache_file is not None:
+            raw = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", start)
+            raw = [b for b in raw if _parse_iso(b["t"]) >= start]
+        else:
+            raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
+        return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
+    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=exclude_forming, cache_file=cache_file)
+
+
 def _load_management_start_cache() -> dict:
     if not os.path.exists(MANAGEMENT_START_CACHE_PATH):
         return {}

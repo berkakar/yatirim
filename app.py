@@ -30,6 +30,7 @@ from dtw_analysis import (
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard, render_account_summary
 from premium_buy_portfolio import render_premium_buy_portfolio
+from otomatik_alim_satim import render_otomatik_alim_satim
 from tefas_fonlari import render_turk_fonlari
 from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
@@ -46,7 +47,7 @@ MODULE_GROUPS = {
         "📊 Bağımsız Hisse Grafiği",
     ],
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
-    "🤖 Algoritmik Ticaret": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest"],
+    "🤖 Algoritmik Ticaret": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım"],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
@@ -1362,6 +1363,19 @@ elif module == "🎯 Premium Buy Point Portföyü":
     st.header("🎯 Premium Buy Point Portföyü")
     st.caption("Seçtiğiniz hisseler için demand zone (premium buy point) taranır; fiyat zone'a girdiğinde otomatik alım yapılır.")
     render_premium_buy_portfolio(target_list, username)
+
+# ==============================================================================
+# 8b. MODÜL: OTOMATİK ALIM/SATIM
+# ==============================================================================
+elif module == "🤖 Otomatik Alım/Satım":
+    st.header("🤖 Otomatik Alım/Satım")
+    st.caption(
+        "Bu mod tamamen Alpaca'daki verilerle çalışır: NASDAQ 100, NYSE ve bu piyasalara bağlı "
+        "kullanıcı tanımlı hisse gruplarını tarar, RSI14/RSI21 + EMA50/EMA200 momentum teyidiyle en "
+        "fazla 10 hisseye daraltır, backtest uygular ve %10 üzeri kârlılık gösterenleri Premium Buy "
+        "Point Portföyü'ne aktarır - günde 1 kez tamamen otomatik de çalışabilir."
+    )
+    render_otomatik_alim_satim(username)
 
 # ==============================================================================
 # 9. MODÜL: TÜRK FONLARI

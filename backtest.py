@@ -14,7 +14,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import get_regular_hours_bars
+from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
 from backtest_engine import run_backtest
 from buy_algorithms import ALGORITHMS, egimli_ters_fibo_signal
@@ -95,15 +95,7 @@ def _style_trades(df: pd.DataFrame):
 
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
-    # Günlük barlar için get_regular_hours_bars kullanılmaz - "regular hours"
-    # (09:30-16:00 ET) penceresi gün içi barlar için anlamlı, günlük barın
-    # kendi zaman damgasına uygulanınca barları yanlışlıkla eleyebilir
-    # (alpaca_trailing_stop.py'nin check_trend_filter'ı da bu yüzden günlük
-    # barları doğrudan client.get_raw_bars ile çeker).
-    if timeframe == "1Day":
-        raw = client.get_raw_bars(symbol, "1Day", start.isoformat())
-        return [Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]) for b in raw]
-    return get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+    return get_bars_for_timeframe(client, symbol, timeframe, start, exclude_forming=True)
 
 
 def _parse_ts(ts: str) -> datetime:

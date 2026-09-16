@@ -5,7 +5,7 @@ import streamlit as st
 
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import format_order_row, TR_TZ
-from alpaca_trailing_stop import get_regular_hours_bars, TIMEFRAME
+from alpaca_trailing_stop import get_bars_for_timeframe, TIMEFRAME
 from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
@@ -31,7 +31,7 @@ def _render_buy_point_table(
         timeframe = settings.get("timeframe") or TIMEFRAME
 
         start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
-        bars = get_regular_hours_bars(client, symbol, timeframe, start, exclude_forming=True)
+        bars = get_bars_for_timeframe(client, symbol, timeframe, start, exclude_forming=True)
         if not bars:
             continue
         try:
@@ -138,8 +138,36 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # değiştiğinde yanlış satıra eski bir değerin yapışmasına yol açabiliyordu.
     if "premium_buy_picker_token" not in st.session_state:
         st.session_state["premium_buy_picker_token"] = 0
+    # Aktarılan hisseler kaydedilene kadar (yani gerçekten watchlist'e yazılana
+    # kadar) burada "taşınır" - session_state.pop ile TEK SEFERLİK tüketilseydi,
+    # kullanıcı Kaydet'e basmadan önce sayfada başka bir widget'la etkileşime
+    # girdiğinde (örn. ağırlığı düzenlerken - ki sayfa tam olarak bunu istiyor)
+    # bu, current_symbols/target_list'te henüz olmayan yeni hisseleri
+    # picker_symbols'tan sessizce düşürüyordu ("aktarıldı ama kaydedilince hiçbir
+    # şey olmadı" hatasının kök nedeni buydu).
+    if "premium_buy_transfer_carry" not in st.session_state:
+        st.session_state["premium_buy_transfer_carry"] = []
 
-    pending_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
+    new_transfer = st.session_state.pop("premium_buy_pending_transfer", None) or []
+    # Otomatik Alım/Satım modülünden aktarılan hisseler için önerilen algoritma/mum
+    # periyodu - Alım Bölgesi Tarama'nın Aktar akışı bunu hiç set etmediği için
+    # (boş dict), aşağıdaki varsayılan hesaplama mantığı o akış için değişmeden
+    # kalır. Bu, transfer_carry'nin aksine sadece widget'ın İLK oluşturulduğu
+    # anda okunuyor, o yüzden tek seferlik tüketimi sorun değil.
+    pending_symbol_settings = st.session_state.pop("premium_buy_pending_symbol_settings", None) or {}
+
+    if new_transfer:
+        st.session_state["premium_buy_transfer_carry"] = list(
+            dict.fromkeys(st.session_state["premium_buy_transfer_carry"] + new_transfer)
+        )
+        st.session_state["premium_buy_picker_token"] += 1
+        st.success(
+            f"✅ {len(new_transfer)} hisse aktarıldı: {', '.join(new_transfer)} — aşağıda seçili "
+            "olarak işaretlendi. **Bu henüz kaydedilmedi**: portföye eklemek için ağırlıkları/algoritmaları "
+            "gözden geçirip sayfanın altındaki 💾 Portföyü Kaydet butonuna basmanız gerekiyor."
+        )
+    pending_transfer = st.session_state["premium_buy_transfer_carry"]
+
     # current_symbols (Alpaca'daki gerçek watchlist) her zaman satır listesine
     # dahil edilir - aksi halde, "Piyasa Seçimi" değişik bir piyasadayken
     # (veya Aktar ile gelen bir hisse target_list'te hiç yoksa) kaydedilmiş bir
@@ -147,9 +175,6 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # (o an ekranda olmadığı için seçili sayılmayıp) watchlist'ten sessizce
     # düşerdi - "aktarıyor ama kaydedince kayboluyor" hatasının kök nedeni buydu.
     picker_symbols = list(dict.fromkeys(target_list + current_symbols + pending_transfer))
-    if pending_transfer:
-        st.session_state["premium_buy_picker_token"] += 1
-        st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
     picker_token = st.session_state["premium_buy_picker_token"]
 
     picker_df = pd.DataFrame({"Hisse": picker_symbols})
@@ -190,14 +215,26 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     if selected_symbols:
         existing_weights = config.get("weights") or {}
 
+        # Yeni aktarılan hisselerin ağırlığı: toplam bütçenin, DAHA ÖNCE
+        # portföy yüzdesi belirlenmiş (bu aktarımdaki semboller HARİÇ)
+        # hisselere ayrılan kısmı düşüldükten sonra kalan payı, aktarılan
+        # hisse sayısına eşit bölerek (toplam bütçeye göre yüzde olarak)
+        # hesaplanır - örn. mevcut hisseler zaten %70 kullanıyorsa ve 3 yeni
+        # hisse aktarıldıysa, her biri kalan %30'un üçte birini (%10) alır.
+        already_allocated_pct = sum(
+            existing_weights.get(s, 0.0) for s in selected_symbols if s not in pending_transfer
+        )
+        remaining_pct = max(0.0, 100.0 - already_allocated_pct)
+        new_transfer_weight_pct = round(remaining_pct / len(pending_transfer), 2) if pending_transfer else 0.0
+
         def _default_weight_pct(symbol: str) -> float:
             # Alpaca'da hâlâ açık bir pozisyonu olan hisseler için GERÇEK güncel
             # ağırlığı (yatırılan tutar = adet × ortalama giriş / bütçe) gösterir -
             # böylece bu alan, bütçe veya pozisyon değiştikçe gerçeği yansıtır ve
             # top-up için ne kadar yer kaldığını doğru gösterir. Pozisyonu olmayan
             # ama daha önce kaydedilmiş bir ağırlığı olan hisseler o kayıtlı
-            # değeri korur. Daha önce hiç kaydedilmemiş (örn. Alım Bölgesi
-            # Tarama'dan yeni aktarılmış) hisseler için varsayılan 0'dır.
+            # değeri korur. Yeni aktarılan (henüz pozisyonu/kayıtlı ağırlığı
+            # olmayan) hisseler kalan payın eşit bölüşümünü alır.
             try:
                 position = client.get_position(symbol)
             except Exception:
@@ -205,6 +242,8 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             if position is not None and budget > 0:
                 invested = float(position["qty"]) * float(position["avg_entry_price"])
                 return round(invested / budget * 100, 2)
+            if symbol in pending_transfer:
+                return new_transfer_weight_pct
             return float(existing_weights.get(symbol, 0.0))
 
         weight_df = pd.DataFrame({
@@ -264,7 +303,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
                 f"K/Z %{(c.get('pnl_pct') or 0):.2f} · Kaynak: {c.get('source') or 'Alpaca'}"
                 for c in combos
             ]
-            saved = existing_symbol_settings.get(symbol) or {}
+            saved = pending_symbol_settings.get(symbol) or existing_symbol_settings.get(symbol) or {}
             default_idx = 0
             for i, c in enumerate(combos):
                 if c["algorithm"] == saved.get("algorithm") and c["timeframe"] == saved.get("timeframe"):
@@ -344,6 +383,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             )
         else:
             client.set_watchlist_symbols(watchlist["id"], selected_symbols)
+            st.session_state["premium_buy_transfer_carry"] = []
             new_config = {
                 "budget": float(budget),
                 "weights": weights_map,

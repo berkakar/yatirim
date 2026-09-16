@@ -2,7 +2,9 @@ name: Türk Fonları (TEFAS)
 
 on:
   schedule:
-    - cron: "10 16 * * 1-5"
+    - cron: "0 6 * * 1-5"   # 09:00 TRT (sabah)
+    - cron: "0 10 * * 1-5"  # 13:00 TRT (öğlen)
+    - cron: "10 16 * * 1-5" # 19:10 TRT (akşam, TEFAS fiyatları tamamladıktan 10 dk sonra)
   workflow_dispatch: {}
 
 permissions:
