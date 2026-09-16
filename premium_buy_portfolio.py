@@ -155,7 +155,11 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     picker_symbols = list(dict.fromkeys(target_list + current_symbols + pending_transfer))
     if pending_transfer:
         st.session_state["premium_buy_picker_token"] += 1
-        st.success(f"✅ Alım Bölgesi Tarama'dan {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)}")
+        st.success(
+            f"✅ {len(pending_transfer)} hisse aktarıldı: {', '.join(pending_transfer)} — aşağıda seçili "
+            "olarak işaretlendi. **Bu henüz kaydedilmedi**: portföye eklemek için ağırlıkları/algoritmaları "
+            "gözden geçirip sayfanın altındaki 💾 Portföyü Kaydet butonuna basmanız gerekiyor."
+        )
     picker_token = st.session_state["premium_buy_picker_token"]
 
     picker_df = pd.DataFrame({"Hisse": picker_symbols})
