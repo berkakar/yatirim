@@ -1,22 +1,25 @@
 {
   "budget": 100075.51,
   "weights": {
-    "MSFT": 6.0,
-    "AMZN": 12.0,
-    "NVDA": 12.0,
-    "INTC": 14.21,
-    "MU": 14.04,
-    "PAYX": 13.08,
-    "NXPI": 14.05,
-    "NOW": 1.0,
-    "TTWO": 12.5,
-    "SKHY": 1.12
+    "MSFT": 10.0,
+    "AMZN": 5.0,
+    "NVDA": 5.0,
+    "INTC": 5.0,
+    "MU": 5.0,
+    "PAYX": 10.0,
+    "NXPI": 5.0,
+    "NOW": 5.0,
+    "MDB": 5.0,
+    "TTWO": 5.0,
+    "VEEV": 1.5,
+    "SKHY": 1.12,
+    "UROY": 1.5
   },
   "algorithm": "trend_pullback",
   "symbol_settings": {
     "MSFT": {
       "algorithm": "demand_zone",
-      "timeframe": "1Day"
+      "timeframe": "30Min"
     },
     "NVDA": {
       "algorithm": "demand_zone",
@@ -38,13 +41,25 @@
       "algorithm": "trend_pullback",
       "timeframe": "15Min"
     },
+    "MDB": {
+      "algorithm": "demand_zone",
+      "timeframe": "30Min"
+    },
     "TTWO": {
+      "algorithm": "demand_zone",
+      "timeframe": "30Min"
+    },
+    "VEEV": {
       "algorithm": "demand_zone",
       "timeframe": "30Min"
     },
     "SKHY": {
       "algorithm": "breakout_volume",
       "timeframe": "15Min"
+    },
+    "UROY": {
+      "algorithm": "demand_zone",
+      "timeframe": "30Min"
     }
   },
   "stop_loss_enabled": true,
