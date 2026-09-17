@@ -1,15 +1,15 @@
 {
-  "budget": 100075.51,
+  "budget": 94860.31,
   "weights": {
-    "MSFT": 10.0,
+    "MSFT": 20.29,
     "AMZN": 5.0,
     "NVDA": 5.0,
     "INTC": 5.0,
     "MU": 5.0,
-    "PAYX": 10.0,
+    "PAYX": 5.5,
     "NXPI": 5.0,
     "NOW": 5.0,
-    "MDB": 5.0,
+    "MDB": 20.29,
     "TTWO": 5.0,
     "VEEV": 1.5,
     "SKHY": 1.12,
@@ -19,7 +19,7 @@
   "symbol_settings": {
     "MSFT": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "1Day"
     },
     "NVDA": {
       "algorithm": "demand_zone",
@@ -43,7 +43,7 @@
     },
     "MDB": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "1Day"
     },
     "TTWO": {
       "algorithm": "demand_zone",
