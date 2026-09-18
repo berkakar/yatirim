@@ -5,7 +5,8 @@ amaçlıdır - bkz. bicak_kanali.py. Şu an gösterilenler: düşüş trendi, bu
 trendin en tepe/son tepe noktasından geçen kılavuz çizgisi, trendin en
 dip noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki
 bir pencere içindeki en düşük bardan kılavuza paralel geçen sıfır
-çizgisi ve bu üç hat arasındaki oranlar."""
+çizgisi, bu üç hat arasındaki oranlar ve kılavuzun türetilmiş_oran kadar
+üstüne ötelenmiş yeşil çizgi (alım çizgisi)."""
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -22,6 +23,7 @@ _KILAVUZ_COLOR = "#e63946"
 _TREND_COLOR = "#ff9f1c"
 _BICAK_COLOR = "#ffd60a"
 _SIFIR_COLOR = "#2ec4b6"
+_YESIL_COLOR = "#06d6a0"
 
 
 def render_bicak_kanali_test(target_list):
@@ -32,8 +34,9 @@ def render_bicak_kanali_test(target_list):
         "bu trendin tepe adayları arasından en yükseği ile kronolojik olarak en son "
         "oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi, trendin en dip "
         "noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki bir "
-        "pencere içindeki en düşük bardan kılavuza paralel geçen sıfır çizgisi ve bu "
-        "üç hat arasındaki oranlar. "
+        "pencere içindeki en düşük bardan kılavuza paralel geçen sıfır çizgisi, bu "
+        "üç hat arasındaki oranlar ve kılavuzun türetilmiş_oran kadar üstüne "
+        "ötelenmiş yeşil çizgi (alım çizgisi). "
         "Üretimdeki bir alım/satım sinyaline bağlı değildir."
     )
 
@@ -90,6 +93,9 @@ def render_bicak_kanali_test(target_list):
         f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
         f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
     )
+    yesil_slope, yesil_intercept = result.yesil_cizgi
+    yesil_son_bar = yesil_slope * (len(bars) - 1) + yesil_intercept
+    st.caption(f"🟢 Yeşil çizgi (alım çizgisi) - son bardaki seviyesi: {yesil_son_bar:.2f}")
 
 
 def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
@@ -165,16 +171,26 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
         name="Sıfır Çizgisi", line=dict(color=_SIFIR_COLOR, width=2, dash="dot"),
     ))
 
+    yesil_slope, yesil_intercept = result.yesil_cizgi
+    fig.add_trace(go.Scatter(
+        x=xs, y=[yesil_slope * x + yesil_intercept for x in xs], mode="lines",
+        name="Yeşil Çizgi (Alım)", line=dict(color=_YESIL_COLOR, width=2.5, dash="dash"),
+    ))
+
     # Kılavuz/bıçak/sıfır çizgisi, sıfır nokta'nın en tepe'den uzaklığına
     # bağlı olarak grafiğin uçlarında çok ekstrapole olabilir (aynı eğim,
     # gerçek fiyat aralığından çok uzağa taşabilir) - eksen ölçeğini buna
-    # göre değil, gerçek mum verisine göre sabitliyoruz.
+    # göre değil, gerçek mum verisine göre sabitliyoruz. Yeşil çizgi
+    # (asıl gösterilmek istenen "alım çizgisi") ekseninde en tepe ve son
+    # bar seviyeleri de dahil edilir, ki kırpılıp görünmez olmasın.
     price_values = [b.h for b in bars] + [b.l for b in bars]
+    price_values.append(yesil_slope * result.leg_tepe.index + yesil_intercept)
+    price_values.append(yesil_slope * (n - 1) + yesil_intercept)
     y_min, y_max = min(price_values), max(price_values)
     y_pad = (y_max - y_min) * 0.08 or 1.0
 
     fig.update_layout(
-        title=f"{ticker} - Kılavuz + Bıçak + Sıfır Çizgisi ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
+        title=f"{ticker} - Kılavuz + Bıçak + Sıfır + Yeşil Çizgi ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
         template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
