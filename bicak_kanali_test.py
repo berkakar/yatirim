@@ -1,21 +1,20 @@
-"""Bıçak Kanalı Test modülü - bicak_kanali.py'deki analizi gerçek piyasa
-verisiyle hızlıca denemek için bağımsız bir sayfa. Herhangi bir alım/satım
-sinyaline bağlı değildir, sadece yöntemin adım adım görsel doğrulaması
-amaçlıdır - bkz. bicak_kanali.py. Şu an gösterilenler: düşüş trendi, bu
-trendin en tepe/son tepe noktasından geçen kılavuz çizgisi, trendin en
-dip noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki
-bir pencere içindeki en düşük bardan kılavuza paralel geçen sıfır
-çizgisi, bu üç hat arasındaki oranlar ve kılavuzun türetilmiş_oran kadar
-üstüne ötelenmiş yeşil çizgi (alım çizgisi)."""
+"""Bıçak Kanalı Test modülü - piyasayı tarayıp bicak_kanali.py'deki
+kılavuz/bıçak/sıfır çizgisi + türetilmiş oran yöntemini her hisseye
+uygular; yeşil çizginin (alım çizgisi) gerçek fiyatla kesiştiği
+hisseleri bir tabloda listeler (bkz. "Alım Bölgesi Tarama" modülündeki
+tarama deseni - app.py). Herhangi bir alım/satım sinyaline bağlı
+değildir, sadece yöntemin görsel doğrulaması amaçlıdır - bkz.
+bicak_kanali.py."""
 
 import plotly.graph_objects as go
 import streamlit as st
 
-from bicak_kanali import Kilavuz, find_kilavuz
-from scanner import SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS, bars_from_df, get_scanner_data
+from bicak_kanali import Kilavuz, find_kilavuz, yesil_cizgi_kesisimi
+from scanner import (
+    DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS, INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS,
+    SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS, bars_from_df, get_scanner_data,
+)
 from structure import Bar
-
-DEFAULT_LOOKBACK_DAYS = 180
 
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
@@ -29,73 +28,121 @@ _YESIL_COLOR = "#06d6a0"
 def render_bicak_kanali_test(target_list):
     st.header("🔪 Bıçak Kanalı Test Modülü")
     st.caption(
-        "bicak_kanali.py'deki yöntemi gerçek piyasa verisiyle adım adım doğrulamak için "
-        "bağımsız bir test sayfası. Şu an gösterilenler: en büyük genlikli düşüş trendi, "
-        "bu trendin tepe adayları arasından en yükseği ile kronolojik olarak en son "
-        "oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi, trendin en dip "
-        "noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki bir "
-        "pencere içindeki en düşük bardan kılavuza paralel geçen sıfır çizgisi, bu "
-        "üç hat arasındaki oranlar ve kılavuzun türetilmiş_oran kadar üstüne "
-        "ötelenmiş yeşil çizgi (alım çizgisi). "
-        "Üretimdeki bir alım/satım sinyaline bağlı değildir."
+        "bicak_kanali.py'deki kılavuz/bıçak/sıfır çizgisi + türetilmiş oran yöntemini "
+        "seçili piyasadaki tüm hisselere uygulayıp, yeşil çizginin (alım çizgisi) "
+        "gerçek fiyatla kesiştiği hisseleri listeler. Üretimdeki bir alım/satım "
+        "sinyaline bağlı değildir, sadece yöntemin görsel doğrulaması amaçlıdır."
     )
 
-    col_ticker, col_tf, col_days = st.columns([2, 1, 1])
-    with col_ticker:
-        ticker = st.selectbox("Hisse:", target_list, key="bicak_kanali_test_ticker")
-    with col_tf:
-        timeframe = st.selectbox(
-            "Mum Seviyesi:", SCAN_TIMEFRAMES,
-            format_func=lambda tf: SCAN_TIMEFRAME_LABELS[tf],
-            index=SCAN_TIMEFRAMES.index("1Day"), key="bicak_kanali_test_timeframe",
-        )
-    with col_days:
-        lookback_days = st.number_input(
-            "Geriye Dönük Gün Sayısı:", min_value=5, max_value=730,
-            value=DEFAULT_LOOKBACK_DAYS, step=5, key="bicak_kanali_test_days",
-        )
+    st.caption("Mum Periyodu")
+    tf_cols = st.columns(len(SCAN_TIMEFRAMES))
+    selected_timeframes = [
+        tf_code for col, tf_code in zip(tf_cols, SCAN_TIMEFRAMES)
+        if col.checkbox(SCAN_TIMEFRAME_LABELS[tf_code], value=(tf_code == "1Day"), key=f"bicak_tf_{tf_code}")
+    ]
 
-    if not st.button("📈 Analiz Et", type="primary"):
-        return
-
-    with st.spinner(f"{ticker} verisi getiriliyor..."):
-        df, _cup, _obo, _tobo = get_scanner_data(ticker, timeframe=timeframe, period_days=int(lookback_days))
-
-    if df is None or df.empty:
-        st.error(f"❌ {ticker} için geçerli piyasa verisi alınamadı.")
-        return
-
-    bars = bars_from_df(df)
-    result = find_kilavuz(bars)
-
-    if result is None:
-        st.info(
-            "ℹ️ Bu hisse/mum seviyesi/gün aralığında bir düşüş trendi ya da kılavuz "
-            "çizgisi için yeterli tepe noktası (en az 2) bulunamadı. Başka bir hisse, "
-            "mum seviyesi veya gün aralığı deneyebilirsiniz."
-        )
-        return
-
-    _render_chart(bars, ticker, timeframe, result)
-
-    en_tepe, son_tepe = result.kilavuz_noktalari
-    st.caption(
-        f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
-        f"{result.leg_dip.t[:10]} ({result.leg_dip.price:.2f}) · "
-        f"toplam tepe adayı: {len(result.tepe_pivots)} · "
-        f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
-        f"{son_tepe.t[:10]} ({son_tepe.price:.2f}) · "
-        f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f}) · "
-        f"sıfır nokta: {result.sifir_nokta.t[:10]} ({result.sifir_nokta.price:.2f})"
+    days_col1, days_col2 = st.columns(2)
+    intraday_days = days_col1.number_input(
+        "15dk / 30dk / 1sa mumlar için geriye gidilecek gün sayısı",
+        min_value=1, max_value=INTRADAY_MAX_DAYS, value=INTRADAY_DEFAULT_DAYS, step=1,
+        key="bicak_intraday_days",
+        help=f"Yahoo Finance gün-içi mumlarda en fazla {INTRADAY_MAX_DAYS} gün geriye gidebiliyor.",
     )
-    st.caption(
-        f"üst_oran (kılavuz-bıçak): {result.ust_oran:.4f} · "
-        f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
-        f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
+    daily_days = days_col2.number_input(
+        "1 gün mumlar için geriye gidilecek gün sayısı",
+        min_value=1, max_value=DAILY_MAX_DAYS, value=DAILY_DEFAULT_DAYS, step=1,
+        key="bicak_daily_days",
+        help=f"En fazla {DAILY_MAX_DAYS} gün (yaklaşık 2 yıl) geriye gidilebiliyor.",
     )
-    yesil_slope, yesil_intercept = result.yesil_cizgi
-    yesil_son_bar = yesil_slope * (len(bars) - 1) + yesil_intercept
-    st.caption(f"🟢 Yeşil çizgi (alım çizgisi) - son bardaki seviyesi: {yesil_son_bar:.2f}")
+
+    if st.button("🚀 Piyasayı Tara", type="primary", disabled=not selected_timeframes):
+        with st.spinner("Hisseler taranıyor..."):
+            signals = []
+            for tf_code in selected_timeframes:
+                tf_label = SCAN_TIMEFRAME_LABELS[tf_code]
+                tf_days = daily_days if tf_code == "1Day" else intraday_days
+                for t in target_list:
+                    df_temp, _cup, _obo, _tobo = get_scanner_data(t, timeframe=tf_code, period_days=tf_days)
+                    if df_temp is None or df_temp.empty:
+                        continue
+                    bars = bars_from_df(df_temp)
+                    result = find_kilavuz(bars)
+                    if result is None:
+                        continue
+                    kesisim = yesil_cizgi_kesisimi(bars, result)
+                    if kesisim is None:
+                        continue
+                    signals.append({
+                        "Hisse": t, "Mum Periyodu": tf_label, "_tf_code": tf_code,
+                        "Kesişim Fiyatı": round(kesisim.price, 2),
+                        "Güncel Muma Uzaklık (bar)": (len(bars) - 1) - kesisim.index,
+                    })
+
+            # Yeni bir tarama, eski tablodaki satır sayısını/sırasını değiştirebilir -
+            # "bicak_chart_<index>" gibi pozisyona bağlı eski durumlar yeni (alakasız)
+            # satırlara yapışmasın diye temizlenir.
+            for key in list(st.session_state.keys()):
+                if key.startswith("bicak_chart_"):
+                    del st.session_state[key]
+            st.session_state.bicak_signals = signals
+            st.session_state.bicak_show_chart = False
+
+    if "bicak_signals" in st.session_state:
+        signals = st.session_state.bicak_signals
+        if not signals:
+            st.warning("Tarama sonucunda yeşil çizginin (alım çizgisi) fiyatla kesiştiği hisse bulunamadı.")
+        else:
+            st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
+            col_ratios = [1.6, 1.3, 1.3, 1.8, 0.8]
+            head_cols = st.columns(col_ratios)
+            for col, label in zip(
+                head_cols, ["Hisse", "Mum Periyodu", "Kesişim Fiyatı", "Güncel Muma Uzaklık (bar)", "Grafik"]
+            ):
+                col.markdown(f"**{label}**")
+            for idx, row in enumerate(signals):
+                c1, c2, c3, c4, c5 = st.columns(col_ratios)
+                c1.write(row["Hisse"])
+                c2.write(row["Mum Periyodu"])
+                c3.write(row["Kesişim Fiyatı"])
+                c4.write(row["Güncel Muma Uzaklık (bar)"])
+                if c5.button("📊", key=f"bicak_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
+                    st.session_state.bicak_selected_ticker = row["Hisse"]
+                    st.session_state.bicak_selected_tf = row["_tf_code"]
+                    st.session_state.bicak_show_chart = True
+
+    if st.session_state.get("bicak_show_chart") and st.session_state.get("bicak_selected_ticker"):
+        active_t = st.session_state.bicak_selected_ticker
+        active_tf = st.session_state.bicak_selected_tf
+        st.write("---")
+        st.markdown(f"### 📈 Bıçak Kanalı Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
+
+        active_days = daily_days if active_tf == "1Day" else intraday_days
+        with st.spinner(f"{active_t} verisi getiriliyor..."):
+            df, _cup, _obo, _tobo = get_scanner_data(active_t, timeframe=active_tf, period_days=active_days)
+
+        if df is None or df.empty:
+            st.error(f"❌ {active_t} için geçerli piyasa verisi alınamadı.")
+        else:
+            bars = bars_from_df(df)
+            result = find_kilavuz(bars)
+            if result is None:
+                st.info("ℹ️ Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
+            else:
+                _render_chart(bars, active_t, active_tf, result)
+                en_tepe, son_tepe = result.kilavuz_noktalari
+                st.caption(
+                    f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
+                    f"{result.leg_dip.t[:10]} ({result.leg_dip.price:.2f}) · "
+                    f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
+                    f"{son_tepe.t[:10]} ({son_tepe.price:.2f}) · "
+                    f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f}) · "
+                    f"sıfır nokta: {result.sifir_nokta.t[:10]} ({result.sifir_nokta.price:.2f})"
+                )
+                st.caption(
+                    f"üst_oran (kılavuz-bıçak): {result.ust_oran:.4f} · "
+                    f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
+                    f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
+                )
 
 
 def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
