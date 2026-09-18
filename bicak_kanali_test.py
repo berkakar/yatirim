@@ -98,8 +98,8 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
 
     fig.add_trace(go.Scatter(
         x=[p.index for p in result.tepe_pivots],
-        y=[bars[p.index].l for p in result.tepe_pivots],
-        mode="markers", name="Kılavuz Noktaları (tepe günü en düşük fiyatı)",
+        y=[p.price for p in result.tepe_pivots],
+        mode="markers", name="Kılavuz Noktaları (tepe günü en yüksek fiyatı)",
         marker=dict(symbol="triangle-down", size=10, color=_KILAVUZ_COLOR, line=dict(color="#000000", width=1)),
     ))
 

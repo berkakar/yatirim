@@ -11,7 +11,7 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu an sadece 1. adım var:
     "gürültü" sayıp tek bir bütün düşüş trendini "seçilen düşüş trendi"
     olarak alır.
   - Bu bacağın kapsadığı bar aralığındaki tepe pivotlarına (en az 2
-    nokta gerekir, o günün en düşük fiyatı kullanılarak) en küçük
+    nokta gerekir, o günün en yüksek fiyatı kullanılarak) en küçük
     kareler ile bir doğru fit edilir -> kılavuz çizgisi.
 
 Sıradaki adımlar (bıçak çizgisi, sıfır çizgisi, türetilmiş oran/yeşil
@@ -83,7 +83,9 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
         p for p in pivots
         if leg_tepe.index <= p.index <= leg_dip.index and p.kind == "high"
     ]
-    kilavuz = _linear_fit([(p.index, bars[p.index].l) for p in tepe_pivots])
+    # p.price bir "high" pivotu için zaten o günün en yüksek fiyatı (bkz.
+    # structure.find_pivots), bars üzerinden ayrıca bakmaya gerek yok.
+    kilavuz = _linear_fit([(p.index, p.price) for p in tepe_pivots])
     if kilavuz is None:
         return None
 
