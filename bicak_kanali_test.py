@@ -1,9 +1,9 @@
 """Bıçak Kanalı Test modülü - bicak_kanali.py'deki analizi gerçek piyasa
 verisiyle hızlıca denemek için bağımsız bir sayfa. Herhangi bir alım/satım
 sinyaline bağlı değildir, sadece yöntemin adım adım görsel doğrulaması
-amaçlıdır - bkz. bicak_kanali.py. Şu an sadece 1. adım (düşüş trendi + bu
-trendin en tepe ve son tepe noktasından geçen kılavuz çizgisi)
-gösteriliyor."""
+amaçlıdır - bkz. bicak_kanali.py. Şu an gösterilenler: düşüş trendi, bu
+trendin en tepe/son tepe noktasından geçen kılavuz çizgisi ve trendin en
+dip noktasından, kılavuza paralel geçen bıçak çizgisi."""
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -18,15 +18,17 @@ _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
 _KILAVUZ_COLOR = "#e63946"
 _TREND_COLOR = "#ff9f1c"
+_BICAK_COLOR = "#ffd60a"
 
 
 def render_bicak_kanali_test(target_list):
     st.header("🔪 Bıçak Kanalı Test Modülü")
     st.caption(
         "bicak_kanali.py'deki yöntemi gerçek piyasa verisiyle adım adım doğrulamak için "
-        "bağımsız bir test sayfası. Şu an sadece 1. adım gösteriliyor: en büyük genlikli "
-        "düşüş trendi, bu trendin tepe adayları arasından en yükseği ile kronolojik "
-        "olarak en son oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi. "
+        "bağımsız bir test sayfası. Şu an gösterilenler: en büyük genlikli düşüş trendi, "
+        "bu trendin tepe adayları arasından en yükseği ile kronolojik olarak en son "
+        "oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi, ve trendin en dip "
+        "noktasından kılavuza paralel geçen bıçak çizgisi. "
         "Üretimdeki bir alım/satım sinyaline bağlı değildir."
     )
 
@@ -74,7 +76,8 @@ def render_bicak_kanali_test(target_list):
         f"{result.leg_dip.t[:10]} ({result.leg_dip.price:.2f}) · "
         f"toplam tepe adayı: {len(result.tepe_pivots)} · "
         f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
-        f"{son_tepe.t[:10]} ({son_tepe.price:.2f})"
+        f"{son_tepe.t[:10]} ({son_tepe.price:.2f}) · "
+        f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f})"
     )
 
 
@@ -125,8 +128,21 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
         name="Kılavuz", line=dict(color=_KILAVUZ_COLOR, width=2, dash="dot"),
     ))
 
+    fig.add_trace(go.Scatter(
+        x=[result.en_dip.index], y=[result.en_dip.price],
+        mode="markers+text", name="En Dip Nokta",
+        text=["En Dip"], textposition="bottom center",
+        marker=dict(symbol="diamond", size=13, color=_BICAK_COLOR, line=dict(color="#000000", width=1.5)),
+    ))
+
+    bicak_slope, bicak_intercept = result.bicak
+    fig.add_trace(go.Scatter(
+        x=xs, y=[bicak_slope * x + bicak_intercept for x in xs], mode="lines",
+        name="Bıçak", line=dict(color=_BICAK_COLOR, width=2, dash="dot"),
+    ))
+
     fig.update_layout(
-        title=f"{ticker} - Kılavuz Çizgisi ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
+        title=f"{ticker} - Kılavuz + Bıçak ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
         template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
     )
