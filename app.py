@@ -34,6 +34,7 @@ from otomatik_alim_satim import render_otomatik_alim_satim
 from tefas_fonlari import render_turk_fonlari
 from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
+from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 
 NAV_HOME = "🏠 Özet"
@@ -45,6 +46,7 @@ MODULE_GROUPS = {
         "🔄 DTW Zaman Serisi & Benzerlik Analizi",
         "📐 Hisse Patern Analizi",
         "📊 Bağımsız Hisse Grafiği",
+        "🔪 Bıçak Kanalı Testi",
     ],
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": ["🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım"],
@@ -1408,3 +1410,9 @@ elif module == "BackTest":
     st.header("🧪 BackTest")
     st.caption("Premium buy-point algoritmalarını ve Alpaca'daki structure-based trailing stop'u seçtiğiniz hisse üzerinde geçmiş veriyle yeniden oynatır.")
     render_backtest(target_list, username)
+
+# ==============================================================================
+# 12. MODÜL: BIÇAK KANALI TESTİ
+# ==============================================================================
+elif module == "🔪 Bıçak Kanalı Testi":
+    render_bicak_kanali_test(target_list)
