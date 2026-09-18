@@ -20,9 +20,10 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
   - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
     kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
     çizgisi.
-  - en tepe'den önceki (barlar henüz tepeye doğru yükselirken, kanal
-    yapısı başlamadan önceki) SIFIR_ONCESI_BAR_SAYISI kadar bar içinde,
-    günlük en düşük fiyatı en küçük olan bar bulunur ("sıfır nokta");
+  - en tepe'den önceki SIFIR_ONCESI_BAR_SAYISI bar içinde önce yerel
+    minimum (günlük en düşük fiyatı en küçük olan bar) bulunur; sonra en
+    tepe'den geriye doğru (bu yerel minimuma kadar) taranıp karşılaşılan
+    ilk yeşil (kapanış > açılış) mumun dibi ("sıfır nokta") alınır;
     kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> sıfır
     çizgisi.
   - kılavuz ile sıfır çizgisi arasındaki (eğim ortak olduğu için
@@ -104,8 +105,10 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
     ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
     çizgisi olarak kurulur. en tepe'den önceki SIFIR_ONCESI_BAR_SAYISI
-    bar içindeki en düşük bardan ("sıfır nokta"), yine kılavuz ile aynı
-    eğimde geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
+    bar içindeki yerel minimuma kadar en tepe'den geriye taranıp
+    karşılaşılan ilk yeşil mumun dibinden ("sıfır nokta"), yine kılavuz
+    ile aynı eğimde geçen paralel doğru sıfır çizgisi olarak kurulur;
+    bu üç hat
     üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
     (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
@@ -143,10 +146,19 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     pencere = bars[pencere_baslangic:en_tepe.index]
     if not pencere:
         return None
-    sifir_offset = min(range(len(pencere)), key=lambda i: pencere[i].l)
-    sifir_index = pencere_baslangic + sifir_offset
-    sifir_bar = pencere[sifir_offset]
-    sifir_nokta = Pivot(index=sifir_index, kind="low", price=sifir_bar.l, t=sifir_bar.t)
+    yerel_min_offset = min(range(len(pencere)), key=lambda i: pencere[i].l)
+    yerel_min_index = pencere_baslangic + yerel_min_offset
+
+    # en tepe'den geriye (dibe/yerel minimuma kadar) tarayıp ilk yeşil
+    # (kapanış > açılış) mumu bul - o mumun dibi sıfır nokta olur.
+    sifir_nokta: Pivot | None = None
+    for i in range(en_tepe.index - 1, yerel_min_index - 1, -1):
+        b = bars[i]
+        if b.c > b.o:
+            sifir_nokta = Pivot(index=i, kind="low", price=b.l, t=b.t)
+            break
+    if sifir_nokta is None:
+        return None
     sifir_intercept = sifir_nokta.price - kilavuz_slope * sifir_nokta.index
     sifir_cizgisi = (kilavuz_slope, sifir_intercept)
 
