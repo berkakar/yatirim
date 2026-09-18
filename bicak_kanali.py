@@ -167,3 +167,18 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
         ust_oran=ust_oran, alt_oran=alt_oran, turetilmis_oran=turetilmis_oran,
         yesil_cizgi=yesil_cizgi,
     )
+
+
+def yesil_cizgi_kesisimi(bars: list[Bar], result: Kilavuz) -> Pivot | None:
+    """Yeşil çizginin (alım çizgisi) bar verisiyle en son (en güncel)
+    kesiştiği barı bulur: o bardaki günlük [en düşük, en yüksek]
+    aralığı, çizginin o bardaki değerini içeriyorsa "kesişim" sayılır.
+    Kesişim barındaki çizgi değeri fiyat, bar index'i ve tarihiyle
+    birlikte bir Pivot olarak döner; hiç kesişim yoksa None."""
+    slope, intercept = result.yesil_cizgi
+    kesisim: Pivot | None = None
+    for i, b in enumerate(bars):
+        level = slope * i + intercept
+        if b.l <= level <= b.h:
+            kesisim = Pivot(index=i, kind="low", price=level, t=b.t)
+    return kesisim
