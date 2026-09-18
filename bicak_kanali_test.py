@@ -1,11 +1,15 @@
 """Bıçak Kanalı Test modülü - piyasayı tarayıp bicak_kanali.py'deki
 kılavuz/bıçak/sıfır çizgisi + türetilmiş oran yöntemini her hisseye
-uygular; yeşil çizginin (alım çizgisi) gerçek fiyatla kesiştiği
-hisseleri bir tabloda listeler (bkz. "Alım Bölgesi Tarama" modülündeki
-tarama deseni - app.py). Herhangi bir alım/satım sinyaline bağlı
+uygular; yeşil çizginin (alım çizgisi) gerçek fiyatla en son kesiştiği
+(= en güncele en yakın, dolayısıyla en yakın alım fırsatı sayılan) barı
+bulup hisseleri bir tabloda listeler (bkz. "Alım Bölgesi Tarama"
+modülündeki tarama deseni - app.py). Sonuç tablosu, "Hisse Patern
+Analizi" modülündeki gibi sütun başlıklarına tıklanarak sıralanabilir
+(st.dataframe + hücre seçimi). Herhangi bir alım/satım sinyaline bağlı
 değildir, sadece yöntemin görsel doğrulaması amaçlıdır - bkz.
 bicak_kanali.py."""
 
+import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -78,12 +82,6 @@ def render_bicak_kanali_test(target_list):
                         "Güncel Muma Uzaklık (bar)": (len(bars) - 1) - kesisim.index,
                     })
 
-            # Yeni bir tarama, eski tablodaki satır sayısını/sırasını değiştirebilir -
-            # "bicak_chart_<index>" gibi pozisyona bağlı eski durumlar yeni (alakasız)
-            # satırlara yapışmasın diye temizlenir.
-            for key in list(st.session_state.keys()):
-                if key.startswith("bicak_chart_"):
-                    del st.session_state[key]
             st.session_state.bicak_signals = signals
             st.session_state.bicak_show_chart = False
 
@@ -93,22 +91,24 @@ def render_bicak_kanali_test(target_list):
             st.warning("Tarama sonucunda yeşil çizginin (alım çizgisi) fiyatla kesiştiği hisse bulunamadı.")
         else:
             st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
-            col_ratios = [1.6, 1.3, 1.3, 1.8, 0.8]
-            head_cols = st.columns(col_ratios)
-            for col, label in zip(
-                head_cols, ["Hisse", "Mum Periyodu", "Kesişim Fiyatı", "Güncel Muma Uzaklık (bar)", "Grafik"]
-            ):
-                col.markdown(f"**{label}**")
-            for idx, row in enumerate(signals):
-                c1, c2, c3, c4, c5 = st.columns(col_ratios)
-                c1.write(row["Hisse"])
-                c2.write(row["Mum Periyodu"])
-                c3.write(row["Kesişim Fiyatı"])
-                c4.write(row["Güncel Muma Uzaklık (bar)"])
-                if c5.button("📊", key=f"bicak_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
-                    st.session_state.bicak_selected_ticker = row["Hisse"]
-                    st.session_state.bicak_selected_tf = row["_tf_code"]
-                    st.session_state.bicak_show_chart = True
+            st.caption(
+                "💡 Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "
+                "tıklayarak (örn. \"Güncel Muma Uzaklık (bar)\" - en yakın kesişim en küçük değerdedir) "
+                "tabloyu sıralayabilirsiniz."
+            )
+            signals_df = pd.DataFrame(signals)
+            display_cols = ["Hisse", "Mum Periyodu", "Kesişim Fiyatı", "Güncel Muma Uzaklık (bar)"]
+            table_event = st.dataframe(
+                signals_df[display_cols], use_container_width=True, hide_index=True,
+                on_select="rerun", selection_mode="single-cell", key="bicak_signals_table",
+            )
+            selected_cells = table_event.selection.cells if table_event and table_event.selection else []
+            if selected_cells:
+                row_idx, _col_name = selected_cells[0]
+                picked = signals_df.iloc[row_idx]
+                st.session_state.bicak_selected_ticker = picked["Hisse"]
+                st.session_state.bicak_selected_tf = picked["_tf_code"]
+                st.session_state.bicak_show_chart = True
 
     if st.session_state.get("bicak_show_chart") and st.session_state.get("bicak_selected_ticker"):
         active_t = st.session_state.bicak_selected_ticker
@@ -223,6 +223,18 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
         x=xs, y=[yesil_slope * x + yesil_intercept for x in xs], mode="lines",
         name="Yeşil Çizgi (Alım)", line=dict(color=_YESIL_COLOR, width=2.5, dash="dash"),
     ))
+
+    # Yeşil çizgiyi birden fazla mum kesebilir - bunlardan en sonuncusu
+    # (en güncele en yakın olan) en yakın alım fırsatı sayılır, o yüzden
+    # ayrıca ve belirgin şekilde işaretlenir.
+    kesisim = yesil_cizgi_kesisimi(bars, result)
+    if kesisim is not None:
+        fig.add_trace(go.Scatter(
+            x=[kesisim.index], y=[kesisim.price],
+            mode="markers+text", name="En Yakın Alım Noktası",
+            text=["En Yakın Alım"], textposition="top center",
+            marker=dict(symbol="star", size=20, color="#ffffff", line=dict(color=_YESIL_COLOR, width=2.5)),
+        ))
 
     # Kılavuz/bıçak/sıfır çizgisi, sıfır nokta'nın en tepe'den uzaklığına
     # bağlı olarak grafiğin uçlarında çok ekstrapole olabilir (aynı eğim,
