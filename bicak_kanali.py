@@ -30,9 +30,10 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     arasındaki konumuna göre iki parçaya bölünür (üst_oran: kılavuz-
     bıçak, alt_oran: bıçak-sıfır çizgisi; toplamları 1.0 olması gerekir
     ama zorlanmaz - gerçek veride bıçak bu aralığın dışına da çıkabilir).
-
-Sıradaki adım (türetilmiş oran/yeşil çizgi) bu üç hat gerçek veride
-doğrulandıktan sonra eklenecek.
+  - üst_oran * alt_oran = türetilmiş_oran; kılavuzun, kanal genişliği
+    (kılavuz-sıfır çizgisi mesafesi) kadarının türetilmiş_oran'ı kadar
+    ÜSTÜNE (kanalın dışına, yukarı) ötelenmiş paralel doğru -> yeşil
+    çizgi (alım çizgisi).
 """
 
 from dataclasses import dataclass
@@ -56,6 +57,7 @@ class Kilavuz:
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
     turetilmis_oran: float                     # ust_oran * alt_oran
+    yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
 
 
 def _select_decline_leg(pivots: list[Pivot]) -> tuple[Pivot, Pivot] | None:
@@ -104,8 +106,9 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     çizgisi olarak kurulur. en tepe'den önceki SIFIR_ONCESI_BAR_SAYISI
     bar içindeki en düşük bardan ("sıfır nokta"), yine kılavuz ile aynı
     eğimde geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
-    üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır. Yeterli/
-    uygun yapı yoksa None döner."""
+    üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
+    türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
+    (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
     pivots = find_pivots(bars, order)
 
     leg = _select_decline_leg(pivots)
@@ -153,11 +156,14 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
         return None
     ust_oran = (kilavuz_intercept - bicak_intercept) / toplam
     alt_oran = (bicak_intercept - sifir_intercept) / toplam
+    turetilmis_oran = ust_oran * alt_oran
+    yesil_cizgi = (kilavuz_slope, kilavuz_intercept + turetilmis_oran * toplam)
 
     return Kilavuz(
         leg_tepe=leg_tepe, leg_dip=leg_dip, tepe_pivots=tepe_pivots,
         kilavuz_noktalari=(en_tepe, son_tepe), kilavuz=kilavuz,
         en_dip=en_dip, bicak=bicak,
         sifir_nokta=sifir_nokta, sifir_cizgisi=sifir_cizgisi,
-        ust_oran=ust_oran, alt_oran=alt_oran, turetilmis_oran=ust_oran * alt_oran,
+        ust_oran=ust_oran, alt_oran=alt_oran, turetilmis_oran=turetilmis_oran,
+        yesil_cizgi=yesil_cizgi,
     )
