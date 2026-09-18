@@ -2,7 +2,7 @@
 verisiyle hızlıca denemek için bağımsız bir sayfa. Herhangi bir alım/satım
 sinyaline bağlı değildir, sadece yöntemin adım adım görsel doğrulaması
 amaçlıdır - bkz. bicak_kanali.py. Şu an sadece 1. adım (düşüş trendi + bu
-trendin en tepe ve ikinci tepe noktasından geçen kılavuz çizgisi)
+trendin en tepe ve son tepe noktasından geçen kılavuz çizgisi)
 gösteriliyor."""
 
 import plotly.graph_objects as go
@@ -25,8 +25,8 @@ def render_bicak_kanali_test(target_list):
     st.caption(
         "bicak_kanali.py'deki yöntemi gerçek piyasa verisiyle adım adım doğrulamak için "
         "bağımsız bir test sayfası. Şu an sadece 1. adım gösteriliyor: en büyük genlikli "
-        "düşüş trendi, bu trendin tepe adayları arasından en yükseği ile kalanlar "
-        "arasındaki en yükseği seçilip bu iki noktadan çekilen kılavuz çizgisi. "
+        "düşüş trendi, bu trendin tepe adayları arasından en yükseği ile kronolojik "
+        "olarak en son oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi. "
         "Üretimdeki bir alım/satım sinyaline bağlı değildir."
     )
 
@@ -68,13 +68,13 @@ def render_bicak_kanali_test(target_list):
 
     _render_chart(bars, ticker, timeframe, result)
 
-    en_tepe, ikinci_tepe = result.kilavuz_noktalari
+    en_tepe, son_tepe = result.kilavuz_noktalari
     st.caption(
         f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
         f"{result.leg_dip.t[:10]} ({result.leg_dip.price:.2f}) · "
         f"toplam tepe adayı: {len(result.tepe_pivots)} · "
         f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
-        f"{ikinci_tepe.t[:10]} ({ikinci_tepe.price:.2f})"
+        f"{son_tepe.t[:10]} ({son_tepe.price:.2f})"
     )
 
 
@@ -111,11 +111,11 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
                     line=dict(color="#000000", width=1)),
     ))
 
-    en_tepe, ikinci_tepe = result.kilavuz_noktalari
+    en_tepe, son_tepe = result.kilavuz_noktalari
     fig.add_trace(go.Scatter(
-        x=[en_tepe.index, ikinci_tepe.index], y=[en_tepe.price, ikinci_tepe.price],
+        x=[en_tepe.index, son_tepe.index], y=[en_tepe.price, son_tepe.price],
         mode="markers+text", name="Kılavuz Noktaları (seçilen 2)",
-        text=["En Tepe", "İkinci Tepe"], textposition="top center",
+        text=["En Tepe", "Son Tepe"], textposition="top center",
         marker=dict(symbol="diamond", size=13, color=_KILAVUZ_COLOR, line=dict(color="#000000", width=1.5)),
     ))
 
