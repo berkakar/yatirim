@@ -22,11 +22,11 @@ from structure import Bar
 
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
-_KILAVUZ_COLOR = "#e63946"
+_KILAVUZ_COLOR = "#f72585"
 _TREND_COLOR = "#ff9f1c"
 _BICAK_COLOR = "#ffd60a"
-_SIFIR_COLOR = "#2ec4b6"
-_YESIL_COLOR = "#06d6a0"
+_SIFIR_COLOR = "#4cc9f0"
+_YESIL_COLOR = "#38b000"
 
 
 def render_bicak_kanali_test(target_list):
