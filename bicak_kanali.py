@@ -12,9 +12,11 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu an sadece 1. adım var:
     olarak alır.
   - Bu bacağın kapsadığı bar aralığındaki tepe pivotlarından (en az 2
     nokta gerekir, o günün en yüksek fiyatı kullanılarak) ikisi seçilir:
-    en yüksek olan ("en tepe") ve kalanlar arasındaki en yüksek olan
-    ("ikinci tepe"). Bu iki noktadan geçen direkt doğru -> kılavuz
-    çizgisi (diğer tepe noktaları arasında bir ortalama fit değil).
+    en yüksek olan ("en tepe") ve trend boyunca en son oluşan (dibe en
+    yakın, kronolojik olarak en son) tepe pivotu ("son tepe"). Bu iki
+    noktadan geçen direkt doğru -> kılavuz çizgisi (diğer tepe noktaları
+    arasında bir ortalama fit değil) - klasik direnç trend çizgisi
+    çekme yöntemine benzer şekilde, tüm düşüş trendini uçtan uca kapsar.
 
 Sıradaki adımlar (bıçak çizgisi, sıfır çizgisi, türetilmiş oran/yeşil
 çizgi) kılavuz gerçek veride doğrulandıktan sonra eklenecek.
@@ -30,7 +32,7 @@ class Kilavuz:
     leg_tepe: Pivot
     leg_dip: Pivot
     tepe_pivots: list[Pivot]                 # trend boyunca bulunan tüm tepe adayları
-    kilavuz_noktalari: tuple[Pivot, Pivot]    # kılavuz çizgisini belirleyen 2 nokta (en tepe, ikinci tepe)
+    kilavuz_noktalari: tuple[Pivot, Pivot]    # kılavuz çizgisini belirleyen 2 nokta (en tepe, son tepe)
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
 
 
@@ -73,8 +75,8 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
 
 def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
-    tepe pivotlarından en yükseği ("en tepe") ve kalanlar arasındaki en
-    yükseği ("ikinci tepe") seçilip bu iki noktadan geçen direkt doğru
+    tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
+    son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
     kılavuz çizgisi olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
     pivots = find_pivots(bars, order)
 
@@ -93,13 +95,13 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     # p.price bir "high" pivotu için zaten o günün en yüksek fiyatı (bkz.
     # structure.find_pivots), bars üzerinden ayrıca bakmaya gerek yok.
     en_tepe = max(tepe_pivots, key=lambda p: p.price)
-    ikinci_tepe = max((p for p in tepe_pivots if p is not en_tepe), key=lambda p: p.price)
+    son_tepe = max((p for p in tepe_pivots if p is not en_tepe), key=lambda p: p.index)
 
-    kilavuz = _linear_fit([(en_tepe.index, en_tepe.price), (ikinci_tepe.index, ikinci_tepe.price)])
+    kilavuz = _linear_fit([(en_tepe.index, en_tepe.price), (son_tepe.index, son_tepe.price)])
     if kilavuz is None:
         return None
 
     return Kilavuz(
         leg_tepe=leg_tepe, leg_dip=leg_dip, tepe_pivots=tepe_pivots,
-        kilavuz_noktalari=(en_tepe, ikinci_tepe), kilavuz=kilavuz,
+        kilavuz_noktalari=(en_tepe, son_tepe), kilavuz=kilavuz,
     )
