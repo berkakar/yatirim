@@ -17,6 +17,7 @@ DEFAULT_LOOKBACK_DAYS = 180
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
 _KILAVUZ_COLOR = "#e63946"
+_TREND_COLOR = "#ff9f1c"
 
 
 def render_bicak_kanali_test(target_list):
@@ -96,8 +97,9 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
     fig.add_trace(go.Scatter(
         x=[result.leg_tepe.index, result.leg_dip.index],
         y=[result.leg_tepe.price, result.leg_dip.price],
-        mode="markers+text", name="Seçilen Düşüş",
+        mode="lines+markers+text", name="Trend Çizgisi (Tepe-Dip)",
         text=["Tepe", "Dip"], textposition="top center",
+        line=dict(color=_TREND_COLOR, width=2),
         marker=dict(symbol="star", size=14, color="#ffffff", line=dict(color="#000000", width=1)),
     ))
 
