@@ -2,8 +2,10 @@
 verisiyle hızlıca denemek için bağımsız bir sayfa. Herhangi bir alım/satım
 sinyaline bağlı değildir, sadece yöntemin adım adım görsel doğrulaması
 amaçlıdır - bkz. bicak_kanali.py. Şu an gösterilenler: düşüş trendi, bu
-trendin en tepe/son tepe noktasından geçen kılavuz çizgisi ve trendin en
-dip noktasından, kılavuza paralel geçen bıçak çizgisi."""
+trendin en tepe/son tepe noktasından geçen kılavuz çizgisi, trendin en
+dip noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki
+bir pencere içindeki en düşük bardan kılavuza paralel geçen sıfır
+çizgisi ve bu üç hat arasındaki oranlar."""
 
 import plotly.graph_objects as go
 import streamlit as st
@@ -19,6 +21,7 @@ _NEGATIVE_HEX = "#e63946"
 _KILAVUZ_COLOR = "#e63946"
 _TREND_COLOR = "#ff9f1c"
 _BICAK_COLOR = "#ffd60a"
+_SIFIR_COLOR = "#2ec4b6"
 
 
 def render_bicak_kanali_test(target_list):
@@ -27,8 +30,10 @@ def render_bicak_kanali_test(target_list):
         "bicak_kanali.py'deki yöntemi gerçek piyasa verisiyle adım adım doğrulamak için "
         "bağımsız bir test sayfası. Şu an gösterilenler: en büyük genlikli düşüş trendi, "
         "bu trendin tepe adayları arasından en yükseği ile kronolojik olarak en son "
-        "oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi, ve trendin en dip "
-        "noktasından kılavuza paralel geçen bıçak çizgisi. "
+        "oluşanı seçilip bu iki noktadan çekilen kılavuz çizgisi, trendin en dip "
+        "noktasından kılavuza paralel geçen bıçak çizgisi, en tepe'den önceki bir "
+        "pencere içindeki en düşük bardan kılavuza paralel geçen sıfır çizgisi ve bu "
+        "üç hat arasındaki oranlar. "
         "Üretimdeki bir alım/satım sinyaline bağlı değildir."
     )
 
@@ -77,7 +82,13 @@ def render_bicak_kanali_test(target_list):
         f"toplam tepe adayı: {len(result.tepe_pivots)} · "
         f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
         f"{son_tepe.t[:10]} ({son_tepe.price:.2f}) · "
-        f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f})"
+        f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f}) · "
+        f"sıfır nokta: {result.sifir_nokta.t[:10]} ({result.sifir_nokta.price:.2f})"
+    )
+    st.caption(
+        f"üst_oran (kılavuz-bıçak): {result.ust_oran:.4f} · "
+        f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
+        f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
     )
 
 
@@ -141,9 +152,31 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
         name="Bıçak", line=dict(color=_BICAK_COLOR, width=2, dash="dot"),
     ))
 
+    fig.add_trace(go.Scatter(
+        x=[result.sifir_nokta.index], y=[result.sifir_nokta.price],
+        mode="markers+text", name="Sıfır Nokta",
+        text=["Sıfır"], textposition="bottom center",
+        marker=dict(symbol="diamond", size=13, color=_SIFIR_COLOR, line=dict(color="#000000", width=1.5)),
+    ))
+
+    sifir_slope, sifir_intercept = result.sifir_cizgisi
+    fig.add_trace(go.Scatter(
+        x=xs, y=[sifir_slope * x + sifir_intercept for x in xs], mode="lines",
+        name="Sıfır Çizgisi", line=dict(color=_SIFIR_COLOR, width=2, dash="dot"),
+    ))
+
+    # Kılavuz/bıçak/sıfır çizgisi, sıfır nokta'nın en tepe'den uzaklığına
+    # bağlı olarak grafiğin uçlarında çok ekstrapole olabilir (aynı eğim,
+    # gerçek fiyat aralığından çok uzağa taşabilir) - eksen ölçeğini buna
+    # göre değil, gerçek mum verisine göre sabitliyoruz.
+    price_values = [b.h for b in bars] + [b.l for b in bars]
+    y_min, y_max = min(price_values), max(price_values)
+    y_pad = (y_max - y_min) * 0.08 or 1.0
+
     fig.update_layout(
-        title=f"{ticker} - Kılavuz + Bıçak ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
+        title=f"{ticker} - Kılavuz + Bıçak + Sıfır Çizgisi ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
         template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
+        yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
     )
     st.plotly_chart(fig, use_container_width=True)
