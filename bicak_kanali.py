@@ -20,15 +20,24 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
   - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
     kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
     çizgisi.
-  - en tepe'ye giden yükselişin dayandığı dip, yapısal (break-of-
-    structure) bir doğrulamayla bulunur (bkz. structure.
-    validated_trailing_level - JeaFx'in BOS trailing-stop yöntemi):
-    fiyat, önceki referans tepeyi her yeniden kırdığında, o kırılıma
-    giden dip "doğrulanır"; en tepe'ye giden son kırılımın doğruladığı
-    dip ("sıfır nokta") alınır - salt en düşük noktayı almaktan farklı
-    olarak, grafikte görülen kesintisiz yükseliş yapısının gerçekte
-    dayandığı dip budur. Kılavuz ile aynı eğimde, bu noktadan geçen
-    paralel doğru -> sıfır çizgisi.
+  - en tepe'ye giden yükselişin dayandığı dip ("sıfır nokta") bulunur:
+    en tepe'den geriye gidilir; fiyatın en tepe'ninkine eşit/daha
+    yüksek olduğu en son bar bulunursa (bu, en tepe'ye giden yükselişle
+    ilgisiz, ondan önceki başka bir döngünün sınırıdır), arama o
+    noktadan sonra başlar - yoksa verinin en başından. Bu aralıktaki
+    (en tepe'ye kadar) en düşük bar, yoldaki ara düşüşlere (lokal
+    minimumlara) bakılmaksızın sıfır nokta olarak alınır - grafiğin
+    solundan başlayıp en tepe'ye ulaşan yükselişin gerçek dayanağı
+    budur. (Not: burada JeaFx'in BOS trailing-stop yöntemi -bkz.
+    structure.validated_trailing_level- denenmişti, ancak o yöntemdeki
+    "pending" değişkeni her referans tepe kırıldığında SADECE en son
+    dibi hatırlayıp öncekileri unutuyor; bu, canlı bir trailing-stop
+    için doğru olsa da (en güncel dibe yapışmalı), çok bacaklı/inişli-
+    çıkışlı bir yükselişte sıfır noktasının her zaman en tepe'nin hemen
+    öncesine sıkışmasına yol açıyordu - yükselişin gerçek başlangıcını
+    değil, ona giden son ufak kırılımın hemen öncesini buluyordu.)
+    Kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> sıfır
+    çizgisi.
   - kılavuz ile sıfır çizgisi arasındaki (eğim ortak olduğu için
     index'ten bağımsız, sabit) dikey mesafe, bıçak çizgisinin bu ikisi
     arasındaki konumuna göre iki parçaya bölünür (üst_oran: kılavuz-
@@ -42,7 +51,7 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
 
 from dataclasses import dataclass
 
-from structure import Bar, Pivot, find_pivots, validated_trailing_level
+from structure import Bar, Pivot, find_pivots
 
 
 @dataclass(frozen=True)
@@ -54,7 +63,7 @@ class Kilavuz:
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
     en_dip: Pivot                             # trend boyunca en düşük dip pivotu
     bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
-    sifir_nokta: Pivot                         # en tepe'ye giden son BOS kırılımının doğruladığı dip
+    sifir_nokta: Pivot                         # en tepe'ye giden yükselişin gerçek başlangıcındaki en düşük bar
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
@@ -99,15 +108,36 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
     return slope, intercept
 
 
+def _find_sifir_nokta(bars: list[Bar], en_tepe: Pivot) -> Pivot | None:
+    """en tepe'den geriye gidilerek, fiyatın en tepe'ninkine eşit/daha
+    yüksek olduğu en son bar bulunur (varsa) - bu, en tepe'ye giden
+    yükselişten önceki, ilgisiz bir önceki döngünün sınırıdır; arama o
+    noktadan sonra (yoksa verinin en başından) başlar. Bu aralıktaki
+    en düşük bar - ara düşüşlere (lokal minimumlara) bakılmaksızın -
+    yükselişin gerçek başlangıcı, yani sıfır nokta olarak döner."""
+    baslangic = 0
+    for i in range(en_tepe.index - 1, -1, -1):
+        if bars[i].h >= en_tepe.price:
+            baslangic = i + 1
+            break
+    pencere = bars[baslangic:en_tepe.index]
+    if not pencere:
+        return None
+    en_dusuk_i = min(range(len(pencere)), key=lambda k: pencere[k].l)
+    b = pencere[en_dusuk_i]
+    return Pivot(index=baslangic + en_dusuk_i, kind="low", price=b.l, t=b.t)
+
+
 def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
     kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
     ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
-    çizgisi olarak kurulur. en tepe'ye giden son break-of-structure
-    kırılımının doğruladığı dipten ("sıfır nokta"), yine kılavuz ile
-    aynı eğimde geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
+    çizgisi olarak kurulur. en tepe'ye giden yükselişin gerçek
+    başlangıcındaki (bkz. _find_sifir_nokta) en düşük bardan ("sıfır
+    nokta"), yine kılavuz ile aynı eğimde geçen paralel doğru sıfır
+    çizgisi olarak kurulur; bu üç hat
     üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
     (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
@@ -139,12 +169,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     bicak_intercept = en_dip.price - kilavuz_slope * en_dip.index
     bicak = (kilavuz_slope, bicak_intercept)
 
-    # en tepe'nin de bir pivot olarak tanınabilmesi için find_pivots'un
-    # sağında `order` kadar bar olması gerekir - bu yüzden dilim en
-    # tepe'nin biraz ilerisine kadar alınır (aksi halde en tepe'ye giden
-    # kırılım hiç doğrulanmadan fonksiyon daha eski bir kırılımı döner).
-    baglam_sonu = min(len(bars), en_tepe.index + order + 1)
-    sifir_nokta = validated_trailing_level(bars[:baglam_sonu], side="long", order=order)
+    sifir_nokta = _find_sifir_nokta(bars, en_tepe)
     if sifir_nokta is None:
         return None
     sifir_intercept = sifir_nokta.price - kilavuz_slope * sifir_nokta.index
