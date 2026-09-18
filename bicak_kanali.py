@@ -1,5 +1,5 @@
 """
-Bıçak Kanalı - adım adım inşa ediliyor. Şu an sadece 1. adım var:
+Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
 
   - Bar serisinde tepe/dip (pivot) noktaları bulunur (bkz. structure.
     find_pivots).
@@ -17,9 +17,12 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu an sadece 1. adım var:
     noktadan geçen direkt doğru -> kılavuz çizgisi (diğer tepe noktaları
     arasında bir ortalama fit değil) - klasik direnç trend çizgisi
     çekme yöntemine benzer şekilde, tüm düşüş trendini uçtan uca kapsar.
+  - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
+    kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
+    çizgisi.
 
-Sıradaki adımlar (bıçak çizgisi, sıfır çizgisi, türetilmiş oran/yeşil
-çizgi) kılavuz gerçek veride doğrulandıktan sonra eklenecek.
+Sıradaki adımlar (sıfır çizgisi, türetilmiş oran/yeşil çizgi) kılavuz ve
+bıçak gerçek veride doğrulandıktan sonra eklenecek.
 """
 
 from dataclasses import dataclass
@@ -34,6 +37,8 @@ class Kilavuz:
     tepe_pivots: list[Pivot]                 # trend boyunca bulunan tüm tepe adayları
     kilavuz_noktalari: tuple[Pivot, Pivot]    # kılavuz çizgisini belirleyen 2 nokta (en tepe, son tepe)
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
+    en_dip: Pivot                             # trend boyunca en düşük dip pivotu
+    bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
 
 
 def _select_decline_leg(pivots: list[Pivot]) -> tuple[Pivot, Pivot] | None:
@@ -77,7 +82,9 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
-    kılavuz çizgisi olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
+    kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
+    ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
+    çizgisi olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
     pivots = find_pivots(bars, order)
 
     leg = _select_decline_leg(pivots)
@@ -85,23 +92,28 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
         return None
     leg_tepe, leg_dip = leg
 
-    tepe_pivots = [
-        p for p in pivots
-        if leg_tepe.index <= p.index <= leg_dip.index and p.kind == "high"
-    ]
-    if len(tepe_pivots) < 2:
+    in_range = [p for p in pivots if leg_tepe.index <= p.index <= leg_dip.index]
+    tepe_pivots = [p for p in in_range if p.kind == "high"]
+    dip_pivots = [p for p in in_range if p.kind == "low"]
+    if len(tepe_pivots) < 2 or not dip_pivots:
         return None
 
-    # p.price bir "high" pivotu için zaten o günün en yüksek fiyatı (bkz.
-    # structure.find_pivots), bars üzerinden ayrıca bakmaya gerek yok.
+    # p.price bir "high"/"low" pivotu için zaten o günün en yüksek/en
+    # düşük fiyatı (bkz. structure.find_pivots), bars üzerinden ayrıca
+    # bakmaya gerek yok.
     en_tepe = max(tepe_pivots, key=lambda p: p.price)
     son_tepe = max((p for p in tepe_pivots if p is not en_tepe), key=lambda p: p.index)
 
     kilavuz = _linear_fit([(en_tepe.index, en_tepe.price), (son_tepe.index, son_tepe.price)])
     if kilavuz is None:
         return None
+    kilavuz_slope, _ = kilavuz
+
+    en_dip = min(dip_pivots, key=lambda p: p.price)
+    bicak = (kilavuz_slope, en_dip.price - kilavuz_slope * en_dip.index)
 
     return Kilavuz(
         leg_tepe=leg_tepe, leg_dip=leg_dip, tepe_pivots=tepe_pivots,
         kilavuz_noktalari=(en_tepe, son_tepe), kilavuz=kilavuz,
+        en_dip=en_dip, bicak=bicak,
     )
