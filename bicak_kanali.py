@@ -20,9 +20,12 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
   - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
     kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
     çizgisi.
-  - en tepe'den önceki son 50 bar içinde oluşan lokal minimumlardan
-    (dip pivotlarından), yeşil (kapanışı açılışından yüksek) bir muma
-    ait olanların fiyatça en yükseği bulunur; o barın günlük en düşük
+  - bıçak çizgisinin fiyatla en son (en güncel) kesiştiği YEŞİL
+    (kapanışı açılışından yüksek) bar bulunur (bkz.
+    _bicak_kesisimi_yesil) - artık en tepe'ye kadar gitmeye
+    çalışılmıyor. Bu bardan önceki son 50 bar içindeki lokal
+    minimumlardan (dip pivotlarından), yine yeşil bir muma ait
+    olanların fiyatça en yükseği bulunur; o barın günlük en düşük
     fiyatı sıfır nokta olarak alınır (bkz. _find_sifir_nokta). Kılavuz
     ile aynı eğimde, bu noktadan geçen paralel doğru -> sıfır çizgisi.
   - kılavuz ile sıfır çizgisi arasındaki (eğim ortak olduğu için
@@ -50,7 +53,7 @@ class Kilavuz:
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
     en_dip: Pivot                             # trend boyunca en düşük dip pivotu
     bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
-    sifir_nokta: Pivot                         # en tepe'den önceki son 50 bardaki en yüksek yeşil lokal minimum
+    sifir_nokta: Pivot                         # bıçağın yeşil kesişiminden önceki son 50 bardaki en yüksek yeşil lokal minimum
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
@@ -98,18 +101,33 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
 _SIFIR_PENCERE = 50
 
 
-def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], en_tepe: Pivot) -> Pivot | None:
-    """en tepe'den önceki son _SIFIR_PENCERE bar içindeki dip
+def _bicak_kesisimi_yesil(bars: list[Bar], bicak: tuple[float, float]) -> Pivot | None:
+    """Bıçak çizgisinin (kılavuz ile aynı eğimdeki, en dip'ten geçen
+    hat) fiyatla en son (en güncel) kesiştiği YEŞİL (kapanışı
+    açılışından yüksek) barı bulur; hiç böyle bir kesişim yoksa None.
+    Sıfır nokta artık bu bardan geriye doğru aranır - en tepe'den
+    değil (bkz. _find_sifir_nokta)."""
+    slope, intercept = bicak
+    kesisim: Pivot | None = None
+    for i, b in enumerate(bars):
+        level = slope * i + intercept
+        if b.l <= level <= b.h and b.c > b.o:
+            kesisim = Pivot(index=i, kind="low", price=level, t=b.t)
+    return kesisim
+
+
+def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], referans: Pivot) -> Pivot | None:
+    """`referans` barından önceki son _SIFIR_PENCERE bar içindeki dip
     pivotlarından (lokal minimumlardan), yeşil bir muma (kapanış >
     açılış) ait olanların fiyatça (günlük en düşük fiyat) en yükseğini
     döner; hiç yeşil lokal minimum yoksa None. `pivots`, aynı `bars`
     üzerinde zaten hesaplanmış olmalı (bkz. structure.find_pivots) -
     pencerenin kenarındaki pivotların da doğru tanınması için burada
     ayrıca dilimlenmiş bir bar listesi üzerinde yeniden hesaplanmaz."""
-    baslangic = max(0, en_tepe.index - _SIFIR_PENCERE)
+    baslangic = max(0, referans.index - _SIFIR_PENCERE)
     adaylar = [
         p for p in pivots
-        if p.kind == "low" and baslangic <= p.index < en_tepe.index
+        if p.kind == "low" and baslangic <= p.index < referans.index
         and bars[p.index].c > bars[p.index].o
     ]
     if not adaylar:
@@ -123,10 +141,11 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
     kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
     ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
-    çizgisi olarak kurulur. en tepe'den önceki son 50 bardaki yeşil
-    lokal minimumlardan fiyatça en yükseğinden (bkz. _find_sifir_nokta)
-    ("sıfır nokta"), yine kılavuz ile aynı eğimde geçen paralel doğru
-    sıfır çizgisi olarak kurulur; bu üç hat
+    çizgisi olarak kurulur. Bıçak çizgisinin fiyatla en son kesiştiği
+    yeşil bardan (bkz. _bicak_kesisimi_yesil) önceki son 50 bardaki
+    yeşil lokal minimumlardan fiyatça en yükseğinden (bkz.
+    _find_sifir_nokta) ("sıfır nokta"), yine kılavuz ile aynı eğimde
+    geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
     üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
     (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
@@ -158,7 +177,10 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     bicak_intercept = en_dip.price - kilavuz_slope * en_dip.index
     bicak = (kilavuz_slope, bicak_intercept)
 
-    sifir_nokta = _find_sifir_nokta(bars, pivots, en_tepe)
+    bicak_kesisim = _bicak_kesisimi_yesil(bars, bicak)
+    if bicak_kesisim is None:
+        return None
+    sifir_nokta = _find_sifir_nokta(bars, pivots, bicak_kesisim)
     if sifir_nokta is None:
         return None
     sifir_intercept = sifir_nokta.price - kilavuz_slope * sifir_nokta.index
