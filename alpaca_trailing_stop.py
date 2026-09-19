@@ -5,9 +5,15 @@ Steps 2-5 below (the actual stop-price decision logic, as opposed to order
 management) are the "breakeven_atr_structure" algorithm in stop_algorithms.py
 - one entry in a pluggable STOP_ALGORITHMS registry (mirrors buy_algorithms.py's
 ALGORITHMS for premium buy points), selected via manage_position's
-`stop_algorithm` argument. This module handles everything ELSE: order
-lookup/placement/resizing, extended-hours recovery, and calling into whichever
-algorithm is selected for the actual price decision.
+`stop_algorithm` argument. run_once resolves which one to use per position
+via resolve_stop_algorithm: the symbol's portfolio_config_berkakar.json
+symbol_settings[symbol].stop_algorithm override if set, else the
+portfolio-wide config.stop_algorithm, else DEFAULT_STOP_ALGORITHM - same
+config file and same per-symbol-override-over-portfolio-default precedence
+alpaca_buy_points.py already uses for which buy algorithm is active. This
+module handles everything ELSE: order lookup/placement/resizing,
+extended-hours recovery, and calling into whichever algorithm is selected
+for the actual price decision.
 
 Manages every open position in the account. Each pass, per position:
 
@@ -140,17 +146,36 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
-def load_top_up_stop_mode() -> str:
+def load_portfolio_config() -> dict:
+    """Premium Buy Point modülünün yazdığı portföy config'i (bkz.
+    github_config.py) - top_up_stop_mode, stop_algorithm ve hisse bazlı
+    symbol_settings override'ları burada. Dosya yoksa boş dict döner."""
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_top_up_stop_mode(config: dict | None = None) -> str:
     """Premium Buy Point modülünde kullanıcının seçtiği, ilave alım (top-up)
     sonrası resting stop davranışı - "keep" (varsayılan: sadece adet
     genişler, fiyat seviyesi değişmez) veya "tighten_to_new_entry" (yeni
     ortalama giriş fiyatına göre bir nefes payı adayı da eklenir - bkz.
     manage_position, sadece stop'u sıkılaştırırsa uygulanır)."""
-    if not os.path.exists(CONFIG_PATH):
-        return TOP_UP_STOP_MODE_DEFAULT
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        config = json.load(f)
+    if config is None:
+        config = load_portfolio_config()
     return config.get("top_up_stop_mode") or TOP_UP_STOP_MODE_DEFAULT
+
+
+def resolve_stop_algorithm(config: dict, symbol: str) -> str:
+    """Bir sembol için aktif stop-loss algoritmasını çözer: hisse bazlı
+    override (symbol_settings[symbol].stop_algorithm) varsa o, yoksa
+    portföy geneli varsayılan (config.stop_algorithm), o da yoksa/geçersizse
+    DEFAULT_STOP_ALGORITHM - buy_algorithms için alpaca_buy_points.py'nin
+    kullandığı aynı çözümleme deseni (bkz. run_once)."""
+    settings = (config.get("symbol_settings") or {}).get(symbol) or {}
+    algo = settings.get("stop_algorithm") or config.get("stop_algorithm") or DEFAULT_STOP_ALGORITHM
+    return algo if algo in STOP_ALGORITHMS else DEFAULT_STOP_ALGORITHM
 
 
 def _parse_iso(ts: str) -> datetime:
@@ -598,9 +623,11 @@ def run_once(client: AlpacaClient) -> None:
         log("No open equity positions.")
         return
 
-    top_up_stop_mode = load_top_up_stop_mode()
+    config = load_portfolio_config()
+    top_up_stop_mode = load_top_up_stop_mode(config)
     for pos in positions:
-        manage_position(client, pos, top_up_stop_mode)
+        stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
+        manage_position(client, pos, top_up_stop_mode, stop_algorithm)
 
 
 def run_loop(client: AlpacaClient) -> None:

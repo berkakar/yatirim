@@ -66,14 +66,19 @@ alpaca_trailing_stop.load_top_up_stop_mode). Any failure in that sequence
 its old price/qty before giving up on the top-up, so a position is never
 left without a stop.
 
-Every entry is submitted as a bracket order with a stop-loss leg at
-INITIAL_STOP_PCT below the limit price (see alpaca_client.place_limit_entry),
-so the protective stop exists on Alpaca's side the instant the entry fills -
-it doesn't wait for alpaca_trailing_stop.py's next scheduled run, which
-GitHub Actions can delay well past its nominal interval. That script's own
-initial-stop placement is now just a fallback for a position that somehow
-has none (e.g. opened outside this system); its structure-based trailing
-still runs on its own schedule to tighten the stop over time.
+Every entry is submitted as a bracket order with a stop-loss leg at whatever
+level the symbol's selected stop algorithm's initial_stop() prescribes (see
+stop_algorithms.py - resolved the same way as the buy algorithm, via
+resolve_stop_algorithm: per-symbol config["symbol_settings"][symbol].
+stop_algorithm, else the portfolio-wide config["stop_algorithm"], else
+DEFAULT_STOP_ALGORITHM) below the limit price (see
+alpaca_client.place_limit_entry), so the protective stop exists on Alpaca's
+side the instant the entry fills - it doesn't wait for
+alpaca_trailing_stop.py's next scheduled run, which GitHub Actions can delay
+well past its nominal interval. That script's own initial-stop placement is
+now just a fallback for a position that somehow has none (e.g. opened
+outside this system); its (same, selected-algorithm) trailing logic still
+runs on its own schedule to tighten the stop over time.
 
 config["stop_loss_enabled"] / config["max_loss_pct"] (set in
 premium_buy_portfolio.py, same UI as the BackTest module's "Zarar Kes") add
@@ -120,9 +125,10 @@ from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
     INITIAL_STOP_PCT, extended_hours_session, get_bars_for_timeframe, load_telegram_settings,
-    load_top_up_stop_mode, TIMEFRAME, log,
+    load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
 from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
@@ -179,7 +185,7 @@ def _get_daily_closes(client: AlpacaClient, symbol: str) -> list[float]:
 def check_symbol(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
     max_loss_pct: float | None = None, available_cash: float | None = None,
-    top_up_stop_mode: str = "keep",
+    top_up_stop_mode: str = "keep", stop_algorithm: str = DEFAULT_STOP_ALGORITHM,
 ) -> float:
     """Pozisyon yoksa: sinyale göre yeni bir giriş (bracket buy-limit) açar
     veya bekleyen girişi günceller - aşağıdaki asıl akış budur.
@@ -205,6 +211,7 @@ def check_symbol(
     çağrıda YENİ verilen emrin tutarı ($), emir verilmediyse 0.0 - run_once
     bunu available_cash'ten düşerek aynı pass'teki diğer sembollere de
     yansıtır."""
+    stop_algo = STOP_ALGORITHMS[stop_algorithm]
     existing_order = client.get_open_limit_buy_order(symbol)
     position = client.get_position(symbol)
 
@@ -317,7 +324,8 @@ def check_symbol(
 
         if top_up_stop_mode == "tighten_to_new_entry":
             new_entry = float(new_position["avg_entry_price"])
-            new_stop_price = max(old_stop_price, round(new_entry * (1 - INITIAL_STOP_PCT), 2))
+            new_naive_stop = stop_algo.initial_stop(new_entry, "long", initial_stop_pct=INITIAL_STOP_PCT)
+            new_stop_price = max(old_stop_price, round(new_naive_stop, 2))
         else:
             new_stop_price = old_stop_price
 
@@ -340,7 +348,7 @@ def check_symbol(
 
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
     # alpaca_client.place_limit_entry and the module docstring.
-    stop_loss_price = round(target_price * (1 - INITIAL_STOP_PCT), 2)
+    stop_loss_price = round(stop_algo.initial_stop(target_price, "long", initial_stop_pct=INITIAL_STOP_PCT), 2)
 
     if existing_order is None:
         order = client.place_limit_entry(
@@ -508,13 +516,14 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
         log(f"{session}: hesap nakti alınamadı, bu pass atlanıyor: {e}")
         return
 
-    pending: dict[str, str] = {}  # symbol -> order_id, dolumu izlenecek
+    pending: dict[str, tuple[str, str]] = {}  # symbol -> (order_id, stop_algorithm), dolumu izlenecek
     for symbol in sorted(watchlist_symbols):
         settings = symbol_settings.get(symbol) or {}
         algorithm = settings.get("algorithm") or default_algorithm
         if algorithm not in ALGORITHMS:
             algorithm = default_algorithm
         timeframe = settings.get("timeframe") or TIMEFRAME
+        stop_algorithm = resolve_stop_algorithm(config, symbol)
         try:
             spent, order_id = check_symbol_extended_hours_entry(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe,
@@ -522,7 +531,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
             )
             available_cash -= spent
             if order_id is not None:
-                pending[symbol] = order_id
+                pending[symbol] = (order_id, stop_algorithm)
         except Exception as e:
             log(f"{symbol}: extended-hours check_symbol failed, atlanıyor: {e}")
 
@@ -536,7 +545,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
 
     deadline = time.monotonic() + EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS
     while pending and time.monotonic() < deadline:
-        for symbol, order_id in list(pending.items()):
+        for symbol, (order_id, stop_algorithm) in list(pending.items()):
             try:
                 order = client.get_order(order_id)
             except Exception as e:
@@ -546,7 +555,9 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
             if order["status"] == "filled":
                 entry_price = float(order["filled_avg_price"])
                 qty = float(order["filled_qty"])
-                stop_price = round(entry_price * (1 - INITIAL_STOP_PCT), 2)
+                stop_algo = STOP_ALGORITHMS[stop_algorithm]
+                naive_stop = stop_algo.initial_stop(entry_price, "long", initial_stop_pct=INITIAL_STOP_PCT)
+                stop_price = round(naive_stop, 2)
                 try:
                     client.place_extended_hours_limit(symbol, qty, "long", stop_price)
                     msg = (
@@ -648,7 +659,7 @@ def run_once(client: AlpacaClient) -> None:
         default_algorithm = DEFAULT_ALGORITHM
     symbol_settings = config.get("symbol_settings") or {}
     max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
-    top_up_stop_mode = load_top_up_stop_mode()
+    top_up_stop_mode = load_top_up_stop_mode(config)
 
     try:
         available_cash = compute_available_cash_for_buying(client)
@@ -662,10 +673,11 @@ def run_once(client: AlpacaClient) -> None:
         if algorithm not in ALGORITHMS:
             algorithm = default_algorithm
         timeframe = settings.get("timeframe") or TIMEFRAME
+        stop_algorithm = resolve_stop_algorithm(config, symbol)
         try:
             spent = check_symbol(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe, max_loss_pct,
-                available_cash, top_up_stop_mode,
+                available_cash, top_up_stop_mode, stop_algorithm,
             )
             available_cash -= spent
         except Exception as e:
