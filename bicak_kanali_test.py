@@ -93,12 +93,13 @@ def render_bicak_kanali_test(target_list):
         else:
             st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
             st.caption(
-                "💡 Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "
-                "tıklayarak (örn. \"Güncel Muma Uzaklık (bar)\" - en yakın kesişim en küçük değerdedir) "
-                "tabloyu sıralayabilirsiniz."
+                "💡 Tablo, Güncel Muma Uzaklık'a göre sıralı geliyor (en yakın kesişim en üstte). "
+                "Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "
+                "tıklayarak tabloyu farklı sıralayabilirsiniz."
             )
             signals_df = pd.DataFrame(signals)
-            display_cols = ["Hisse", "Mum Periyodu", "Kesişim Fiyatı", "Güncel Muma Uzaklık (bar)"]
+            signals_df = signals_df.sort_values("Güncel Muma Uzaklık (bar)", ascending=True).reset_index(drop=True)
+            display_cols = ["Hisse", "Güncel Muma Uzaklık (bar)", "Kesişim Fiyatı", "Mum Periyodu"]
             table_event = st.dataframe(
                 signals_df[display_cols], use_container_width=True, hide_index=True,
                 on_select="rerun", selection_mode="single-cell", key="bicak_signals_table",
