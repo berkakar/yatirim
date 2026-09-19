@@ -29,9 +29,10 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     (üst_oran=1, alt_oran=0, türetilmiş_oran=0, yeşil çizgi=kılavuz
     çizgisiyle çakışır). Bu, yeniden adım adım netleştirilecek bir
     başlangıç noktasıdır.
-  - ADIM ADIM YENİDEN İNŞA - 1. adım: dip çizgisinin (leg_tepe'den
-    leg_dip'e çizilen direkt doğru - grafikteki "Trend Çizgisi (Tepe-
-    Dip)"; kılavuz ile aynı eğimde DEĞİL) fiyatla soldan sağa doğru
+  - ADIM ADIM YENİDEN İNŞA - 1. adım: dip çizgisinin (en dip
+    noktasından geçen, kılavuz ile aynı eğimdeki paralel doğru - şu an
+    bıçak çizgisiyle AYNI hat, çünkü sıfır nokta geçici olarak en_dip'e
+    eşitlendi) fiyatla, en dip noktasından ÖNCEKİ (soldaki) taraftaki
     İLK kesiştiği YEŞİL (kapanışı açılışından yüksek) bar bulunup
     "dip kesişim mumu" olarak işaretlenir (bkz.
     _dip_cizgisi_ilk_yesil_kesisim). Bu adımda henüz sıfır noktası
@@ -67,7 +68,7 @@ class Kilavuz:
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
     turetilmis_oran: float                     # ust_oran * alt_oran
     yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
-    dip_kesisim_mumu: Pivot | None             # dip çizgisinin soldan sağa İLK kesiştiği yeşil bar (henüz sıfır nokta hesabında kullanılmıyor)
+    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar (henüz sıfır nokta hesabında kullanılmıyor)
 
 
 def _select_decline_leg(pivots: list[Pivot]) -> tuple[Pivot, Pivot] | None:
@@ -107,20 +108,17 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
     return slope, intercept
 
 
-def _dip_cizgisi_ilk_yesil_kesisim(bars: list[Bar], leg_tepe: Pivot, leg_dip: Pivot) -> Pivot | None:
-    """Dip çizgisinin (leg_tepe'den leg_dip'e çizilen direkt doğru -
-    grafikteki "Trend Çizgisi (Tepe-Dip)"; kılavuz ile aynı eğimde
-    DEĞİL) fiyatla soldan sağa doğru İLK kesiştiği YEŞİL (kapanışı
+def _dip_cizgisi_ilk_yesil_kesisim(bars: list[Bar], en_dip: Pivot, dip_cizgisi: tuple[float, float]) -> Pivot | None:
+    """Dip çizgisinin (en dip noktasından geçen, kılavuz ile aynı
+    eğimdeki paralel doğru) fiyatla, en dip noktasından ÖNCEKİ
+    barlarda soldan sağa doğru İLK kesiştiği YEŞİL (kapanışı
     açılışından yüksek) barı bulur ("dip kesişim mumu"); hiç böyle bir
-    kesişim yoksa None. Arama leg_tepe'den SONRAKİ barlarla
-    sınırlıdır - çizgi kendi tanımı gereği tam olarak leg_tepe'nin
-    fiyatından geçtiği için, tepeye giden son (genelde yeşil) yükseliş
-    barı sahte bir "kesişim" olarak sayılmasın."""
-    dip_cizgisi = _linear_fit([(leg_tepe.index, leg_tepe.price), (leg_dip.index, leg_dip.price)])
-    if dip_cizgisi is None:
-        return None
+    kesişim yoksa None. Arama en dip noktasından ÖNCEKİ barlarla
+    sınırlıdır - çizgi kendi tanımı gereği tam olarak en dip'in
+    fiyatından geçtiği için, en dip'in kendisi (veya sonrası) sahte
+    bir "kesişim" olarak sayılmasın."""
     slope, intercept = dip_cizgisi
-    for i in range(leg_tepe.index + 1, len(bars)):
+    for i in range(0, en_dip.index):
         b = bars[i]
         level = slope * i + intercept
         if b.l <= level <= b.h and b.c > b.o:
@@ -172,7 +170,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     sifir_intercept = bicak_intercept
     sifir_cizgisi = (kilavuz_slope, sifir_intercept)
 
-    dip_kesisim_mumu = _dip_cizgisi_ilk_yesil_kesisim(bars, leg_tepe, leg_dip)
+    dip_kesisim_mumu = _dip_cizgisi_ilk_yesil_kesisim(bars, en_dip, bicak)
 
     kilavuz_intercept = kilavuz[1]
     toplam = kilavuz_intercept - sifir_intercept
