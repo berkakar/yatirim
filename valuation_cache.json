@@ -4647,7 +4647,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-19"
   },
   "SIRI": {
     "raw": {
@@ -4697,7 +4697,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-19"
   },
   "TROW": {
     "raw": {
@@ -4822,7 +4822,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-19"
   },
   "WBD": {
     "raw": {
@@ -5054,7 +5054,7 @@
       "Hisse": "SMH",
       "Alt Sektör (İş Modeli)": "Diğer",
       "Ana Sektör": "Diğer",
-      "F/K": 39.24,
+      "F/K": 39.14,
       "PD/DD": null,
       "FD/FAVÖK": null,
       "PEG": null,
@@ -5072,7 +5072,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-19"
   },
   "SKHY": {
     "raw": {
@@ -5104,8 +5104,8 @@
       "Hisse": "XLF",
       "Alt Sektör (İş Modeli)": "Diğer",
       "Ana Sektör": "Diğer",
-      "F/K": 16.23,
-      "PD/DD": 1.68,
+      "F/K": 15.84,
+      "PD/DD": 1.64,
       "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
@@ -5122,15 +5122,15 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-09-13"
+    "cached_at": "2026-09-19"
   },
   "XLE": {
     "raw": {
       "Hisse": "XLE",
       "Alt Sektör (İş Modeli)": "Diğer",
       "Ana Sektör": "Diğer",
-      "F/K": 21.13,
-      "PD/DD": 1.2,
+      "F/K": 17.84,
+      "PD/DD": 1.23,
       "FD/FAVÖK": null,
       "PEG": null,
       "EPS Büyümesi %": null,
@@ -5147,7 +5147,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-19"
   },
   "MAGS": {
     "raw": {
@@ -5172,7 +5172,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-09-13"
+    "cached_at": "2026-09-19"
   },
   "ANET": {
     "raw": {
