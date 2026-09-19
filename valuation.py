@@ -7,7 +7,7 @@ import os
 import streamlit as st
 from datetime import date, datetime, timedelta, timezone
 
-from github_config import read_json_from_github, write_json_to_github
+from github_config import read_json_from_github, update_json_on_github
 from ui_style import zebra_style
 
 SUB_SECTOR_FILE = "sub_sectors.json"
@@ -157,18 +157,41 @@ def _load_valuation_cache():
     return data or {}
 
 
-def _save_valuation_cache(cache):
-    """Güncellenmiş önbelleği kalıcı olması için GitHub'a commit'ler (mümkün
-    olduğunda), ayrıca yerel dosyaya da yazar."""
+def _save_valuation_cache_updates(updates):
+    """Bu çalıştırmada taze çekilen önbellek girdilerini (`updates`) kalıcı önbelleğe
+    ekler. `write_json_to_github` gibi tüm dosyayı elimizdeki (bayatlamış olabilecek)
+    kopyayla ezmek yerine, GitHub'daki EN GÜNCEL veriyi okuyup sadece kendi
+    güncellemelerimizi onun üzerine merge eder (bkz. update_json_on_github).
+
+    Bu, iki kullanıcının art arda değerleme analizini tetiklemesi durumunda birinin
+    güncellemesinin diğerininki tarafından sessizce ezilmesini (lost update) önler:
+    eskiden her iki kullanıcı da kendi bayat kopyasını temel alıp dosyanın tamamını
+    yeniden yazdığından, ikinci yazan birincinin az önce eklediği taze verileri
+    farkında olmadan siliyordu."""
     token = st.secrets.get("GITHUB_TOKEN")
+    merged = None
     if token:
         try:
-            write_json_to_github(GITHUB_REPO, token, VALUATION_CACHE_FILE, cache, "Update valuation cache")
+            merged = update_json_on_github(
+                GITHUB_REPO, token, VALUATION_CACHE_FILE, {},
+                lambda current: {**current, **updates},
+                "Update valuation cache",
+            )
         except Exception as e:
             st.warning(f"⚠️ Değerleme önbelleği GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
+    if merged is None:
+        local = {}
+        if os.path.exists(VALUATION_CACHE_FILE):
+            try:
+                with open(VALUATION_CACHE_FILE, 'r', encoding='utf-8') as f:
+                    local = json.load(f)
+            except Exception:
+                local = {}
+        merged = {**local, **updates}
+
     with open(VALUATION_CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+        json.dump(merged, f, ensure_ascii=False, indent=2)
 
 
 def _needs_refresh(cache_entry):
@@ -206,15 +229,16 @@ def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
     cache = _load_valuation_cache()
     results = []
     freshly_fetched = []
-    cache_changed = False
+    updates = {}
 
     for i, ticker in enumerate(ticker_list):
         entry = cache.get(ticker)
         if _needs_refresh(entry):
             raw = fetch_single_ticker_raw(ticker)
             if raw:
-                cache[ticker] = {"raw": raw, "cached_at": date.today().isoformat()}
-                cache_changed = True
+                new_entry = {"raw": raw, "cached_at": date.today().isoformat()}
+                cache[ticker] = new_entry
+                updates[ticker] = new_entry
                 freshly_fetched.append(ticker)
                 results.append(raw)
             elif entry:
@@ -226,8 +250,8 @@ def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
         if progress_callback:
             progress_callback(i + 1, len(ticker_list), ticker)
 
-    if cache_changed:
-        _save_valuation_cache(cache)
+    if updates:
+        _save_valuation_cache_updates(updates)
 
     return results, freshly_fetched
 
