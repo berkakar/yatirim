@@ -20,23 +20,17 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
   - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
     kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
     çizgisi.
-  - GEÇİCİ OLARAK EN BASİT HALİNE DÖNDÜRÜLDÜ (sıfır noktasının tam
-    tanımı üzerinde art arda çok fazla değişiklik yapılıp işler
-    karıştığı için): sıfır nokta, bıçak çizgisini belirleyen aynı "en
-    dip nokta" (trend boyunca en düşük dip pivotu) olarak alınıyor.
-    Kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> sıfır
-    çizgisi - bu da pratikte bıçak çizgisiyle AYNI çizgi demektir
-    (üst_oran=1, alt_oran=0, türetilmiş_oran=0, yeşil çizgi=kılavuz
-    çizgisiyle çakışır). Bu, yeniden adım adım netleştirilecek bir
-    başlangıç noktasıdır.
-  - ADIM ADIM YENİDEN İNŞA - 1. adım: dip çizgisinin (en dip
-    noktasından geçen, kılavuz ile aynı eğimdeki paralel doğru - şu an
-    bıçak çizgisiyle AYNI hat, çünkü sıfır nokta geçici olarak en_dip'e
-    eşitlendi) fiyatla, en dip noktasından ÖNCEKİ (soldaki) taraftaki
-    İLK kesiştiği YEŞİL (kapanışı açılışından yüksek) bar bulunup
-    "dip kesişim mumu" olarak işaretlenir (bkz.
-    _dip_cizgisi_ilk_yesil_kesisim). Bu adımda henüz sıfır noktası
-    hesabına dahil edilmiyor - sadece grafikte gösteriliyor.
+  - ADIM ADIM YENİDEN İNŞA: dip çizgisinin (en dip noktasından geçen,
+    kılavuz ile aynı eğimdeki paralel doğru - bıçak çizgisiyle AYNI
+    hat) fiyatla, en dip noktasından ÖNCEKİ (soldaki) taraftaki İLK
+    kesiştiği YEŞİL (kapanışı açılışından yüksek) bar bulunur ("dip
+    kesişim mumu" - bkz. _dip_cizgisi_ilk_yesil_kesisim). Sıfır nokta,
+    bu barın (dip kesişim mumunun) günlük en düşük fiyatına
+    kaydırılarak belirlenir - kesişimin kendi çizgi üzerindeki değeri
+    değil, doğrudan o barın gerçek en düşük fiyatı kullanılır. Kılavuz
+    ile aynı eğimde, sıfır noktadan geçen paralel doğru -> sıfır
+    çizgisi. Dip kesişim mumu bulunamazsa kanal geçersiz sayılır
+    (None döner).
   - kılavuz ile sıfır çizgisi arasındaki (eğim ortak olduğu için
     index'ten bağımsız, sabit) dikey mesafe, bıçak çizgisinin bu ikisi
     arasındaki konumuna göre iki parçaya bölünür (üst_oran: kılavuz-
@@ -62,13 +56,13 @@ class Kilavuz:
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
     en_dip: Pivot                             # trend boyunca en düşük dip pivotu
     bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
-    sifir_nokta: Pivot                         # GEÇİCİ: en_dip ile aynı (en basit hale döndürüldü)
+    sifir_nokta: Pivot                         # dip kesişim mumunun günlük en düşük fiyatı
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
     turetilmis_oran: float                     # ust_oran * alt_oran
     yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
-    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar (henüz sıfır nokta hesabında kullanılmıyor)
+    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu barın en düşük fiyatına kaydırılır
 
 
 def _select_decline_leg(pivots: list[Pivot]) -> tuple[Pivot, Pivot] | None:
@@ -132,9 +126,11 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
     kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
     ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
-    çizgisi olarak kurulur. Sıfır nokta GEÇİCİ OLARAK en_dip ile aynı
-    alınıyor (bkz. modül docstring'i) - yine kılavuz ile aynı eğimde
-    geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
+    çizgisi olarak kurulur. Dip çizgisinin (bıçak ile aynı hat) en dip
+    noktasından önce ilk kestiği yeşil bardan ("dip kesişim mumu"),
+    bu barın günlük en düşük fiyatına kaydırılarak sıfır nokta
+    belirlenir; yine kılavuz ile aynı eğimde geçen paralel doğru sıfır
+    çizgisi olarak kurulur; bu üç hat
     üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
     (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
@@ -166,11 +162,13 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     bicak_intercept = en_dip.price - kilavuz_slope * en_dip.index
     bicak = (kilavuz_slope, bicak_intercept)
 
-    sifir_nokta = en_dip
-    sifir_intercept = bicak_intercept
-    sifir_cizgisi = (kilavuz_slope, sifir_intercept)
-
     dip_kesisim_mumu = _dip_cizgisi_ilk_yesil_kesisim(bars, en_dip, bicak)
+    if dip_kesisim_mumu is None:
+        return None
+    kesisim_bar = bars[dip_kesisim_mumu.index]
+    sifir_nokta = Pivot(index=dip_kesisim_mumu.index, kind="low", price=kesisim_bar.l, t=dip_kesisim_mumu.t)
+    sifir_intercept = sifir_nokta.price - kilavuz_slope * sifir_nokta.index
+    sifir_cizgisi = (kilavuz_slope, sifir_intercept)
 
     kilavuz_intercept = kilavuz[1]
     toplam = kilavuz_intercept - sifir_intercept
