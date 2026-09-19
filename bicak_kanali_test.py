@@ -27,6 +27,7 @@ _TREND_COLOR = "#ff9f1c"
 _BICAK_COLOR = "#ffd60a"
 _SIFIR_COLOR = "#4cc9f0"
 _YESIL_COLOR = "#38b000"
+_DIP_KESISIM_COLOR = "#9d4edd"
 
 
 def render_bicak_kanali_test(target_list):
@@ -177,6 +178,14 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
         marker=dict(symbol="triangle-down", size=8, color=_KILAVUZ_COLOR, opacity=0.5,
                     line=dict(color="#000000", width=1)),
     ))
+
+    if result.dip_kesisim_mumu is not None:
+        fig.add_trace(go.Scatter(
+            x=[result.dip_kesisim_mumu.index], y=[result.dip_kesisim_mumu.price],
+            mode="markers+text", name="Dip Kesişim Mumu",
+            text=["Dip Kesişim"], textposition="bottom center",
+            marker=dict(symbol="diamond", size=13, color=_DIP_KESISIM_COLOR, line=dict(color="#000000", width=1.5)),
+        ))
 
     en_tepe, son_tepe = result.kilavuz_noktalari
     fig.add_trace(go.Scatter(
