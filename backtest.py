@@ -18,6 +18,7 @@ from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
 from backtest_engine import run_backtest
 from buy_algorithms import ALGORITHMS, egimli_ters_fibo_signal
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
 from structure import Bar
 from ters_fibo import analyze as ters_fibo_analyze
 from ters_fibo import nearest_support_below
@@ -58,6 +59,15 @@ def _format_stop_loss(r: dict) -> str:
     if r.get("stop_loss_triggered"):
         return f"Tetiklendi (%{limit:g}) · {r.get('stop_loss_triggered_at') or ''}"
     return f"Açık (%{limit:g})"
+
+
+def _stop_algorithm_label(r: dict) -> str:
+    # Eski kayıtlarda stop_algorithm alanı yok - o alan eklenmeden önce
+    # üretilen tüm sonuçlar zaten DEFAULT_STOP_ALGORITHM ile koşmuştu (bkz.
+    # backtest_engine.run_backtest'in aynı varsayılanı).
+    algo_id = r.get("stop_algorithm") or DEFAULT_STOP_ALGORITHM
+    algo = STOP_ALGORITHMS.get(algo_id)
+    return algo.label if algo else algo_id
 
 
 def _style_summary(df: pd.DataFrame):
@@ -357,6 +367,14 @@ def _render_settings():
         if col.checkbox(label, key=f"bt_algo_{algo_id}")
     ]
 
+    st.subheader("🛡️ Stop-Loss Algoritmaları")
+    st.caption("Her seçili buy-point algoritması × mum periyodu kombinasyonu, aşağıda seçtiğiniz her stop-loss algoritmasıyla ayrı ayrı koşulur.")
+    stop_algo_cols = st.columns(len(STOP_ALGORITHMS))
+    selected_stop_algorithms = [
+        algo_id for col, (algo_id, stop_algo) in zip(stop_algo_cols, STOP_ALGORITHMS.items())
+        if col.checkbox(stop_algo.label, key=f"bt_stop_algo_{algo_id}")
+    ]
+
     st.subheader("🕯️ Mum Periyodu")
     tf_cols = st.columns(len(TIMEFRAMES))
     selected_timeframes = [
@@ -403,12 +421,12 @@ def _render_settings():
         help="Başlangıç bütçesine göre toplam zarar bu yüzdeye ulaştığında, o çalıştırma için yeni alım/satım işlemleri durdurulur.",
     )
 
-    return (selected_algorithms, selected_timeframes, int(days_of_data), int(days_before_trading), float(budget),
-            bool(stop_loss_enabled), float(max_loss_pct))
+    return (selected_algorithms, selected_stop_algorithms, selected_timeframes, int(days_of_data),
+            int(days_before_trading), float(budget), bool(stop_loss_enabled), float(max_loss_pct))
 
 
-def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_before_trading, budget,
-                    stop_loss_enabled, max_loss_pct, username):
+def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days_of_data, days_before_trading,
+                    budget, stop_loss_enabled, max_loss_pct, username):
     start = datetime.now(timezone.utc) - timedelta(days=days_of_data)
     bars_by_tf = {}
     for tf in timeframes:
@@ -428,19 +446,20 @@ def _run_backtests(client, symbol, algorithms, timeframes, days_of_data, days_be
     effective_max_loss_pct = max_loss_pct if stop_loss_enabled else None
     new_runs = []
     progress = st.progress(0.0)
-    combos = [(a, tf) for a in algorithms for tf in timeframes]
-    for i, (algo_id, tf) in enumerate(combos):
+    combos = [(a, tf, sa) for a in algorithms for tf in timeframes for sa in stop_algorithms]
+    for i, (algo_id, tf, stop_algo_id) in enumerate(combos):
         result = run_backtest(
             symbol=symbol, algorithm=algo_id, timeframe=tf, bars=bars_by_tf.get(tf, []),
             daily_pairs=daily_pairs, days_of_data=days_of_data, days_before_trading=days_before_trading,
-            starting_budget=budget, max_loss_pct=effective_max_loss_pct,
+            starting_budget=budget, max_loss_pct=effective_max_loss_pct, stop_algorithm=stop_algo_id,
         )
         new_runs.append({
-            "run_id": new_run_id(symbol, algo_id, tf),
+            "run_id": new_run_id(symbol, algo_id, tf, stop_algo_id),
             "run_at": run_at,
             "symbol": symbol,
             "algorithm": algo_id,
             "timeframe": tf,
+            "stop_algorithm": stop_algo_id,
             "days_of_data": days_of_data,
             "days_before_trading": days_before_trading,
             "starting_budget": budget,
@@ -478,6 +497,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 "Çalıştırma (UTC)": r.get("run_at", ""),
                 "Hisse": r.get("symbol", ""),
                 "Mum Periyodu": TIMEFRAME_LABELS.get(r.get("timeframe"), r.get("timeframe")),
+                "Stop-Loss Algoritması": _stop_algorithm_label(r),
                 "Kaynak": r.get("source") or "Alpaca",
                 "Veri (gün)": r.get("days_of_data"),
                 "İşlem Başlangıcı (gün)": r.get("days_before_trading"),
@@ -493,7 +513,11 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 use_container_width=True, hide_index=True,
             )
 
-            options = [f"{r.get('run_at')} · {r.get('symbol')} · {TIMEFRAME_LABELS.get(r.get('timeframe'), r.get('timeframe'))}" for r in runs]
+            options = [
+                f"{r.get('run_at')} · {r.get('symbol')} · "
+                f"{TIMEFRAME_LABELS.get(r.get('timeframe'), r.get('timeframe'))} · {_stop_algorithm_label(r)}"
+                for r in runs
+            ]
             picked = st.selectbox("İşlem detayı için bir çalıştırma seç", options, key=f"bt_detail_pick_{algo_id}")
             picked_run = runs[options.index(picked)]
 
@@ -580,21 +604,25 @@ def render_backtest(target_list: list[str], username: str):
 
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()
-    (selected_algorithms, selected_timeframes, days_of_data, days_before_trading, budget,
-     stop_loss_enabled, max_loss_pct) = _render_settings()
+    (selected_algorithms, selected_stop_algorithms, selected_timeframes, days_of_data, days_before_trading,
+     budget, stop_loss_enabled, max_loss_pct) = _render_settings()
 
     st.divider()
-    can_run = bool(selected_symbol and selected_algorithms and selected_timeframes)
+    can_run = bool(selected_symbol and selected_algorithms and selected_stop_algorithms and selected_timeframes)
     if st.button("🚀 Backtest Çalıştır", type="primary", disabled=not can_run):
-        with st.spinner(f"{selected_symbol} için {len(selected_algorithms)} algoritma × {len(selected_timeframes)} mum periyodu çalıştırılıyor..."):
+        with st.spinner(
+            f"{selected_symbol} için {len(selected_algorithms)} algoritma × {len(selected_stop_algorithms)} "
+            f"stop-loss algoritması × {len(selected_timeframes)} mum periyodu çalıştırılıyor..."
+        ):
             all_results = _run_backtests(
-                client, selected_symbol, selected_algorithms, selected_timeframes,
+                client, selected_symbol, selected_algorithms, selected_stop_algorithms, selected_timeframes,
                 days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct, username,
             )
         st.success("Backtest tamamlandı ve sonuçlar kaydedildi.")
     else:
         if not can_run:
-            st.caption("Çalıştırmak için bir hisse, en az bir algoritma ve en az bir mum periyodu seçmelisin.")
+            st.caption("Çalıştırmak için bir hisse, en az bir buy-point algoritması, en az bir stop-loss "
+                       "algoritması ve en az bir mum periyodu seçmelisin.")
         all_results = load_results(username)
 
     st.divider()
