@@ -60,6 +60,22 @@ def render_bicak_kanali_test(target_list):
         help=f"En fazla {DAILY_MAX_DAYS} gün (yaklaşık 2 yıl) geriye gidilebiliyor.",
     )
 
+    leg_mode = st.radio(
+        "Düşüş Bacağı Seçim Yöntemi",
+        options=["Son N Bar (güncel düşüş)", "Tüm Seri (tarihteki en büyük düşüş)"],
+        index=0, key="bicak_leg_mode", horizontal=True,
+        help="Son N Bar: tarama en güncel N bar ile sınırlanır, en güncel düşüşü "
+             "önceliklendirir. Tüm Seri: tüm bar serisinde en büyük genlikli "
+             "tepe->dip düşüşü seçilir (eski/orijinal davranış).",
+    )
+    if leg_mode == "Son N Bar (güncel düşüş)":
+        pencere = st.number_input(
+            "Pencere (bar)", min_value=1, value=30, step=5, key="bicak_pencere",
+            help="Düşüş bacağı taraması sadece en güncel N bar içindeki pivotlarla sınırlanır.",
+        )
+    else:
+        pencere = None
+
     if st.button("🚀 Piyasayı Tara", type="primary", disabled=not selected_timeframes):
         with st.spinner("Hisseler taranıyor..."):
             signals = []
@@ -71,7 +87,7 @@ def render_bicak_kanali_test(target_list):
                     if df_temp is None or df_temp.empty:
                         continue
                     bars = bars_from_df(df_temp)
-                    result = find_kilavuz(bars)
+                    result = find_kilavuz(bars, pencere=pencere)
                     if result is None:
                         continue
                     kesisim = yesil_cizgi_kesisimi(bars, result)
@@ -126,7 +142,7 @@ def render_bicak_kanali_test(target_list):
             st.error(f"❌ {active_t} için geçerli piyasa verisi alınamadı.")
         else:
             bars = bars_from_df(df)
-            result = find_kilavuz(bars)
+            result = find_kilavuz(bars, pencere=pencere)
             if result is None:
                 st.info("ℹ️ Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
             else:

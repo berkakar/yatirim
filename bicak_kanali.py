@@ -9,7 +9,10 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     dip için genlik (referans tepe - dip) hesaplanır; en büyük genlik
     kazanır. Bu, aradaki küçük tepe/dip sıçramalarını (ara bacakları)
     "gürültü" sayıp tek bir bütün düşüş trendini "seçilen düşüş trendi"
-    olarak alır.
+    olarak alır. Bu tarama, en güncel bardan geriye doğru `pencere` bar
+    ile sınırlanabilir (varsayılan son 30 bar) - amaç, tarihteki en
+    büyük düşüş yerine en güncel düşüşü önceliklendirmek; None
+    verilirse tüm seri (sınırsız, eski davranış) taranır.
   - Bu bacağın kapsadığı bar aralığındaki tepe pivotlarından (en az 2
     nokta gerekir, o günün en yüksek fiyatı kullanılarak) ikisi seçilir:
     en yüksek olan ("en tepe") ve trend boyunca en son oluşan (dibe en
@@ -65,14 +68,19 @@ class Kilavuz:
     dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu bardan geriye 60 bar içinde aranır
 
 
-def _select_decline_leg(pivots: list[Pivot]) -> tuple[Pivot, Pivot] | None:
+def _select_decline_leg(pivots: list[Pivot], min_index: int = 0) -> tuple[Pivot, Pivot] | None:
     """Pivotlar arasında maksimum düşüş (maximum drawdown) mantığıyla en
     büyük genlikli tepe->dip düşüşünü (tepe, dip) olarak döner. `pivots`
-    index'e göre sıralı olmalıdır (bkz. structure.find_pivots)."""
+    index'e göre sıralı olmalıdır (bkz. structure.find_pivots).
+    `min_index`'ten küçük index'li pivotlar taramaya dahil edilmez -
+    tarama penceresini (bkz. find_kilavuz'daki `pencere`) en güncel
+    barlarla sınırlamak için kullanılır."""
     best: tuple[Pivot, Pivot] | None = None
     best_amplitude = 0.0
     current_peak: Pivot | None = None
     for p in pivots:
+        if p.index < min_index:
+            continue
         if p.kind == "high":
             if current_peak is None or p.price > current_peak.price:
                 current_peak = p
@@ -136,7 +144,7 @@ def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], kesisim: Pivot) -> P
     return max(adaylar, key=lambda p: p.price)
 
 
-def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
+def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
@@ -149,10 +157,16 @@ def find_kilavuz(bars: list[Bar], order: int = 2) -> Kilavuz | None:
     eğimde geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
     üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
-    (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner."""
+    (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner.
+
+    `pencere`: düşüş bacağı (leg) taraması, en güncel bara göre geriye
+    doğru sadece son `pencere` bar içindeki pivotlarla sınırlanır - bu
+    en güncel düşüşü, tarihteki en büyük genlikli düşüşe göre önceliklendirir.
+    Varsayılan 30 bar. None verilirse tüm seri (sınırsız) taranır."""
     pivots = find_pivots(bars, order)
 
-    leg = _select_decline_leg(pivots)
+    min_index = max(0, len(bars) - pencere) if pencere is not None else 0
+    leg = _select_decline_leg(pivots, min_index)
     if leg is None:
         return None
     leg_tepe, leg_dip = leg
