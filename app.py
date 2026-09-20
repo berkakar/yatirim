@@ -1422,7 +1422,7 @@ elif module == "📐 Hisse Patern Analizi":
 # ==============================================================================
 elif module == "BackTest":
     st.header("🧪 BackTest")
-    st.caption("Premium buy-point algoritmalarını ve Alpaca'daki structure-based trailing stop'u seçtiğiniz hisse üzerinde geçmiş veriyle yeniden oynatır.")
+    st.caption("Seçtiğiniz hisse üzerinde, seçtiğiniz buy-point algoritması × mum periyodu × stop-loss algoritması kombinasyonlarının her birini canlı sistemle birebir aynı karar mantığıyla geçmiş veri üzerinde yeniden oynatır - sonuçlar, o kombinasyonun canlıda gerçekte ne yapacağını yansıtır. Her çalıştırma algoritma bazlı sekmelerde kalıcı olarak biriktirilir; özet tablonun yanında işlem detayları ve grafiği de incelenebilir.")
     render_backtest(target_list, username)
 
 # ==============================================================================
