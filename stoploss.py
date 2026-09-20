@@ -4,7 +4,9 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 
-@st.cache_data
+@st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar - ttl'siz @st.cache_data süresiz
+# önbelleklerdi (uygulama süreci yeniden başlayana kadar), bu yüzden fiyat
+# saatler/günler önce çekilmiş olsa bile hep aynı bayat sonuç dönerdi.
 def get_stoploss_data(ticker):
 
     print(f"DEBUG: {ticker} için veri alınıyor...")

@@ -7,6 +7,8 @@ import os
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move
+
 CACHE_FILE = "nasdaq_5m_cache.json"
 DTW_RESULTS_CACHE_FILE = "dtw_results_cache.json"
 
@@ -60,8 +62,13 @@ def _fetch_single_ticker_5m(ticker, today_str):
     try:
         t = yf.Ticker(ticker)
         df = t.history(period="5d", interval="5m", prepost=True)
-        
+
         if df.empty:
+            return ticker, None
+
+        # Barların iç tutarlılığını ve (BIST sembollerinde) günlük taban/
+        # tavan marjını aşan bozuk tick'leri doğrula.
+        if not is_ohlc_consistent(df) or has_implausible_daily_move(df['Close'], ticker):
             return ticker, None
 
         # yfinance verisini America/New_York zaman dilimine sabitleyelim
@@ -79,8 +86,13 @@ def _fetch_single_ticker_5m(ticker, today_str):
         
         if len(unique_dates) < 2:
             return ticker, None
-            
+
         day1_date, day2_date = unique_dates[-2], unique_dates[-1]
+
+        # En güncel tamamlanmış gün beklenenden fazla eskiyse (Yahoo'dan
+        # bayat bir yanıt geldiyse) veriyi güncel kabul etme.
+        if not is_fresh(date.fromisoformat(day2_date)):
+            return ticker, None
 
         d1_df = df[df['Date_Str'] == day1_date]
         d2_df = df[df['Date_Str'] == day2_date]
