@@ -20,6 +20,7 @@ from scanner import (
     bars_from_df, get_scanner_data,
 )
 from structure import Bar
+from theme import get_plotly_template
 
 # "4Hour" bilinçli olarak scanner.SCAN_TIMEFRAMES'e eklenmedi (app.py'deki Alım
 # Bölgesi Tarama gibi diğer modüllerde de çıkmasın diye) - sadece bu modülde,
@@ -326,7 +327,7 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
 
     fig.update_layout(
         title=f"{ticker} - Kılavuz + Bıçak + Sıfır + Yeşil Çizgi ({_BICAK_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
-        template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
+        template=get_plotly_template(), height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
     )

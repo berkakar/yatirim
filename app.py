@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style
+from theme import inject_css, render_mode_switcher, get_plotly_template
 from scanner import (
     get_scanner_data, bars_from_df, fetch_daily_pairs, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
@@ -111,6 +112,7 @@ def load_selections(username):
 
 # Sayfa Yapılandırması
 st.set_page_config(layout="wide", page_title="Yatırım Terminali")
+inject_css()
 
 # ------------------------------------------------------------------------------
 # GİRİŞ (AUTHENTICATION)
@@ -124,7 +126,8 @@ authenticator = stauth.Authenticate(
 )
 _LOGO_PATH = "assets/logo.jpg"
 _LOGIN_BOX_WIDTH = 380
-if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
+_not_authenticated = st.session_state.get("authentication_status") is not True
+if _not_authenticated and os.path.exists(_LOGO_PATH):
     # Giriş formu (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
     # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
     st.markdown(
@@ -139,10 +142,13 @@ if st.session_state.get("authentication_status") is not True and os.path.exists(
     )
     _login_col, _logo_col = st.columns([1, 1], gap="large")
     with _login_col:
+        render_mode_switcher(key="login_theme_switcher")
         authenticator.login(location="main")
     with _logo_col:
         st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
 else:
+    if _not_authenticated:
+        render_mode_switcher(key="login_theme_switcher")
     authenticator.login(location="main")
 
 _auth_status = st.session_state.get("authentication_status")
@@ -182,6 +188,8 @@ if removed_group and "selected_stock_groups" in st.session_state:
 # ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
 # ------------------------------------------------------------------------------
+with st.sidebar:
+    render_mode_switcher(key="sidebar_theme_switcher")
 market = st.sidebar.selectbox("Piyasa Seçimi", MARKETS)
 
 # Piyasa değiştiğinde, artık seçili piyasaya ait olmayan grup seçimlerini
@@ -713,7 +721,7 @@ elif module == "Alım Bölgesi Tarama":
                 )
             fig.update_layout(
                 title=f"{active_t} ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)}) - Alım Bölgesi Grafiği",
-                template="plotly_dark", height=500, xaxis_rangeslider_visible=False,
+                template=get_plotly_template(), height=500, xaxis_rangeslider_visible=False,
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -932,7 +940,7 @@ elif module == "📊 Bağımsız Hisse Grafiği":
                     low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
                 )])
                 
-                fig.update_layout(title=f"{active_t} - Mum Grafiği", template="plotly_dark", height=550, xaxis_rangeslider_visible=False)
+                fig.update_layout(title=f"{active_t} - Mum Grafiği", template=get_plotly_template(), height=550, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1322,7 +1330,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
                 fig.update_layout(
                     title=f"{selected_t} - 5 Dakikalık Fiyat Karşılaştırması (Türkiye Saati - TRT)",
-                    template="plotly_dark", height=600,
+                    template=get_plotly_template(), height=600,
                     xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"Fiyat {t_data['day1']['date']} ($)", font=dict(color="#00d2ff"))),
                     yaxis2=dict(title=dict(text=f"Fiyat {t_data['day2']['date']} ($)", font=dict(color="#ff9f1c")), overlaying="y", side="right")
@@ -1357,7 +1365,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
                 fig.update_layout(
                     title=f"{t1_sel} vs {t2_sel} - Son Gün 5m Fiyat Hareketi Kıyaslaması (TRT)",
-                    template="plotly_dark", height=600,
+                    template=get_plotly_template(), height=600,
                     xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"{t1_sel} Fiyat ($)", font=dict(color="#2ec4b6"))),
                     yaxis2=dict(title=dict(text=f"{t2_sel} Fiyat ($)", font=dict(color="#e63946")), overlaying="y", side="right")
