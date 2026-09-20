@@ -119,12 +119,25 @@ authenticator = stauth.Authenticate(
     st.secrets["cookie"]["expiry_days"],
 )
 _LOGO_PATH = "assets/logo.jpg"
+_LOGIN_BOX_WIDTH = 380
 if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
+    # Giriş formu (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
+    # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
+    st.markdown(
+        f"""
+        <style>
+        div[data-testid="stForm"] {{
+            max-width: {_LOGIN_BOX_WIDTH}px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
     _login_col, _logo_col = st.columns([1, 1], gap="large")
     with _login_col:
         authenticator.login(location="main")
     with _logo_col:
-        st.image(_LOGO_PATH, use_container_width=True)
+        st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
 else:
     authenticator.login(location="main")
 
