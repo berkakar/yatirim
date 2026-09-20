@@ -22,13 +22,17 @@ PRICE_REFRESH_SECONDS = 30
 @st.fragment(run_every=PRICE_REFRESH_SECONDS)
 def _render_buy_point_table(
     client: AlpacaClient, current_symbols: list[str], symbol_settings: dict[str, dict], default_algorithm: str,
-    weights: dict[str, float], budget: float, stop_loss_enabled: bool, max_loss_pct: float | None,
+    default_stop_algorithm: str, weights: dict[str, float], budget: float, stop_loss_enabled: bool,
+    max_loss_pct: float | None,
 ):
     daily_start = datetime.now(timezone.utc) - timedelta(days=DAILY_LOOKBACK_DAYS)
     rows = []
     for symbol in current_symbols:
         settings = symbol_settings.get(symbol) or {}
         active_algorithm = settings.get("algorithm") or default_algorithm
+        active_stop_algorithm = settings.get("stop_algorithm") or default_stop_algorithm
+        if active_stop_algorithm not in STOP_ALGORITHMS:
+            active_stop_algorithm = default_stop_algorithm
         timeframe = settings.get("timeframe") or TIMEFRAME
 
         start = datetime.now(timezone.utc) - timedelta(days=BUY_LOOKBACK_DAYS)
@@ -66,6 +70,7 @@ def _render_buy_point_table(
             sig = signals.get(algo_id)
             row[label] = sig.price if sig else "—"
         row["Kullanılan Algoritma"] = ALGORITHMS[active_algorithm][0]
+        row["Stop Loss Algoritması"] = STOP_ALGORITHMS[active_stop_algorithm].label
         row["Kullanılacak Fiyat"] = "—" if stopped_out else (active_signal.price if active_signal else "—")
         if stopped_out:
             row["Durum"] = "Zarar Kesildi"
@@ -78,8 +83,9 @@ def _render_buy_point_table(
         f"Son güncelleme: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT "
         f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
         "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
-        "(\"—\" = sinyal yok). 'Kullanılan Algoritma' ve 'Kullanılacak Fiyat', o hisse için aşağıda seçtiğiniz "
-        "(veya BackTest sonucu yoksa varsayılan) algoritma/mum periyoduna göredir - gerçek alım GitHub Action "
+        "(\"—\" = sinyal yok). 'Kullanılan Algoritma', 'Stop Loss Algoritması' ve 'Kullanılacak Fiyat', o "
+        "hisse için yukarıda (Hisse Bazlı Algoritma Seçimi) seçtiğiniz - yoksa aşağıdaki (Varsayılan "
+        "Algoritma / Risk Yönetimi) varsayılanlara göredir - gerçek alım GitHub Action "
         "tarafından 5 dakikalık taramada bu fiyat/algoritma/periyot ile yapılır. \"Zarar Kesildi\", Zarar Kes "
         "etkinken o hissenin kendi bütçesine göre gerçekleşen zararının eşiğe ulaştığı, yeni alım yapılmadığı "
         "anlamına gelir."
@@ -104,6 +110,14 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     watchlist = client.get_or_create_watchlist(watchlist_name)
     current_symbols = [a["symbol"] for a in watchlist.get("assets", [])]
     config = read_portfolio_config(GITHUB_REPO, github_token, username)
+
+    # Hisse bazlı seçim (aşağıda) ve portföy geneli varsayılan (Risk Yönetimi
+    # bölümündeki selectbox) aynı kaydedilmiş değeri paylaşır - burada bir kez
+    # okunur.
+    stop_algorithm_ids = list(STOP_ALGORITHMS.keys())
+    current_stop_algorithm = config.get("stop_algorithm", DEFAULT_STOP_ALGORITHM)
+    if current_stop_algorithm not in stop_algorithm_ids:
+        current_stop_algorithm = DEFAULT_STOP_ALGORITHM
 
     with st.expander("📈 Alım Yaklaşımı Nasıl Çalışır?"):
         st.markdown(
@@ -285,37 +299,59 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "yüksekten başlayarak listelenir. Seçtiğiniz kombinasyon, o hisse için otomatik alım/satımda "
         "kullanılır (canlı alım her durumda Alpaca üzerinden yapılır - kaynak sadece o kombinasyonun "
         "hangi veriyle geriye dönük test edildiğini gösterir). BackTest sonucu olmayan hisseler, "
-        "aşağıdaki varsayılan algoritma ve mum periyoduyla (30 Dakika) taranır."
+        "aşağıdaki varsayılan algoritma ve mum periyoduyla (30 Dakika) taranır. Her hisse için ayrıca "
+        "hangi stop-loss algoritmasının kullanılacağı da seçilebilir - seçilmezse Risk Yönetimi "
+        "bölümündeki portföy geneli varsayılan uygulanır."
     )
     existing_symbol_settings = config.get("symbol_settings") or {}
     symbol_settings: dict[str, dict] = {}
     if selected_symbols:
         all_backtest_results = load_results(username)
+        head_sym, head_algo, head_stop = st.columns([1, 2.6, 1.8])
+        head_sym.markdown("**Hisse**")
+        head_algo.markdown("**Buy-Point Algoritması**")
+        head_stop.markdown("**Stop-Loss Algoritması**")
         for symbol in selected_symbols:
             combos = best_per_symbol_combo(all_backtest_results, symbol)
-            col_sym, col_combo = st.columns([1, 3])
+            col_sym, col_combo, col_stop = st.columns([1, 2.6, 1.8])
             col_sym.markdown(f"**{symbol}**")
-            if not combos:
-                col_combo.caption("BackTest sonucu yok — varsayılan algoritma kullanılacak.")
-                continue
-
-            options = [
-                f"{ALGORITHMS[c['algorithm']][0]} · {TIMEFRAME_LABELS.get(c['timeframe'], c['timeframe'])} · "
-                f"K/Z %{(c.get('pnl_pct') or 0):.2f} · Kaynak: {c.get('source') or 'Alpaca'}"
-                for c in combos
-            ]
             saved = pending_symbol_settings.get(symbol) or existing_symbol_settings.get(symbol) or {}
-            default_idx = 0
-            for i, c in enumerate(combos):
-                if c["algorithm"] == saved.get("algorithm") and c["timeframe"] == saved.get("timeframe"):
-                    default_idx = i
-                    break
-            picked_label = col_combo.selectbox(
-                f"{symbol} için algoritma seçimi", options, index=default_idx,
-                key=f"symbol_algo_{symbol}", label_visibility="collapsed",
+            settings_for_symbol: dict = {}
+
+            if combos:
+                options = [
+                    f"{ALGORITHMS[c['algorithm']][0]} · {TIMEFRAME_LABELS.get(c['timeframe'], c['timeframe'])} · "
+                    f"K/Z %{(c.get('pnl_pct') or 0):.2f} · Kaynak: {c.get('source') or 'Alpaca'}"
+                    for c in combos
+                ]
+                default_idx = 0
+                for i, c in enumerate(combos):
+                    if c["algorithm"] == saved.get("algorithm") and c["timeframe"] == saved.get("timeframe"):
+                        default_idx = i
+                        break
+                picked_label = col_combo.selectbox(
+                    f"{symbol} için algoritma seçimi", options, index=default_idx,
+                    key=f"symbol_algo_{symbol}", label_visibility="collapsed",
+                )
+                picked = combos[options.index(picked_label)]
+                settings_for_symbol["algorithm"] = picked["algorithm"]
+                settings_for_symbol["timeframe"] = picked["timeframe"]
+            else:
+                col_combo.caption("BackTest sonucu yok — varsayılan algoritma kullanılacak.")
+
+            saved_stop_algorithm = saved.get("stop_algorithm")
+            stop_default_idx = (
+                stop_algorithm_ids.index(saved_stop_algorithm) if saved_stop_algorithm in stop_algorithm_ids
+                else stop_algorithm_ids.index(current_stop_algorithm)
             )
-            picked = combos[options.index(picked_label)]
-            symbol_settings[symbol] = {"algorithm": picked["algorithm"], "timeframe": picked["timeframe"]}
+            picked_stop_algorithm = col_stop.selectbox(
+                f"{symbol} için stop-loss algoritması", stop_algorithm_ids, index=stop_default_idx,
+                format_func=lambda k: STOP_ALGORITHMS[k].label,
+                key=f"symbol_stop_algo_{symbol}", label_visibility="collapsed",
+            )
+            settings_for_symbol["stop_algorithm"] = picked_stop_algorithm
+
+            symbol_settings[symbol] = settings_for_symbol
 
     st.subheader("⚙️ Varsayılan Algoritma")
     st.caption("BackTest sonucu olmayan hisseler için kullanılan varsayılan algoritmadır.")
@@ -331,10 +367,6 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
 
     st.subheader("🛑 Risk Yönetimi")
-    stop_algorithm_ids = list(STOP_ALGORITHMS.keys())
-    current_stop_algorithm = config.get("stop_algorithm", DEFAULT_STOP_ALGORITHM)
-    if current_stop_algorithm not in stop_algorithm_ids:
-        current_stop_algorithm = DEFAULT_STOP_ALGORITHM
     selected_stop_algorithm = st.selectbox(
         "Stop-Loss Algoritması",
         stop_algorithm_ids,
@@ -343,8 +375,9 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         key="pbp_stop_algorithm",
         help="Bir pozisyon açıldığında ilk stop'un nereye kurulacağını ve zamanla nasıl "
              "sıkılaştırılacağını (trailing) belirler - hem canlı alım (bu modül + Trailing Stop "
-             "modülü) hem BackTest için geçerlidir, ikisi de aynı algoritmayı kullanır. Şu an tek "
-             "algoritma mevcut; yenileri eklendiğinde burada seçilebilir olacak.",
+             "modülü) hem BackTest için geçerlidir, ikisi de aynı algoritmayı kullanır. Yukarıdaki "
+             "Hisse Bazlı Algoritma Seçimi'nde bir hisse için ayrı bir stop-loss algoritması "
+             "seçilmediyse, o hisse için buradaki varsayılan kullanılır.",
     )
 
     sl1, sl2 = st.columns([1, 2])
@@ -420,7 +453,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     st.subheader("📍 Premium Buy Point Karşılaştırması")
     _render_buy_point_table(
-        client, current_symbols, symbol_settings, selected_algorithm,
+        client, current_symbols, symbol_settings, selected_algorithm, selected_stop_algorithm,
         weights_map, float(budget), bool(stop_loss_enabled), float(max_loss_pct) if stop_loss_enabled else None,
     )
 
