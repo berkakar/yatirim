@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from github_config import read_json_from_github, update_json_on_github
 from theme import negative_color
 from ui_style import zebra_style
+from yf_data_quality import is_info_meaningful
 
 SUB_SECTOR_FILE = "sub_sectors.json"
 
@@ -36,7 +37,13 @@ def fetch_single_ticker_raw(ticker):
     try:
         t = yf.Ticker(ticker)
         info = t.info
-        
+
+        # Delisted/durdurulmuş/geçersiz bir sembol için Yahoo neredeyse boş
+        # bir .info sözlüğü döndürebilir - bunu, tüm oranları None olan
+        # "sahte" bir satır olarak tabloya sokmak yerine baştan reddet.
+        if not is_info_meaningful(info):
+            return None
+
         main_sector = info.get('sector', 'Diğer')
         industry = info.get('industry', 'Diğer')
 

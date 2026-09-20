@@ -66,3 +66,39 @@ def has_implausible_daily_move(closes: pd.Series, ticker: str, max_pct: float = 
         return False
     changes = closes.pct_change().abs() * 100
     return bool((changes > max_pct).any())
+
+
+# Bir pencerede en az bu kadar FARKLI kapanış fiyatı olması beklenir - altında
+# kalması, Yahoo'nun işlem görmeyen/durdurulmuş bir sembol için aynı bayat
+# fiyatı tekrar tekrar döndürdüğüne işaret eder. Bilinçli olarak çok düşük
+# tutulur (yalnızca bariz durgun/bayat verileri yakalar): gerçekten seyrek
+# işlem gören ama meşru bir hisseyi yanlışlıkla elememek için.
+MIN_UNIQUE_CLOSES = 3
+
+
+def has_flat_prices(closes: pd.Series, min_unique: int = MIN_UNIQUE_CLOSES) -> bool:
+    """Kapanış fiyatlarının pencere boyunca neredeyse hiç değişmediğini
+    (Yahoo'nun bayat/tekrarlanan veri döndürdüğü durumları) tespit eder.
+    Barların sayısı `min_unique`'dan azsa (çok kısa bir pencere), bunun
+    hakkında bir şey söylenemez, False (sorun yok) döner."""
+    if closes is None or len(closes) < min_unique:
+        return False
+    return closes.nunique() < min_unique
+
+
+def is_info_meaningful(info: dict | None, min_keys: int = 10) -> bool:
+    """yfinance'in `.info` sözlüğünün gerçek bir şirkete mi ait yoksa
+    delisted/durdurulmuş/geçersiz bir sembol için neredeyse boş bir yanıt
+    mı olduğunu ayırt eder. Gerçek, aktif bir hissede yfinance genelde
+    100'ün üzerinde alan döner; geçersiz bir sembolde sözlük boş ya da
+    birkaç anahtarla sınırlı olur. Anahtar sayısı yeterli olsa bile hiçbir
+    temel sinyal (sektör, piyasa değeri, herhangi bir fiyat çarpanı) yoksa
+    yine de reddedilir - şirket kabuğu var ama veri yok demektir."""
+    if not info:
+        return False
+    if len(info) < min_keys:
+        return False
+    return any(
+        info.get(field) not in (None, "")
+        for field in ("sector", "marketCap", "trailingPE", "priceToBook", "enterpriseToEbitda")
+    )

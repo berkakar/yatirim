@@ -5,7 +5,7 @@ import streamlit as st
 from scipy.signal import argrelextrema
 
 from structure import Bar
-from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move
+from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
 
 def bars_from_df(df: pd.DataFrame) -> list[Bar]:
@@ -216,10 +216,16 @@ def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
     if df is None or df.empty or len(df) < min_rows:
         return None
 
-    # Yahoo'nun döndürdüğü barların iç tutarlılığını (High/Low/Open/Close)
-    # ve BIST sembollerinde günlük taban/tavan marjını aşan sıçramaları
-    # (bozuk tick) doğrula - anlamsız veriyle tarama/sinyal üretmemek için.
-    if not is_ohlc_consistent(df) or has_implausible_daily_move(df['Close'], resolved_ticker):
+    # Yahoo'nun döndürdüğü barların iç tutarlılığını (High/Low/Open/Close),
+    # BIST sembollerinde günlük taban/tavan marjını aşan sıçramaları (bozuk
+    # tick) ve işlem görmeyen/durdurulmuş bir sembol için bayat/tekrarlanan
+    # fiyat döndürülüp döndürülmediğini doğrula - anlamsız veriyle
+    # tarama/sinyal üretmemek için.
+    if (
+        not is_ohlc_consistent(df)
+        or has_implausible_daily_move(df['Close'], resolved_ticker)
+        or has_flat_prices(df['Close'])
+    ):
         return None
 
     # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir

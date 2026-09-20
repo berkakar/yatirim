@@ -4,6 +4,8 @@ import pandas as pd
 import pandas_ta as ta
 import numpy as np
 
+from yf_data_quality import has_flat_prices
+
 @st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar - ttl'siz @st.cache_data süresiz
 # önbelleklerdi (uygulama süreci yeniden başlayana kadar), bu yüzden fiyat
 # saatler/günler önce çekilmiş olsa bile hep aynı bayat sonuç dönerdi.
@@ -19,9 +21,15 @@ def get_stoploss_data(ticker):
         df.columns = df.columns.get_level_values(0)
     
     # Yeterli veri yoksa işlemi durdur (En az 50 bar kontrolü)
-    if df.empty or len(df) < 50: 
+    if df.empty or len(df) < 50:
         return None
-    
+
+    # İşlem görmeyen/durdurulmuş bir sembol için Yahoo'nun bayat/tekrarlanan
+    # fiyat döndürüp döndürmediğini doğrula - anlamsız bir stop loss/EMA
+    # analizi üretmemek için.
+    if has_flat_prices(df['Close']):
+        return None
+
     close = df['Close'].iloc[-1]
 
     # 2. EMA Hesaplamaları (EMA20, EMA50, EMA200)
