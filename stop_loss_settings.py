@@ -68,11 +68,28 @@ def render_stop_loss_settings(username: str):
     algo1 = existing.get("breakeven_atr_structure") or {}
     algo2 = existing.get("wait_then_trail") or {}
 
-    st.subheader("🔧 Paylaşılan Yapısal Trail Ayarları")
+    st.subheader(f"🎯 {STOP_ALGORITHMS['breakeven_atr_structure'].label}")
     st.caption(
-        "Her iki algoritmanın da (Beklemeli ve İz Süren Stop'ta kâr kilidinden sonra) kullandığı "
-        "ATR-tamponlu break-of-structure trail için ortak ayarlar."
+        "Sabit yüzdelik ilk stop, ardından breakeven'e çekilme ve ATR-tamponlu break-of-structure "
+        "trail. Buradaki yapısal trail ayarları, Beklemeli ve İz Süren Stop'un kâr kilidinden sonra "
+        "devreye giren trail için de geçerlidir - o algoritma bu bölümdeki yapısal trail'i aynen kullanır."
     )
+    a1c1, a1c2 = st.columns(2)
+    algo1_initial_stop_pct = a1c1.number_input(
+        "İlk Stop %", min_value=0.1, max_value=50.0,
+        value=float(algo1.get("initial_stop_pct", INITIAL_STOP_PCT * 100)), step=0.1, format="%.2f",
+        key="sls_algo1_initial_stop_pct",
+        help="Pozisyon açıldığında ilk stop, ortalama maliyetin bu yüzde kadar altına (long) / "
+             "üstüne (short) kurulur.",
+    )
+    algo1_breakeven_trigger_pct = a1c2.number_input(
+        "Breakeven Tetik %", min_value=0.0, max_value=50.0,
+        value=float(algo1.get("breakeven_trigger_pct", BREAKEVEN_TRIGGER_PCT * 100)), step=0.1, format="%.2f",
+        key="sls_algo1_breakeven_trigger_pct",
+        help="Fiyat ortalama maliyetin bu yüzde kadar lehine hareket ettiğinde, stop ortalama "
+             "maliyete (breakeven) çekilir.",
+    )
+
     sc1, sc2, sc3 = st.columns(3)
     atr_period = sc1.number_input(
         "ATR Periyodu (bar)", min_value=2, max_value=200,
@@ -114,30 +131,12 @@ def render_stop_loss_settings(username: str):
     )
 
     st.divider()
-    st.subheader(f"🎯 {STOP_ALGORITHMS['breakeven_atr_structure'].label}")
-    st.caption("Sabit yüzdelik ilk stop, ardından breakeven'e çekilme ve yukarıdaki ortak yapısal trail.")
-    a1c1, a1c2 = st.columns(2)
-    algo1_initial_stop_pct = a1c1.number_input(
-        "İlk Stop %", min_value=0.1, max_value=50.0,
-        value=float(algo1.get("initial_stop_pct", INITIAL_STOP_PCT * 100)), step=0.1, format="%.2f",
-        key="sls_algo1_initial_stop_pct",
-        help="Pozisyon açıldığında ilk stop, ortalama maliyetin bu yüzde kadar altına (long) / "
-             "üstüne (short) kurulur.",
-    )
-    algo1_breakeven_trigger_pct = a1c2.number_input(
-        "Breakeven Tetik %", min_value=0.0, max_value=50.0,
-        value=float(algo1.get("breakeven_trigger_pct", BREAKEVEN_TRIGGER_PCT * 100)), step=0.1, format="%.2f",
-        key="sls_algo1_breakeven_trigger_pct",
-        help="Fiyat ortalama maliyetin bu yüzde kadar lehine hareket ettiğinde, stop ortalama "
-             "maliyete (breakeven) çekilir.",
-    )
-
-    st.divider()
     st.subheader(f"⏳ {STOP_ALGORITHMS['wait_then_trail'].label}")
     st.caption(
         "Sabit yüzdelik ilk stop + breakeven, sonra kâr eşiğine ulaşana kadar (yapısal trail olmadan) "
-        "bekleme; eşik bir kez aşıldığında (kalıcı olarak) kâr kilidi ve yukarıdaki ortak yapısal trail "
-        "devreye girer."
+        "bekleme; eşik bir kez aşıldığında (kalıcı olarak) kâr kilidi ve yukarıdaki Breakeven + Yapısal "
+        "Trail bölümünde ayarladığınız yapısal trail devreye girer - bu algoritmanın kendi ayrı bir "
+        "yapısal trail ayarı yoktur."
     )
     a2c1, a2c2 = st.columns(2)
     algo2_initial_stop_pct = a2c1.number_input(
