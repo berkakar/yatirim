@@ -1,20 +1,18 @@
 """Uygulama genelinde tablolara tutarlı, tema-duyarlı görünüm kazandıran ortak
 yardımcılar. st.dataframe (ve Styler kabul eden benzer bileşenler) hücre bazlı
 CSS string'lerini render eder; burada satırlara alternatif arka plan (zebra)
-uygulanır, tema tipi st.context.theme üzerinden okunur.
+uygulanır, tema (gündüz/gece) theme.py üzerinden okunur.
 """
 
 import pandas as pd
-import streamlit as st
 
-DARK_COLORS = ("#0e1117", "#161b22")
-LIGHT_COLORS = ("#ffffff", "#f0f2f6")
+from theme import get_palette
 
 
 def get_zebra_colors():
-    """(çift_satır_rengi, tek_satır_rengi) - aktif temaya göre."""
-    theme_type = st.context.theme.get("type") or "dark"
-    return LIGHT_COLORS if theme_type == "light" else DARK_COLORS
+    """(çift_satır_rengi, tek_satır_rengi) - aktif gündüz/gece moduna göre."""
+    p = get_palette()
+    return (p["bg_elevated"], p["bg_subtle"])
 
 
 def zebra_style(df, extra_style_fn=None):
