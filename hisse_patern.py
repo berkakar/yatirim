@@ -18,6 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from hisse_patern_analysis import PERIOD_CONFIGS, build_detail_chart_series, compute_pattern_table
+from theme import get_plotly_template
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -187,7 +188,7 @@ def render_hisse_patern(target_list):
 
     fig.update_layout(
         title=f"{detail_ticker} - {cfg['label']} Patern Karşılaştırması",
-        template="plotly_dark", height=550,
+        template=get_plotly_template(), height=550,
         xaxis=dict(title="Periyot İçi Sıra (dönemler aynı eksende üst üste hizalanmıştır)"),
         yaxis=dict(title="Kapanış Fiyatı"),
         legend_title_text="Dönem",

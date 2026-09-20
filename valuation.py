@@ -8,6 +8,7 @@ import streamlit as st
 from datetime import date, datetime, timedelta, timezone
 
 from github_config import read_json_from_github, update_json_on_github
+from theme import negative_color
 from ui_style import zebra_style
 
 SUB_SECTOR_FILE = "sub_sectors.json"
@@ -405,33 +406,35 @@ def style_valuation_df(df):
     """Pandas dataframe için renklendirme kuralları."""
     def apply_styles(val_df):
         style_df = pd.DataFrame('', index=val_df.index, columns=val_df.columns)
-        
+        neg = f'color: {negative_color()};'
+        neg_bold = f'color: {negative_color()}; font-weight: bold;'
+
         for idx in val_df.index:
             if val_df.loc[idx, 'Nihai Skor'] >= 70:
                 style_df.loc[idx, 'Nihai Skor'] = 'background-color: #1b4332; color: #2ec4b6; font-weight: bold;'
             elif val_df.loc[idx, 'Nihai Skor'] < 40:
-                style_df.loc[idx, 'Nihai Skor'] = 'color: #e63946; font-weight: bold;'
+                style_df.loc[idx, 'Nihai Skor'] = neg_bold
 
             if pd.notna(val_df.loc[idx, 'Alt Sektör İskontosu %']) and val_df.loc[idx, 'Alt Sektör İskontosu %'] < 0:
-                style_df.loc[idx, 'Alt Sektör İskontosu %'] = 'color: #e63946;'
+                style_df.loc[idx, 'Alt Sektör İskontosu %'] = neg
             if pd.notna(val_df.loc[idx, 'PEG']) and val_df.loc[idx, 'PEG'] > 1.5:
-                style_df.loc[idx, 'PEG'] = 'color: #e63946;'
+                style_df.loc[idx, 'PEG'] = neg
             if pd.notna(val_df.loc[idx, 'EPS Büyümesi %']) and val_df.loc[idx, 'EPS Büyümesi %'] < 0:
-                style_df.loc[idx, 'EPS Büyümesi %'] = 'color: #e63946;'
+                style_df.loc[idx, 'EPS Büyümesi %'] = neg
             if pd.notna(val_df.loc[idx, 'Gelir Büyümesi %']) and val_df.loc[idx, 'Gelir Büyümesi %'] < 0:
-                style_df.loc[idx, 'Gelir Büyümesi %'] = 'color: #e63946;'
+                style_df.loc[idx, 'Gelir Büyümesi %'] = neg
             if pd.notna(val_df.loc[idx, 'Öz Sermaye Getirisi (ROE) %']) and val_df.loc[idx, 'Öz Sermaye Getirisi (ROE) %'] < 10.0:
-                style_df.loc[idx, 'Öz Sermaye Getirisi (ROE) %'] = 'color: #e63946;'
+                style_df.loc[idx, 'Öz Sermaye Getirisi (ROE) %'] = neg
             if pd.notna(val_df.loc[idx, 'Net Kar Marjı %']) and val_df.loc[idx, 'Net Kar Marjı %'] < 8.0:
-                style_df.loc[idx, 'Net Kar Marjı %'] = 'color: #e63946;'
+                style_df.loc[idx, 'Net Kar Marjı %'] = neg
             if pd.notna(val_df.loc[idx, 'Faiz Karşılama Oranı']) and val_df.loc[idx, 'Faiz Karşılama Oranı'] < 1.5:
-                style_df.loc[idx, 'Faiz Karşılama Oranı'] = 'color: #e63946;'
+                style_df.loc[idx, 'Faiz Karşılama Oranı'] = neg
             if pd.notna(val_df.loc[idx, 'Borç / Özsermaye']) and (val_df.loc[idx, 'Borç / Özsermaye'] > 1.5 or val_df.loc[idx, 'Borç / Özsermaye'] < 0):
-                style_df.loc[idx, 'Borç / Özsermaye'] = 'color: #e63946;'
+                style_df.loc[idx, 'Borç / Özsermaye'] = neg
             if pd.notna(val_df.loc[idx, 'Borç / Varlık %']) and val_df.loc[idx, 'Borç / Varlık %'] > 60.0:
-                style_df.loc[idx, 'Borç / Varlık %'] = 'color: #e63946;'
+                style_df.loc[idx, 'Borç / Varlık %'] = neg
             if pd.notna(val_df.loc[idx, 'Cari Oran']) and val_df.loc[idx, 'Cari Oran'] < 1.0:
-                style_df.loc[idx, 'Cari Oran'] = 'color: #e63946;'
+                style_df.loc[idx, 'Cari Oran'] = neg
 
         return style_df
 

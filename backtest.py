@@ -23,20 +23,34 @@ from stop_loss_settings import load_stop_loss_settings
 from structure import Bar
 from ters_fibo import analyze as ters_fibo_analyze
 from ters_fibo import nearest_support_below
+from theme import get_plotly_template, negative_color, positive_color
 from ui_style import zebra_style, freshness_caption
 
 TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
-# valuation.py / tefas_fonlari.py ile aynı palet (uygulama genelinde tutarlılık için).
+# Grafik üzerindeki mum/işaretçi renkleri kasıtlı olarak sabit: gerçek alım-satım
+# terminallerinde (TradingView vb.) yükseliş/düşüş rengi gündüz/gece temasından
+# bağımsızdır. valuation.py / tefas_fonlari.py ile aynı palet.
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
-_POSITIVE_COLOR = f"color: {_POSITIVE_HEX}; font-weight: bold;"
-_NEGATIVE_COLOR = f"color: {_NEGATIVE_HEX}; font-weight: bold;"
-_SIDE_COLORS = {"Alış": _POSITIVE_COLOR, "Satış": _NEGATIVE_COLOR}
 _BUY_MARKER_COLOR = "#FFFFFF"   # işlem detay grafiğinde alım zamanı
 _SELL_MARKER_COLOR = "#800000"  # işlem detay grafiğinde satım zamanı (bordo)
+
+
+# Tablo hücrelerindeki K/Z metin rengi ise sayfa arka planı üzerinde okunurluk
+# için gündüz/gece moduna göre değişir - çağrı anında hesaplanır.
+def _positive_text_style():
+    return f"color: {positive_color()}; font-weight: bold;"
+
+
+def _negative_text_style():
+    return f"color: {negative_color()}; font-weight: bold;"
+
+
+def _side_style(side):
+    return {"Alış": _positive_text_style(), "Satış": _negative_text_style()}.get(side, "")
 
 _SUMMARY_COLUMN_CONFIG = {
     "Başlangıç Bütçe": st.column_config.NumberColumn(format="localized"),
@@ -82,11 +96,11 @@ def _style_summary(df: pd.DataFrame):
             for idx in data.index:
                 v = data.loc[idx, col]
                 if pd.notna(v):
-                    style_df.loc[idx, col] = _POSITIVE_COLOR if v > 0 else (_NEGATIVE_COLOR if v < 0 else "")
+                    style_df.loc[idx, col] = _positive_text_style() if v > 0 else (_negative_text_style() if v < 0 else "")
         if "Zarar Kes" in data.columns:
             for idx in data.index:
                 if str(data.loc[idx, "Zarar Kes"]).startswith("Tetiklendi"):
-                    style_df.loc[idx, "Zarar Kes"] = _NEGATIVE_COLOR
+                    style_df.loc[idx, "Zarar Kes"] = _negative_text_style()
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
@@ -99,7 +113,7 @@ def _style_trades(df: pd.DataFrame):
         style_df = pd.DataFrame("", index=data.index, columns=data.columns)
         if "Yön" in data.columns:
             for idx in data.index:
-                style_df.loc[idx, "Yön"] = _SIDE_COLORS.get(data.loc[idx, "Yön"], "")
+                style_df.loc[idx, "Yön"] = _side_style(data.loc[idx, "Yön"])
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
@@ -153,7 +167,7 @@ def _render_trade_detail_chart(bars: list[Bar], trades: list[dict], symbol: str,
 
     fig.update_layout(
         title=f"{symbol} - İşlem Detay Grafiği ({timeframe_label})",
-        template="plotly_dark", height=600, xaxis_rangeslider_visible=False,
+        template=get_plotly_template(), height=600, xaxis_rangeslider_visible=False,
     )
     st.plotly_chart(fig, use_container_width=True)
 
@@ -277,7 +291,7 @@ def _render_egimli_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label
 
     fig.update_layout(
         title=f"{symbol} - Eğimli Ters Fibo Analizi ({timeframe_label})",
-        template="plotly_dark", height=700, xaxis_rangeslider_visible=False,
+        template=get_plotly_template(), height=700, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         xaxis=dict(range=x_range), yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
     )

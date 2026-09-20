@@ -14,6 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from tefas_fonlari_data import CACHE_FILE, FUND_CATEGORIES, LOOKBACK_WINDOWS, load_cache
+from theme import negative_color, positive_color
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -24,10 +25,16 @@ _SIGNED_COLUMNS = (
     + ["Net Para Girişi/Çıkışı", "Tümüne Oranı"]
 )
 
+
 # valuation.py'deki style_valuation_df ile aynı palet (uygulama genelinde
-# tutarlılık için): kırmızı = olumsuz, teal/yeşil = olumlu.
-_POSITIVE_COLOR = "color: #2ec4b6;"
-_NEGATIVE_COLOR = "color: #e63946;"
+# tutarlılık için): kırmızı = olumsuz, yeşil = olumlu. Gündüz/gece moduna göre
+# değiştiği için sabit değil, çağrı anında hesaplanan fonksiyonlar.
+def _positive_style():
+    return f"color: {positive_color()};"
+
+
+def _negative_style():
+    return f"color: {negative_color()};"
 
 
 def _style_turk_fonlari(df):
@@ -41,7 +48,7 @@ def _style_turk_fonlari(df):
             for idx in val_df.index:
                 v = val_df.loc[idx, col]
                 if pd.notna(v):
-                    style_df.loc[idx, col] = _POSITIVE_COLOR if v > 0 else (_NEGATIVE_COLOR if v < 0 else "")
+                    style_df.loc[idx, col] = _positive_style() if v > 0 else (_negative_style() if v < 0 else "")
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
