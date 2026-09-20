@@ -24,10 +24,18 @@ def zebra_style(df, extra_style_fn=None):
     diğer özellikler - yazı rengi, kalınlık - birlikte uygulanır).
     """
     even_bg, odd_bg = get_zebra_colors()
+    p = get_palette()
+    # st.dataframe zebra arka planını hücre bazlı background-color olarak
+    # render eder, ama metin rengini kendi (statik config.toml temalı) ızgara
+    # varsayılanından alır - gece modunda bu koyu zemin üzerinde koyu metne
+    # (okunaksız) yol açar. Bu yüzden metin rengini de burada açıkça set
+    # ediyoruz; extra_style_fn kendi renk vermişse (ör. pozitif/negatif) o
+    # hücrede önceliklidir (aşağıda üzerine eklenir).
+    base_style = f"background-color: {{bg}}; color: {p['text']};"
 
     def _apply(data):
         style_df = pd.DataFrame(
-            [[f"background-color: {odd_bg if i % 2 else even_bg};" for _ in data.columns] for i in range(len(data))],
+            [[base_style.format(bg=odd_bg if i % 2 else even_bg) for _ in data.columns] for i in range(len(data))],
             index=data.index, columns=data.columns,
         )
         if extra_style_fn is not None:
