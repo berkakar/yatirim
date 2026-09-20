@@ -6,10 +6,12 @@ Alpaca orders.
 
 Reuses the exact same decision functions the live system uses
 (buy_algorithms.ALGORITHMS, reject_if_marketable, stop_algorithms.
-STOP_ALGORITHMS) and the same tunable constants
-(alpaca_trailing_stop.INITIAL_STOP_PCT, ATR_PERIOD, etc.), so a backtest
-result reflects what the live bot would actually have done, not a separate
-approximation of it.
+STOP_ALGORITHMS) and the same shared structure-trail tuning constants
+(alpaca_trailing_stop.ATR_PERIOD, etc. - algorithm-specific constants like
+each stop algorithm's own initial-stop/breakeven percentages live in
+stop_algorithms.py instead, as that algorithm's own defaults), so a
+backtest result reflects what the live bot would actually have done, not a
+separate approximation of it.
 
 No look-ahead: at simulated bar i, only bars[:i+1] are visible, and the
 daily closes used for the higher-timeframe trend filter / trend_pullback's
@@ -38,9 +40,7 @@ from datetime import datetime, timedelta
 from alpaca_trailing_stop import (
     ATR_MULTIPLIER,
     ATR_PERIOD,
-    BREAKEVEN_TRIGGER_PCT,
     FALLBACK_BUFFER_PCT,
-    INITIAL_STOP_PCT,
     STALE_REFERENCE_DAYS,
     TREND_EMA_PERIOD,
 )
@@ -168,9 +168,12 @@ def run_backtest(
                 side="long", entry_price=position["entry_price"], current_stop_price=position["stop_price"],
                 bars=struct_bars, daily_closes=daily_closes,
             )
+            # initial_stop_pct/breakeven_trigger_pct GEÇİLMİYOR - bunlar
+            # algoritmaya özgü sabitler (bkz. alpaca_trailing_stop.manage_position'daki
+            # aynı gerekçe). ATR/yapısal-trail ayarları algoritmalar arası
+            # paylaşılan genel tuning olduğu için geçirilmeye devam eder.
             decision = stop_algo.trail(
-                ctx, initial_stop_pct=INITIAL_STOP_PCT, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER,
-                breakeven_trigger_pct=BREAKEVEN_TRIGGER_PCT, stale_reference_days=STALE_REFERENCE_DAYS,
+                ctx, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER, stale_reference_days=STALE_REFERENCE_DAYS,
                 trend_ema_period=TREND_EMA_PERIOD, swing_order=SWING_ORDER, fallback_buffer_pct=FALLBACK_BUFFER_PCT,
             )
             if decision is not None and decision.price > position["stop_price"]:
@@ -203,14 +206,14 @@ def run_backtest(
                 resting = None
             elif abs(signal.price - resting["price"]) >= 0.01:
                 qty = math.floor(cash / signal.price) if signal.price > 0 else 0
-                initial_stop = stop_algo.initial_stop(signal.price, "long", initial_stop_pct=INITIAL_STOP_PCT)
+                initial_stop = stop_algo.initial_stop(signal.price, "long")
                 resting = ({"price": round(signal.price, 2), "qty": qty,
                             "stop_price": round(initial_stop, 2), "reason": signal.reason}
                            if qty > 0 else None)
         elif signal is not None:
             qty = math.floor(cash / signal.price) if signal.price > 0 else 0
             if qty > 0:
-                initial_stop = stop_algo.initial_stop(signal.price, "long", initial_stop_pct=INITIAL_STOP_PCT)
+                initial_stop = stop_algo.initial_stop(signal.price, "long")
                 resting = {"price": round(signal.price, 2), "qty": qty,
                            "stop_price": round(initial_stop, 2), "reason": signal.reason}
 

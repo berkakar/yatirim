@@ -13,6 +13,26 @@ yerine):
     üretir. "Asla gevşetme" kuralı algoritmanın kendisinde değil, çağıran
     tarafta (mevcut current_stop_price ile karşılaştırılarak) uygulanır -
     her algoritma bunu tekrar yazmak zorunda kalmasın diye.
+
+initial_stop_pct/breakeven_trigger_pct gibi bir algoritmaya ÖZGÜ sabitler
+(o algoritmanın tanımının parçası) her fonksiyonun kendi varsayılan değeri
+olarak burada yaşar - çağıranlar (alpaca_trailing_stop.manage_position,
+backtest_engine.run_backtest, alpaca_buy_points.py) bunları GEÇMEZ, seçili
+algoritma ne ise onun kendi değerleri kullanılır. ATR/yapısal-trail
+ayarları (atr_period, atr_multiplier, stale_reference_days,
+trend_ema_period, swing_order, fallback_buffer_pct) ise algoritmalar arası
+PAYLAŞILAN genel tuning olduğu için alpaca_trailing_stop.py'nin env-var
+destekli sabitlerinden geçirilmeye devam eder.
+
+İki algoritma var:
+  - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
+    breakeven floor + günlük EMA trend filtresiyle gate'lenen ATR-buffered
+    break-of-structure trail.
+  - "wait_then_trail" ("Beklemeli ve İz Süren Stop"): sabit-% ilk stop +
+    breakeven floor, SONRA fiyat maliyetin belirli bir kâr eşiğine
+    ulaşana kadar (yapısal trail olmadan) beklenir; eşik bir kez aşıldığında
+    (kalıcı olarak) stop bir kâr kilidine çekilir ve yukarıdakiyle AYNI
+    yapısal trail (_structure_trail_candidate) devreye girer.
 """
 
 from dataclasses import dataclass
@@ -76,6 +96,31 @@ def _trend_ok(daily_closes: list[float] | None, side: str, trend_ema_period: int
     return last_close > trend_ema if side == "long" else last_close < trend_ema
 
 
+def _structure_trail_candidate(
+    ctx: StopContext, atr_period: int, atr_multiplier: float, stale_reference_days: float,
+    trend_ema_period: int, swing_order: int, fallback_buffer_pct: float,
+) -> tuple[float, str] | None:
+    """ATR-buffered break-of-structure trail adayı (bkz. structure.
+    validated_trailing_level), günlük EMA trend filtresiyle gate'lenir.
+    breakeven_atr_structure_trail ile wait_then_trail_trail arasında
+    PAYLAŞILAN tek mantık - ikincisi, kullanıcının "o zaten ilk stop
+    algoritmasında tanımlı" dediği aynı yapısal trail'i, sadece kâr kilidi
+    tetiklendikten sonra devreye sokmak için bunu çağırır."""
+    if not _trend_ok(ctx.daily_closes, ctx.side, trend_ema_period):
+        return None
+    pivot = validated_trailing_level(ctx.bars, ctx.side, swing_order, stale_reference_days)
+    if pivot is None:
+        return None
+    atr_value = atr(ctx.bars, atr_period)
+    buffer_amount = atr_value * atr_multiplier if atr_value is not None else pivot.price * fallback_buffer_pct
+    last_price = ctx.bars[-1].c
+    if ctx.side == "long":
+        candidate = pivot.price - buffer_amount
+        return (candidate, f"structure@{pivot.price:.2f}") if candidate < last_price else None
+    candidate = pivot.price + buffer_amount
+    return (candidate, f"structure@{pivot.price:.2f}") if candidate > last_price else None
+
+
 def breakeven_atr_structure_initial_stop(
     entry_price: float, side: str, bars: list[Bar] | None = None,
     initial_stop_pct: float = INITIAL_STOP_PCT,
@@ -122,19 +167,122 @@ def breakeven_atr_structure_trail(
             if top_up_candidate > last_price:
                 candidates.append((top_up_candidate, "top-up nefes payı"))
 
-    if _trend_ok(ctx.daily_closes, side, trend_ema_period):
-        pivot = validated_trailing_level(ctx.bars, side, swing_order, stale_reference_days)
-        if pivot is not None:
-            atr_value = atr(ctx.bars, atr_period)
-            buffer_amount = atr_value * atr_multiplier if atr_value is not None else pivot.price * fallback_buffer_pct
-            if side == "long":
-                candidate = pivot.price - buffer_amount
-                if candidate < last_price:
-                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
-            else:
-                candidate = pivot.price + buffer_amount
-                if candidate > last_price:
-                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
+    structure_candidate = _structure_trail_candidate(
+        ctx, atr_period, atr_multiplier, stale_reference_days, trend_ema_period, swing_order, fallback_buffer_pct,
+    )
+    if structure_candidate is not None:
+        candidates.append(structure_candidate)
+
+    if not candidates:
+        return None
+
+    if side == "long":
+        best_price, reason = max(candidates, key=lambda c: c[0])
+        improves = best_price > ctx.current_stop_price
+    else:
+        best_price, reason = min(candidates, key=lambda c: c[0])
+        improves = best_price < ctx.current_stop_price
+
+    if not improves:
+        return None
+    return StopDecision(price=best_price, reason=reason)
+
+
+# ---- İkinci algoritma: "Beklemeli ve İz Süren Stop". Sabit-% ilk stop
+# (varsayılan %2), fiyat maliyetin +%1.5'ine ulaşınca breakeven'e çekilir.
+# Oradan sonra - yapısal trail HENÜZ DEVREDE DEĞİL, sadece bekleniyor -
+# fiyat maliyetin +%5'ine ulaşana kadar mum mum izlenir. Fiyat bir kez
+# +%5'e ulaştıysa (sonradan geri çekilse bile - bkz. kullanıcı onayı: bu
+# kalıcı bir geçiş), stop maliyetin +%4'üne kilitlenir VE bu noktadan
+# itibaren yukarıdaki breakeven_atr_structure_trail ile birebir aynı
+# ATR-buffered break-of-structure trail (_structure_trail_candidate)
+# devreye girer - "o zaten ilk stop algoritmasında tanımlı".
+
+WAIT_THEN_TRAIL_INITIAL_STOP_PCT = 0.02
+WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT = 0.015
+WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT = 0.05
+WAIT_THEN_TRAIL_PROFIT_LOCK_PCT = 0.04
+
+
+def wait_then_trail_initial_stop(
+    entry_price: float, side: str, bars: list[Bar] | None = None,
+    initial_stop_pct: float = WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
+) -> float:
+    return entry_price * (1 - initial_stop_pct) if side == "long" else entry_price * (1 + initial_stop_pct)
+
+
+def _reached_profit_lock(ctx: StopContext, profit_lock_trigger_pct: float) -> bool:
+    """Fiyat, pozisyon yönetim başlangıcından bu yana (ctx.bars) HERHANGİ bir
+    anda giriş fiyatının +profit_lock_trigger_pct kadar lehine hareket etmiş
+    mi - bir kez True olduysa, sonraki barlarda fiyat geri çekilse bile aynı
+    kalır (kalıcı geçiş): en yüksek/düşük fiyat ctx.bars'ın TAMAMINDAN
+    hesaplanır, sadece son bardan değil."""
+    if ctx.side == "long":
+        favorable_excursion = max(b.h for b in ctx.bars)
+        return favorable_excursion >= ctx.entry_price * (1 + profit_lock_trigger_pct)
+    favorable_excursion = min(b.l for b in ctx.bars)
+    return favorable_excursion <= ctx.entry_price * (1 - profit_lock_trigger_pct)
+
+
+def wait_then_trail_trail(
+    ctx: StopContext,
+    initial_stop_pct: float = WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
+    breakeven_trigger_pct: float = WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT,
+    profit_lock_trigger_pct: float = WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT,
+    profit_lock_pct: float = WAIT_THEN_TRAIL_PROFIT_LOCK_PCT,
+    atr_period: int = ATR_PERIOD,
+    atr_multiplier: float = ATR_MULTIPLIER,
+    stale_reference_days: float = STALE_REFERENCE_DAYS,
+    trend_ema_period: int = TREND_EMA_PERIOD,
+    swing_order: int = SWING_ORDER,
+    fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+) -> StopDecision | None:
+    """Beklemeli ve İz Süren Stop: breakeven floor (+%1.5 tetikte) + (top-up
+    sonrası "tighten_to_new_entry" seçiliyse) nefes payı adayı - buraya kadar
+    breakeven_atr_structure_trail ile aynı mantık, sadece farklı yüzdelerle.
+    Ayrıca: fiyat bir kez +%5 kâra ulaştıysa, +%4 kâr kilidi adayı VE
+    breakeven_atr_structure_trail'deki aynı yapısal trail adayı devreye
+    girer - o eşiğe ulaşılana kadar (sadece breakeven hariç) hiçbir
+    sıkılaştırma yapılmaz, "bekleme" budur."""
+    if not ctx.bars:
+        return None
+    side = ctx.side
+    last_price = ctx.bars[-1].c
+    candidates: list[tuple[float, str]] = []
+
+    gain_pct = ((last_price - ctx.entry_price) / ctx.entry_price if side == "long"
+                else (ctx.entry_price - last_price) / ctx.entry_price)
+    if gain_pct >= breakeven_trigger_pct:
+        if side == "long" and ctx.entry_price > ctx.current_stop_price and ctx.entry_price < last_price:
+            candidates.append((ctx.entry_price, "breakeven"))
+        elif side == "short" and ctx.entry_price < ctx.current_stop_price and ctx.entry_price > last_price:
+            candidates.append((ctx.entry_price, "breakeven"))
+
+    if ctx.topped_up and ctx.top_up_stop_mode == "tighten_to_new_entry":
+        if side == "long":
+            top_up_candidate = ctx.entry_price * (1 - initial_stop_pct)
+            if top_up_candidate < last_price:
+                candidates.append((top_up_candidate, "top-up nefes payı"))
+        else:
+            top_up_candidate = ctx.entry_price * (1 + initial_stop_pct)
+            if top_up_candidate > last_price:
+                candidates.append((top_up_candidate, "top-up nefes payı"))
+
+    if _reached_profit_lock(ctx, profit_lock_trigger_pct):
+        if side == "long":
+            lock_price = ctx.entry_price * (1 + profit_lock_pct)
+            if lock_price < last_price:
+                candidates.append((lock_price, f"kâr kilidi (+%{profit_lock_pct * 100:g})"))
+        else:
+            lock_price = ctx.entry_price * (1 - profit_lock_pct)
+            if lock_price > last_price:
+                candidates.append((lock_price, f"kâr kilidi (-%{profit_lock_pct * 100:g})"))
+
+        structure_candidate = _structure_trail_candidate(
+            ctx, atr_period, atr_multiplier, stale_reference_days, trend_ema_period, swing_order, fallback_buffer_pct,
+        )
+        if structure_candidate is not None:
+            candidates.append(structure_candidate)
 
     if not candidates:
         return None
@@ -156,6 +304,11 @@ STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
         label="Breakeven + Yapısal Trail (ATR tamponlu)",
         initial_stop=breakeven_atr_structure_initial_stop,
         trail=breakeven_atr_structure_trail,
+    ),
+    "wait_then_trail": StopAlgorithm(
+        label="Beklemeli ve İz Süren Stop",
+        initial_stop=wait_then_trail_initial_stop,
+        trail=wait_then_trail_trail,
     ),
 }
 DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"

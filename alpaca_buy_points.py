@@ -100,8 +100,9 @@ fresh entry's signal fill during pre-market/after-hours too, not just
 regular hours: Alpaca doesn't support bracket/OTO orders in extended hours
 (only plain limit), so the entry goes out unbracketed and the script polls
 for its own fill in a tight internal loop (its own GitHub Actions workflow,
-independent of this one), arming a naive-%INITIAL_STOP_PCT protective
-extended-hours limit-sell the moment it detects a fill - not instantly like
+independent of this one), arming a naive protective extended-hours limit-sell
+(the symbol's selected stop algorithm's initial_stop()) the moment it
+detects a fill - not instantly like
 a bracket, but within its poll interval rather than waiting on the next
 regular session. check_symbol's own existing-order check (see
 already_bracketed) upgrades that plain order to a proper bracket the moment
@@ -124,7 +125,7 @@ from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, g
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
-    INITIAL_STOP_PCT, extended_hours_session, get_bars_for_timeframe, load_telegram_settings,
+    extended_hours_session, get_bars_for_timeframe, load_telegram_settings,
     load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
@@ -324,7 +325,7 @@ def check_symbol(
 
         if top_up_stop_mode == "tighten_to_new_entry":
             new_entry = float(new_position["avg_entry_price"])
-            new_naive_stop = stop_algo.initial_stop(new_entry, "long", initial_stop_pct=INITIAL_STOP_PCT)
+            new_naive_stop = stop_algo.initial_stop(new_entry, "long")
             new_stop_price = max(old_stop_price, round(new_naive_stop, 2))
         else:
             new_stop_price = old_stop_price
@@ -348,7 +349,7 @@ def check_symbol(
 
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
     # alpaca_client.place_limit_entry and the module docstring.
-    stop_loss_price = round(stop_algo.initial_stop(target_price, "long", initial_stop_pct=INITIAL_STOP_PCT), 2)
+    stop_loss_price = round(stop_algo.initial_stop(target_price, "long"), 2)
 
     if existing_order is None:
         order = client.place_limit_entry(
@@ -483,8 +484,9 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
     sonra kendi içinde EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS boyunca her
     EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS'de bir bu emirlerin dolup
     dolmadığını kontrol eder - dolduğu anda (bir sonraki ~10dk'lık GitHub
-    Actions tetiklemesini beklemeden) hemen naif %INITIAL_STOP_PCT'lik bir
-    koruma (day+extended-hours limit-sell) kurar ve Telegram'dan bildirir.
+    Actions tetiklemesini beklemeden) hemen sembolün seçili stop algoritmasının
+    naif ilk stop'uyla bir koruma (day+extended-hours limit-sell) kurar ve
+    Telegram'dan bildirir.
 
     Poll penceresi bitene kadar dolmayan emirler olduğu gibi resting kalır -
     bir sonraki tetiklemede (ya da regular hours başladığında check_symbol
@@ -556,7 +558,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                 entry_price = float(order["filled_avg_price"])
                 qty = float(order["filled_qty"])
                 stop_algo = STOP_ALGORITHMS[stop_algorithm]
-                naive_stop = stop_algo.initial_stop(entry_price, "long", initial_stop_pct=INITIAL_STOP_PCT)
+                naive_stop = stop_algo.initial_stop(entry_price, "long")
                 stop_price = round(naive_stop, 2)
                 try:
                     client.place_extended_hours_limit(symbol, qty, "long", stop_price)

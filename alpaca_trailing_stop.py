@@ -95,13 +95,18 @@ load_dotenv()
 
 TIMEFRAME = os.environ.get("TRADE_TIMEFRAME", "30Min")
 SWING_ORDER = int(os.environ.get("TRADE_SWING_ORDER", "2"))
-INITIAL_STOP_PCT = float(os.environ.get("TRADE_INITIAL_STOP_PCT", "1.5")) / 100
 POLL_SECONDS = int(os.environ.get("TRADE_POLL_SECONDS", "60"))
 
+# ATR/yapısal-trail ayarları - birden fazla stop algoritması arasında PAYLAŞILAN
+# (structure.validated_trailing_level'ı kullanan her algoritmanın aynı şekilde
+# çağırdığı) genel tuning; env var'larla operasyonel olarak ayarlanabilir.
+# initial_stop_pct/breakeven_trigger_pct gibi bir algoritmaya ÖZGÜ, o
+# algoritmanın tanımının parçası olan sabitler artık burada DEĞİL -
+# stop_algorithms.py'de ilgili algoritma fonksiyonunun kendi varsayılanı
+# olarak tanımlı (bkz. o dosyanın modül docstring'i).
 LOOKBACK_DAYS = int(os.environ.get("TRADE_LOOKBACK_DAYS", "15"))
 ATR_PERIOD = int(os.environ.get("TRADE_ATR_PERIOD", "14"))
 ATR_MULTIPLIER = float(os.environ.get("TRADE_ATR_MULTIPLIER", "0.25"))
-BREAKEVEN_TRIGGER_PCT = float(os.environ.get("TRADE_BREAKEVEN_TRIGGER_PCT", "1.0")) / 100
 STALE_REFERENCE_DAYS = float(os.environ.get("TRADE_STALE_REFERENCE_DAYS", "10"))
 TREND_EMA_PERIOD = int(os.environ.get("TRADE_TREND_EMA_PERIOD", "50"))
 
@@ -342,8 +347,8 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
     """En son (open/replaced/canceled/expired fark etmez) stop emrinin
     fiyatı - ama sadece yakın zamanda (EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS
     içinde) kurulmuşsa; aksi halde None. manage_position, resting bir stop
-    bulamadığında koruma seviyesini INITIAL_STOP_PCT'e sıfırlamak yerine
-    buradan trail edilmiş son seviyeyi geri yükleyebilmesi için var - en
+    bulamadığında koruma seviyesini seçili algoritmanın naif ilk stop'una
+    sıfırlamak yerine buradan trail edilmiş son seviyeyi geri yükleyebilmesi için var - en
     tipik senaryo, extended-hours guard'ın acil limit emrinin seans
     bitiminde dolmadan düşmesi.
 
@@ -385,13 +390,14 @@ def manage_position(
                 f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
             return
 
-        naive_stop = algo.initial_stop(entry_price, side, initial_stop_pct=INITIAL_STOP_PCT)
+        naive_stop = algo.initial_stop(entry_price, side)
         restored = last_trailed_stop_price(client, symbol)
         if restored is not None:
             # Extended-hours guard'ın bıraktığı acil limit emri seans
             # bitiminde dolmadan düşmüş olabilir - bu durumda structure
-            # trail'in kazandırdığı ilerlemeyi INITIAL_STOP_PCT'e sıfırlamak
-            # yerine, son bilinen trail seviyesini geri yüklüyoruz. İki
+            # trail'in kazandırdığı ilerlemeyi seçili algoritmanın naif ilk
+            # stop'una sıfırlamak yerine, son bilinen trail seviyesini geri
+            # yüklüyoruz. İki
             # adaydan (restored, naive) gerçekten sıkı olanı seçiliyor -
             # aşağıdaki candidate seçimindeki "en çok sıkılaştıran" kuralıyla
             # aynı mantık.
@@ -430,9 +436,12 @@ def manage_position(
         side=side, entry_price=entry_price, current_stop_price=current_stop_price,
         bars=bars, daily_closes=daily_closes, topped_up=topped_up, top_up_stop_mode=top_up_stop_mode,
     )
+    # initial_stop_pct/breakeven_trigger_pct GEÇİLMİYOR - bunlar algoritmaya
+    # özgü sabitler (seçili algoritmanın kendi varsayılanı geçerli olsun diye,
+    # bkz. stop_algorithms.py). ATR/yapısal-trail ayarları ise algoritmalar
+    # arası paylaşılan genel tuning olduğu için buradan geçirilmeye devam eder.
     decision = algo.trail(
-        ctx, initial_stop_pct=INITIAL_STOP_PCT, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER,
-        breakeven_trigger_pct=BREAKEVEN_TRIGGER_PCT, stale_reference_days=STALE_REFERENCE_DAYS,
+        ctx, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER, stale_reference_days=STALE_REFERENCE_DAYS,
         trend_ema_period=TREND_EMA_PERIOD, swing_order=SWING_ORDER, fallback_buffer_pct=FALLBACK_BUFFER_PCT,
     )
     if decision is None:
