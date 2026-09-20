@@ -15,10 +15,18 @@ import streamlit as st
 
 from bicak_kanali import Kilavuz, find_kilavuz, yesil_cizgi_kesisimi
 from scanner import (
-    DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS, INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS,
-    SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS, bars_from_df, get_scanner_data,
+    DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS, FOUR_HOUR_DEFAULT_DAYS, FOUR_HOUR_MAX_DAYS,
+    INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
+    bars_from_df, get_scanner_data,
 )
 from structure import Bar
+
+# "4Hour" bilinçli olarak scanner.SCAN_TIMEFRAMES'e eklenmedi (app.py'deki Alım
+# Bölgesi Tarama gibi diğer modüllerde de çıkmasın diye) - sadece bu modülde,
+# scanner.get_scanner_data'nın zaten desteklediği "4Hour" değeriyle kullanılıyor
+# (bkz. scanner._resample_to_4h - 1 saatlik barlardan türetiliyor).
+_BICAK_TIMEFRAMES = SCAN_TIMEFRAMES + ["4Hour"]
+_BICAK_TIMEFRAME_LABELS = {**SCAN_TIMEFRAME_LABELS, "4Hour": "4 Saat"}
 
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
@@ -65,20 +73,27 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
         )
 
     st.caption("Mum Periyodu")
-    tf_cols = st.columns(len(SCAN_TIMEFRAMES))
+    tf_cols = st.columns(len(_BICAK_TIMEFRAMES))
     selected_timeframes = [
-        tf_code for col, tf_code in zip(tf_cols, SCAN_TIMEFRAMES)
-        if col.checkbox(SCAN_TIMEFRAME_LABELS[tf_code], value=(tf_code == "1Day"), key=f"bicak_tf_{tf_code}")
+        tf_code for col, tf_code in zip(tf_cols, _BICAK_TIMEFRAMES)
+        if col.checkbox(_BICAK_TIMEFRAME_LABELS[tf_code], value=(tf_code == "1Day"), key=f"bicak_tf_{tf_code}")
     ]
 
-    days_col1, days_col2 = st.columns(2)
+    days_col1, days_col2, days_col3 = st.columns(3)
     intraday_days = days_col1.number_input(
         "15dk / 30dk / 1sa mumlar için geriye gidilecek gün sayısı",
         min_value=1, max_value=INTRADAY_MAX_DAYS, value=INTRADAY_DEFAULT_DAYS, step=1,
         key="bicak_intraday_days",
         help=f"Yahoo Finance gün-içi mumlarda en fazla {INTRADAY_MAX_DAYS} gün geriye gidebiliyor.",
     )
-    daily_days = days_col2.number_input(
+    four_hour_days = days_col2.number_input(
+        "4 saat mumlar için geriye gidilecek gün sayısı",
+        min_value=1, max_value=FOUR_HOUR_MAX_DAYS, value=FOUR_HOUR_DEFAULT_DAYS, step=1,
+        key="bicak_four_hour_days",
+        help=f"4 saatlik barlar 1 saatlik barlardan türetilir (yfinance native desteklemiyor), "
+             f"bu yüzden aynı üst sınıra ({FOUR_HOUR_MAX_DAYS} gün) sahip.",
+    )
+    daily_days = days_col3.number_input(
         "1 gün mumlar için geriye gidilecek gün sayısı",
         min_value=1, max_value=DAILY_MAX_DAYS, value=DAILY_DEFAULT_DAYS, step=1,
         key="bicak_daily_days",
@@ -105,8 +120,13 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
         with st.spinner("Hisseler taranıyor..."):
             signals = []
             for tf_code in selected_timeframes:
-                tf_label = SCAN_TIMEFRAME_LABELS[tf_code]
-                tf_days = daily_days if tf_code == "1Day" else intraday_days
+                tf_label = _BICAK_TIMEFRAME_LABELS[tf_code]
+                if tf_code == "1Day":
+                    tf_days = daily_days
+                elif tf_code == "4Hour":
+                    tf_days = four_hour_days
+                else:
+                    tf_days = intraday_days
                 for t in target_list:
                     df_temp, _cup, _obo, _tobo = get_scanner_data(t, timeframe=tf_code, period_days=tf_days)
                     if df_temp is None or df_temp.empty:
@@ -157,9 +177,14 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
         active_t = st.session_state.bicak_selected_ticker
         active_tf = st.session_state.bicak_selected_tf
         st.write("---")
-        st.markdown(f"### 📈 Bıçak Kanalı Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
+        st.markdown(f"### 📈 Bıçak Kanalı Grafiği: **{active_t}** ({_BICAK_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
 
-        active_days = daily_days if active_tf == "1Day" else intraday_days
+        if active_tf == "1Day":
+            active_days = daily_days
+        elif active_tf == "4Hour":
+            active_days = four_hour_days
+        else:
+            active_days = intraday_days
         with st.spinner(f"{active_t} verisi getiriliyor..."):
             df, _cup, _obo, _tobo = get_scanner_data(active_t, timeframe=active_tf, period_days=active_days)
 
@@ -300,7 +325,7 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
     y_pad = (y_max - y_min) * 0.08 or 1.0
 
     fig.update_layout(
-        title=f"{ticker} - Kılavuz + Bıçak + Sıfır + Yeşil Çizgi ({SCAN_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
+        title=f"{ticker} - Kılavuz + Bıçak + Sıfır + Yeşil Çizgi ({_BICAK_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
         template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
