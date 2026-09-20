@@ -43,18 +43,31 @@ jobs:
           APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
           APCA_API_DATA_URL: https://data.alpaca.markets/v2
 
+      # Alım-Stop-Alım Ek Yeteneği (buy_stop_rebuy.py) - bir pozisyon kendi stop'u
+      # tetiklenerek kapandığında fiyatın önceki alım seviyesine dönüşünü izler ve
+      # dönerse yeniden alır. Yukarıdaki iki adımdan SONRA çalışır, böylece aynı
+      # pass içinde en güncel pozisyon/stop durumunu kullanır - bkz. o dosyanın
+      # docstring'i. portfolio_config_berkakar.json'da kapalıysa (varsayılan) no-op.
+      - run: python buy_stop_rebuy.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+
       # alpaca_bars_cache.py / alpaca_realized_pnl_cache.py / get_management_start
-      # (alpaca_trailing_stop.py) tarafından güncellenen state cache'leri - her
-      # ~5 dakikada bir aynı bar/order-history pencerelerini Alpaca'dan sıfırdan
-      # çekmemek için buradan devam eder. Gerçek bir değişiklik yoksa (yeni bar
-      # kapanmadı, yeni fill olmadı) diff boş kalır ve commit atlanır - bu
-      # yüzden commit sıklığı poll aralığına değil, altta yatan verinin
-      # gerçekten değişme sıklığına bağlıdır.
+      # (alpaca_trailing_stop.py) / buy_stop_rebuy.py tarafından güncellenen state
+      # cache'leri - her ~5 dakikada bir aynı bar/order-history pencerelerini
+      # Alpaca'dan sıfırdan çekmemek için buradan devam eder. Gerçek bir değişiklik
+      # yoksa (yeni bar kapanmadı, yeni fill olmadı) diff boş kalır ve commit
+      # atlanır - bu yüzden commit sıklığı poll aralığına değil, altta yatan
+      # verinin gerçekten değişme sıklığına bağlıdır.
       - name: Commit and push updated Alpaca state cache
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for f in alpaca_realized_pnl_cache_berkakar.json alpaca_daily_bars_cache_berkakar.json alpaca_intraday_bars_cache_berkakar.json alpaca_position_management_cache_berkakar.json; do
+          for f in alpaca_realized_pnl_cache_berkakar.json alpaca_daily_bars_cache_berkakar.json alpaca_intraday_bars_cache_berkakar.json alpaca_position_management_cache_berkakar.json buy_stop_rebuy_state_berkakar.json; do
             [ -f "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then

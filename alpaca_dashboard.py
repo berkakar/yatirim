@@ -43,35 +43,41 @@ def _order_price(order: dict) -> float | None:
     return None
 
 
-def _parse_order_tag(order: dict) -> tuple[str, str]:
+REBUY_NOTE = "🔁 Alım-Stop-Alım: stop sonrası otomatik yeniden alım"
+
+
+def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
     """alpaca_buy_points.py tags buy-limit entries with client_order_id
     "algo-<algorithm_id>-<timeframe>-<symbol>-<epoch>" so historical orders
     stay attributed to whichever algorithm/mum periyodu was active when each
     was placed, even after the portfolio's settings later change. Orders
     placed before the timeframe was added to this tag have the older
     4-part "algo-<algorithm_id>-<symbol>-<epoch>" form (mum periyodu
-    unknown). Orders that aren't a tagged buy-limit entry show "—" for both.
-    Returns (algoritma_etiketi, mum_periyodu_etiketi)."""
+    unknown). buy_stop_rebuy.py tags its yeniden alım (rebuy) market emirlerini
+    aynı şekilde ama "rebuy-" öneki ile - bkz. o modülün docstring'i. Orders
+    that aren't a tagged buy-limit/rebuy entry show "—" for both.
+    Returns (algoritma_etiketi, mum_periyodu_etiketi, alım_stop_alım_mı)."""
     parts = (order.get("client_order_id") or "").split("-")
-    if not parts or parts[0] != "algo":
-        return "—", "—"
+    if not parts or parts[0] not in ("algo", "rebuy"):
+        return "—", "—", False
+    is_rebuy = parts[0] == "rebuy"
     if len(parts) == 5:
         algo_id, timeframe = parts[1], parts[2]
     elif len(parts) == 4:
         algo_id, timeframe = parts[1], None
     else:
-        return "—", "—"
+        return "—", "—", False
 
     algo = ALGORITHMS.get(algo_id)
     algo_label = algo[0] if algo else "—"
     timeframe_label = TIMEFRAME_LABELS.get(timeframe, timeframe) if timeframe else "—"
-    return algo_label, timeframe_label
+    return algo_label, timeframe_label, is_rebuy
 
 
 def format_order_row(order: dict) -> dict:
     created = _to_tr_time(order["created_at"])
     price = _order_price(order)
-    algo_label, timeframe_label = _parse_order_tag(order)
+    algo_label, timeframe_label, is_rebuy = _parse_order_tag(order)
 
     if order.get("qty"):
         amount = f"{float(order['qty']):g} adet"
@@ -91,7 +97,19 @@ def format_order_row(order: dict) -> dict:
         "Fiyat": round(price, 2) if price is not None else "—",
         "Adet/Tutar": amount,
         "Durum": STATUS_TR.get(order["status"], order["status"]),
+        "Açıklama": REBUY_NOTE if is_rebuy else "",
     }
+
+
+def rebuy_row_style(df: pd.DataFrame) -> pd.DataFrame:
+    """zebra_style'ın extra_style_fn'i - Alım-Stop-Alım Ek Yeteneği ile
+    verilmiş yeniden alım emirlerinin ("Açıklama" sütunu dolu) satırını
+    turuncu yazıyla vurgular. format_order_row kullanan her iki İşlem
+    Geçmişi tablosunda da (bu modül ve premium_buy_portfolio.py) kullanılır."""
+    return pd.DataFrame(
+        [["color: orange;" if row.get("Açıklama") else "" for _ in df.columns] for _, row in df.iterrows()],
+        index=df.index, columns=df.columns,
+    )
 
 
 def render_account_summary(client: AlpacaClient, username: str, positions: list[dict], show_initial_capital_setting: bool = True):
@@ -292,5 +310,9 @@ def render_alpaca_dashboard(username):
         .sort_values("_sort_ts", ascending=False)
         .drop(columns=["_sort_ts"])
     )
-    st.dataframe(zebra_style(history_df), use_container_width=True, hide_index=True)
-    st.caption("Sütun başlıklarına tıklayarak sıralayabilirsiniz. Varsayılan sıralama: en yeni işlem en üstte. Kapanmış pozisyonlar da dahildir.")
+    st.dataframe(zebra_style(history_df, extra_style_fn=rebuy_row_style), use_container_width=True, hide_index=True)
+    st.caption(
+        "Sütun başlıklarına tıklayarak sıralayabilirsiniz. Varsayılan sıralama: en yeni işlem en üstte. "
+        "Kapanmış pozisyonlar da dahildir. Turuncu yazılı satırlar, Alım-Stop-Alım Ek Yeteneği ile stop "
+        "sonrası otomatik yapılan yeniden alımları gösterir (bkz. 'Açıklama' sütunu)."
+    )
