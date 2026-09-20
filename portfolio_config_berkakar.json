@@ -1,65 +1,83 @@
 {
-  "budget": 94860.31,
+  "budget": 69137.83,
   "weights": {
-    "MSFT": 20.29,
-    "AMZN": 5.0,
+    "MSFT": 27.18,
+    "AMZN": 6.62,
     "NVDA": 5.0,
     "INTC": 5.0,
     "MU": 5.0,
-    "PAYX": 5.5,
+    "PAYX": 7.54,
     "NXPI": 5.0,
     "NOW": 5.0,
     "MDB": 20.29,
     "TTWO": 5.0,
     "VEEV": 1.5,
-    "SKHY": 1.12,
-    "UROY": 1.5
+    "SKHY": 1.36,
+    "UROY": 2.05
   },
   "algorithm": "trend_pullback",
+  "stop_algorithm": "breakeven_atr_structure",
   "symbol_settings": {
     "MSFT": {
       "algorithm": "demand_zone",
-      "timeframe": "1Day"
+      "timeframe": "1Day",
+      "stop_algorithm": "breakeven_atr_structure"
+    },
+    "AMZN": {
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "NVDA": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "30Min",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "INTC": {
       "algorithm": "demand_zone",
-      "timeframe": "1Hour"
+      "timeframe": "1Hour",
+      "stop_algorithm": "breakeven_atr_structure"
+    },
+    "MU": {
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "PAYX": {
       "algorithm": "demand_zone",
-      "timeframe": "1Day"
+      "timeframe": "1Day",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "NXPI": {
       "algorithm": "volatility_support",
-      "timeframe": "1Hour"
+      "timeframe": "1Hour",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "NOW": {
       "algorithm": "trend_pullback",
-      "timeframe": "15Min"
+      "timeframe": "15Min",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "MDB": {
       "algorithm": "demand_zone",
-      "timeframe": "1Day"
+      "timeframe": "1Day",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "TTWO": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "30Min",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "VEEV": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "30Min",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "SKHY": {
       "algorithm": "breakout_volume",
-      "timeframe": "15Min"
+      "timeframe": "15Min",
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "UROY": {
       "algorithm": "demand_zone",
-      "timeframe": "30Min"
+      "timeframe": "30Min",
+      "stop_algorithm": "breakeven_atr_structure"
     }
   },
   "stop_loss_enabled": true,
