@@ -120,11 +120,13 @@ authenticator = stauth.Authenticate(
 )
 _LOGO_PATH = "assets/logo.jpg"
 if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
-    _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
-    with _logo_col2:
+    _login_col, _logo_col = st.columns([1, 1], gap="large")
+    with _login_col:
+        authenticator.login(location="main")
+    with _logo_col:
         st.image(_LOGO_PATH, use_container_width=True)
-
-authenticator.login(location="main")
+else:
+    authenticator.login(location="main")
 
 _auth_status = st.session_state.get("authentication_status")
 if _auth_status is False:
