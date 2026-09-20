@@ -28,7 +28,7 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import render_alpaca_dashboard, render_account_summary
+from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
 from tefas_fonlari import render_turk_fonlari
@@ -37,8 +37,9 @@ from hisse_patern import render_hisse_patern
 from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
+from version_info import get_version_label
 
-NAV_HOME = "🏠 Özet"
+NAV_HOME = "🏠 Giriş Sayfası"
 MODULE_GROUPS = {
     "🔍 Alım Bölgesi Tarama": ["Alım Bölgesi Tarama"],
     "📊 Analiz": [
@@ -121,7 +122,28 @@ authenticator = stauth.Authenticate(
     st.secrets["cookie"]["key"],
     st.secrets["cookie"]["expiry_days"],
 )
-authenticator.login(location="main")
+_LOGO_PATH = "assets/logo.jpg"
+_LOGIN_BOX_WIDTH = 380
+if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
+    # Giriş formu (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
+    # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
+    st.markdown(
+        f"""
+        <style>
+        div[data-testid="stForm"] {{
+            max-width: {_LOGIN_BOX_WIDTH}px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    _login_col, _logo_col = st.columns([1, 1], gap="large")
+    with _login_col:
+        authenticator.login(location="main")
+    with _logo_col:
+        st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
+else:
+    authenticator.login(location="main")
 
 _auth_status = st.session_state.get("authentication_status")
 if _auth_status is False:
@@ -133,7 +155,7 @@ elif _auth_status is None:
 
 username = st.session_state["username"]
 
-st.title("📈 Profesyonel Yatırım Terminali")
+st.title("📈 Yatırım Terminali")
 authenticator.logout("🚪 Çıkış Yap", "sidebar")
 
 # ------------------------------------------------------------------------------
@@ -333,7 +355,7 @@ def render_chart_for(ticker):
 
 
 # ==============================================================================
-# 0. MODÜL: ÖZET (ANA SAYFA)
+# 0. MODÜL: GİRİŞ SAYFASI (ANA SAYFA)
 # ==============================================================================
 if module == NAV_HOME:
     st.header("🏠 Genel Bakış")
@@ -341,11 +363,13 @@ if module == NAV_HOME:
 
     key_id, secret_key = get_user_alpaca_creds(username)
 
+    alpaca_positions = None
     if key_id and secret_key:
         try:
-            client = AlpacaClient(key_id, secret_key)
-            positions = client.get_all_positions()
-            render_account_summary(client, username, positions)
+            alpaca_client = AlpacaClient(key_id, secret_key)
+            alpaca_positions = alpaca_client.get_all_positions()
+            render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
+            render_positions_summary_table(alpaca_positions)
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:
@@ -365,20 +389,6 @@ if module == NAV_HOME:
         st.metric("Alım Bölgesi Sinyali", len(st.session_state.scan_signals))
     else:
         st.info("Alım Bölgesi Tarama bu oturumda henüz çalıştırılmadı.")
-
-    st.divider()
-    st.subheader("🚀 Hızlı Erişim")
-
-    def _go_to_category(cat_name):
-        st.session_state["nav_category"] = cat_name
-        st.session_state["open_category"] = cat_name
-
-    nav_cols = st.columns(len(MODULE_GROUPS))
-    for col, cat_name in zip(nav_cols, MODULE_GROUPS.keys()):
-        col.button(
-            cat_name, use_container_width=True, key=f"quicknav_{cat_name}",
-            on_click=_go_to_category, args=(cat_name,),
-        )
 
 # ==============================================================================
 # 1. MODÜL: ALIM BÖLGESİ TARAMA (Fincan-Kulp + OBO/TOBO birleşik)
@@ -1428,3 +1438,12 @@ elif module == "🛡️ Stop Loss Ayarları":
 # ==============================================================================
 elif module == "🔪 Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
+
+# ==============================================================================
+# YAZILIM SÜRÜMÜ (sol menünün en altı)
+# ==============================================================================
+st.sidebar.divider()
+st.sidebar.markdown(
+    f"<div style='font-style: italic; font-size: 8pt;'>Yazılım Sürümü: {get_version_label()}</div>",
+    unsafe_allow_html=True,
+)

@@ -1,0 +1,48 @@
+name: Update Version Info
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# main'e ardışık push'lar aynı anda commit atmaya çalışıp çakışmasın.
+concurrency:
+  group: update-version
+  cancel-in-progress: false
+
+jobs:
+  stamp:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write push timestamp
+        run: |
+          cat > version_info.json <<EOF
+          {
+            "pushed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "commit_sha": "${{ github.sha }}"
+          }
+          EOF
+
+      # GITHUB_TOKEN ile yapılan bu push, kendi "on: push" tetikleyicisini
+      # yeniden çalıştırmaz (GitHub'ın varsayılan davranışı) - sonsuz döngü riski yok.
+      - name: Commit and push version info
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add version_info.json
+          if git diff --cached --quiet; then
+            echo "No version change to commit."
+          else
+            git commit -m "Update deploy version info"
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
+          fi
