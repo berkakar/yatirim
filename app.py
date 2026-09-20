@@ -365,6 +365,7 @@ if module == NAV_HOME:
             alpaca_client = AlpacaClient(key_id, secret_key)
             alpaca_positions = alpaca_client.get_all_positions()
             render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
+            render_positions_summary_table(alpaca_positions)
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:
@@ -384,26 +385,6 @@ if module == NAV_HOME:
         st.metric("Alım Bölgesi Sinyali", len(st.session_state.scan_signals))
     else:
         st.info("Alım Bölgesi Tarama bu oturumda henüz çalıştırılmadı.")
-
-    st.divider()
-    st.subheader("🚀 Hızlı Erişim")
-
-    def _go_to_category(cat_name):
-        st.session_state["nav_category"] = cat_name
-        st.session_state["open_category"] = cat_name
-
-    nav_cols = st.columns(len(MODULE_GROUPS))
-    for col, cat_name in zip(nav_cols, MODULE_GROUPS.keys()):
-        col.button(
-            cat_name, use_container_width=True, key=f"quicknav_{cat_name}",
-            on_click=_go_to_category, args=(cat_name,),
-        )
-
-    if key_id and secret_key:
-        st.divider()
-        st.subheader("🦙 Alpaca Canlı Pozisyonlar")
-        if alpaca_positions is not None:
-            render_positions_summary_table(alpaca_positions)
 
 # ==============================================================================
 # 1. MODÜL: ALIM BÖLGESİ TARAMA (Fincan-Kulp + OBO/TOBO birleşik)
