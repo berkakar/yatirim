@@ -28,7 +28,7 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import render_alpaca_dashboard, render_account_summary
+from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
 from tefas_fonlari import render_turk_fonlari
@@ -36,8 +36,9 @@ from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
 from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
+from version_info import get_version_label
 
-NAV_HOME = "🏠 Özet"
+NAV_HOME = "🏠 Giriş Sayfası"
 MODULE_GROUPS = {
     "🔍 Alım Bölgesi Tarama": ["Alım Bölgesi Tarama"],
     "📊 Analiz": [
@@ -117,6 +118,12 @@ authenticator = stauth.Authenticate(
     st.secrets["cookie"]["key"],
     st.secrets["cookie"]["expiry_days"],
 )
+_LOGO_PATH = "assets/logo.jpg"
+if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
+    _logo_col1, _logo_col2, _logo_col3 = st.columns([1, 1, 1])
+    with _logo_col2:
+        st.image(_LOGO_PATH, use_container_width=True)
+
 authenticator.login(location="main")
 
 _auth_status = st.session_state.get("authentication_status")
@@ -129,7 +136,7 @@ elif _auth_status is None:
 
 username = st.session_state["username"]
 
-st.title("📈 Profesyonel Yatırım Terminali")
+st.title("📈 Yatırım Terminali")
 authenticator.logout("🚪 Çıkış Yap", "sidebar")
 
 # ------------------------------------------------------------------------------
@@ -329,7 +336,7 @@ def render_chart_for(ticker):
 
 
 # ==============================================================================
-# 0. MODÜL: ÖZET (ANA SAYFA)
+# 0. MODÜL: GİRİŞ SAYFASI (ANA SAYFA)
 # ==============================================================================
 if module == NAV_HOME:
     st.header("🏠 Genel Bakış")
@@ -337,11 +344,12 @@ if module == NAV_HOME:
 
     key_id, secret_key = get_user_alpaca_creds(username)
 
+    alpaca_positions = None
     if key_id and secret_key:
         try:
-            client = AlpacaClient(key_id, secret_key)
-            positions = client.get_all_positions()
-            render_account_summary(client, username, positions)
+            alpaca_client = AlpacaClient(key_id, secret_key)
+            alpaca_positions = alpaca_client.get_all_positions()
+            render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:
@@ -375,6 +383,12 @@ if module == NAV_HOME:
             cat_name, use_container_width=True, key=f"quicknav_{cat_name}",
             on_click=_go_to_category, args=(cat_name,),
         )
+
+    if key_id and secret_key:
+        st.divider()
+        st.subheader("🦙 Alpaca Canlı Pozisyonlar")
+        if alpaca_positions is not None:
+            render_positions_summary_table(alpaca_positions)
 
 # ==============================================================================
 # 1. MODÜL: ALIM BÖLGESİ TARAMA (Fincan-Kulp + OBO/TOBO birleşik)
@@ -1416,3 +1430,12 @@ elif module == "BackTest":
 # ==============================================================================
 elif module == "🔪 Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
+
+# ==============================================================================
+# YAZILIM SÜRÜMÜ (sol menünün en altı)
+# ==============================================================================
+st.sidebar.divider()
+st.sidebar.markdown(
+    f"<div style='font-style: italic; font-size: 8pt;'>Yazılım Sürümü: {get_version_label()}</div>",
+    unsafe_allow_html=True,
+)

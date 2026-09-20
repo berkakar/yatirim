@@ -94,10 +94,12 @@ def format_order_row(order: dict) -> dict:
     }
 
 
-def render_account_summary(client: AlpacaClient, username: str, positions: list[dict]):
+def render_account_summary(client: AlpacaClient, username: str, positions: list[dict], show_initial_capital_setting: bool = True):
     """Nakit/toplam hesap değeri özeti ve ilk sermayeye göre anlık kâr -
     Genel Bakış (app.py) ve Alpaca Canlı Pozisyonlar sayfalarında ortak
-    gösterilir, tek bir yerden hesaplanır."""
+    gösterilir, tek bir yerden hesaplanır. `show_initial_capital_setting=False`
+    ile Giriş Sayfası'nda ayar bölümü gizlenir (o ayar ayrı bir yerde
+    yönetilir), ancak kayıtlı sermayeye göre kâr hesaplaması yine yapılır."""
     account = client.get_account()
     cash = float(account["cash"])
     equity = float(account["equity"])  # nakit + tüm pozisyonların güncel piyasa değeri
@@ -105,27 +107,28 @@ def render_account_summary(client: AlpacaClient, username: str, positions: list[
     if 'initial_capital' not in st.session_state:
         st.session_state.initial_capital = load_initial_capital(username)
 
-    with st.expander(
-        "💵 İlk Sermaye Ayarı",
-        expanded=st.session_state.initial_capital is None,
-    ):
-        st.caption(
-            "Alım/satım sayısı arttıkça 'açık pozisyonların gerçekleşmemiş K/Z toplamı' kavramı "
-            "portföyün gerçek performansını yansıtmaz hale gelir. Bunun yerine, hesaba ilk "
-            "yatırdığınız sermayeyi bir kez girin - kâr, o andaki toplam hesap değeri (nakit + "
-            "pozisyonlar) ile bu sermaye karşılaştırılarak hesaplanır; yapılan tüm alım/satımların "
-            "net etkisini (gerçekleşmiş ve gerçekleşmemiş birlikte) kapsar."
-        )
-        new_capital = st.number_input(
-            "İlk yatırılan sermaye ($)", min_value=0.0,
-            value=float(st.session_state.initial_capital or 0.0), step=100.0,
-            key="initial_capital_input",
-        )
-        if st.button("Kaydet", key="save_initial_capital_btn"):
-            save_initial_capital(new_capital, username)
-            st.session_state.initial_capital = new_capital
-            st.success("İlk sermaye kaydedildi.")
-            st.rerun()
+    if show_initial_capital_setting:
+        with st.expander(
+            "💵 İlk Sermaye Ayarı",
+            expanded=st.session_state.initial_capital is None,
+        ):
+            st.caption(
+                "Alım/satım sayısı arttıkça 'açık pozisyonların gerçekleşmemiş K/Z toplamı' kavramı "
+                "portföyün gerçek performansını yansıtmaz hale gelir. Bunun yerine, hesaba ilk "
+                "yatırdığınız sermayeyi bir kez girin - kâr, o andaki toplam hesap değeri (nakit + "
+                "pozisyonlar) ile bu sermaye karşılaştırılarak hesaplanır; yapılan tüm alım/satımların "
+                "net etkisini (gerçekleşmiş ve gerçekleşmemiş birlikte) kapsar."
+            )
+            new_capital = st.number_input(
+                "İlk yatırılan sermaye ($)", min_value=0.0,
+                value=float(st.session_state.initial_capital or 0.0), step=100.0,
+                key="initial_capital_input",
+            )
+            if st.button("Kaydet", key="save_initial_capital_btn"):
+                save_initial_capital(new_capital, username)
+                st.session_state.initial_capital = new_capital
+                st.success("İlk sermaye kaydedildi.")
+                st.rerun()
 
     initial_capital = st.session_state.initial_capital
 
@@ -139,6 +142,28 @@ def render_account_summary(client: AlpacaClient, username: str, positions: list[
         c4.metric("Portföyün Anlık Kârı", f"${total_pl:,.2f}", f"{total_pl_pct:+.2f}%")
     else:
         c4.metric("Portföyün Anlık Kârı", "—")
+
+
+def render_positions_summary_table(positions: list[dict]):
+    """Açık pozisyonların kısa özeti - hisse, güncel fiyat, ortalama maliyet ve
+    kâr/zarar - Giriş Sayfası'nda gösterilir. Alpaca Canlı Pozisyonlar
+    sayfasındaki stop-loss detaylarını (render_alpaca_dashboard) içermez."""
+    if not positions:
+        st.info("Açık pozisyon yok.")
+        return
+
+    rows = []
+    for pos in positions:
+        rows.append({
+            "Hisse": pos["symbol"],
+            "Adet": abs(float(pos["qty"])),
+            "Ortalama Maliyet": round(float(pos["avg_entry_price"]), 2),
+            "Güncel Fiyat": round(float(pos["current_price"]), 2),
+            "Kâr/Zarar ($)": round(float(pos["unrealized_pl"]), 2),
+            "Kâr/Zarar (%)": round(float(pos["unrealized_plpc"]) * 100, 2),
+        })
+
+    st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
 
 
 def render_realized_pnl_table(client: AlpacaClient, orders: list[dict], history_days: int):
