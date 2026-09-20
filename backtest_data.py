@@ -63,8 +63,14 @@ def append_results(username: str, new_runs: list[dict]) -> list[dict]:
     return results
 
 
-def new_run_id(symbol: str, algorithm: str, timeframe: str) -> str:
+def new_run_id(symbol: str, algorithm: str, timeframe: str, stop_algorithm: str | None = None) -> str:
     ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    # stop_algorithm sadece verildiğinde eklenir (backtest.py, birden fazla
+    # stop algoritmasını aynı saniyede koşabildiği için) - diğer çağıranlar
+    # (app.py, otomatik_alim_satim_core.py) tek (varsayılan) stop algoritmasıyla
+    # çalıştığından eski id biçimini korur.
+    if stop_algorithm:
+        return f"{symbol}-{algorithm}-{timeframe}-{stop_algorithm}-{ts}"
     return f"{symbol}-{algorithm}-{timeframe}-{ts}"
 
 

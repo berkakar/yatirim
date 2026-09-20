@@ -10,6 +10,7 @@ from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
 from ui_style import zebra_style
 
 GITHUB_REPO = "berkakar/yatirim"
@@ -330,6 +331,22 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
 
     st.subheader("🛑 Risk Yönetimi")
+    stop_algorithm_ids = list(STOP_ALGORITHMS.keys())
+    current_stop_algorithm = config.get("stop_algorithm", DEFAULT_STOP_ALGORITHM)
+    if current_stop_algorithm not in stop_algorithm_ids:
+        current_stop_algorithm = DEFAULT_STOP_ALGORITHM
+    selected_stop_algorithm = st.selectbox(
+        "Stop-Loss Algoritması",
+        stop_algorithm_ids,
+        index=stop_algorithm_ids.index(current_stop_algorithm),
+        format_func=lambda k: STOP_ALGORITHMS[k].label,
+        key="pbp_stop_algorithm",
+        help="Bir pozisyon açıldığında ilk stop'un nereye kurulacağını ve zamanla nasıl "
+             "sıkılaştırılacağını (trailing) belirler - hem canlı alım (bu modül + Trailing Stop "
+             "modülü) hem BackTest için geçerlidir, ikisi de aynı algoritmayı kullanır. Şu an tek "
+             "algoritma mevcut; yenileri eklendiğinde burada seçilebilir olacak.",
+    )
+
     sl1, sl2 = st.columns([1, 2])
     stop_loss_enabled = sl1.checkbox(
         "Zarar Kes", value=bool(config.get("stop_loss_enabled")), key="pbp_stop_loss_enabled",
@@ -388,6 +405,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
                 "budget": float(budget),
                 "weights": weights_map,
                 "algorithm": selected_algorithm,
+                "stop_algorithm": selected_stop_algorithm,
                 "symbol_settings": symbol_settings,
                 "stop_loss_enabled": bool(stop_loss_enabled),
                 "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,

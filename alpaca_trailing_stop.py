@@ -1,6 +1,20 @@
 """
 Structure-based trailing-stop bot for Alpaca paper trading.
 
+Steps 2-5 below (the actual stop-price decision logic, as opposed to order
+management) are the "breakeven_atr_structure" algorithm in stop_algorithms.py
+- one entry in a pluggable STOP_ALGORITHMS registry (mirrors buy_algorithms.py's
+ALGORITHMS for premium buy points), selected via manage_position's
+`stop_algorithm` argument. run_once resolves which one to use per position
+via resolve_stop_algorithm: the symbol's portfolio_config_berkakar.json
+symbol_settings[symbol].stop_algorithm override if set, else the
+portfolio-wide config.stop_algorithm, else DEFAULT_STOP_ALGORITHM - same
+config file and same per-symbol-override-over-portfolio-default precedence
+alpaca_buy_points.py already uses for which buy algorithm is active. This
+module handles everything ELSE: order lookup/placement/resizing,
+extended-hours recovery, and calling into whichever algorithm is selected
+for the actual price decision.
+
 Manages every open position in the account. Each pass, per position:
 
   1. Makes sure a stop order is resting (places an initial fixed-% stop
@@ -73,21 +87,26 @@ from dotenv import load_dotenv
 
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
-from indicators import atr, ema
-from structure import Bar, validated_trailing_level
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext
+from structure import Bar
 from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
 
 TIMEFRAME = os.environ.get("TRADE_TIMEFRAME", "30Min")
 SWING_ORDER = int(os.environ.get("TRADE_SWING_ORDER", "2"))
-INITIAL_STOP_PCT = float(os.environ.get("TRADE_INITIAL_STOP_PCT", "1.5")) / 100
 POLL_SECONDS = int(os.environ.get("TRADE_POLL_SECONDS", "60"))
 
+# ATR/yapısal-trail ayarları - birden fazla stop algoritması arasında PAYLAŞILAN
+# (structure.validated_trailing_level'ı kullanan her algoritmanın aynı şekilde
+# çağırdığı) genel tuning; env var'larla operasyonel olarak ayarlanabilir.
+# initial_stop_pct/breakeven_trigger_pct gibi bir algoritmaya ÖZGÜ, o
+# algoritmanın tanımının parçası olan sabitler artık burada DEĞİL -
+# stop_algorithms.py'de ilgili algoritma fonksiyonunun kendi varsayılanı
+# olarak tanımlı (bkz. o dosyanın modül docstring'i).
 LOOKBACK_DAYS = int(os.environ.get("TRADE_LOOKBACK_DAYS", "15"))
 ATR_PERIOD = int(os.environ.get("TRADE_ATR_PERIOD", "14"))
 ATR_MULTIPLIER = float(os.environ.get("TRADE_ATR_MULTIPLIER", "0.25"))
-BREAKEVEN_TRIGGER_PCT = float(os.environ.get("TRADE_BREAKEVEN_TRIGGER_PCT", "1.0")) / 100
 STALE_REFERENCE_DAYS = float(os.environ.get("TRADE_STALE_REFERENCE_DAYS", "10"))
 TREND_EMA_PERIOD = int(os.environ.get("TRADE_TREND_EMA_PERIOD", "50"))
 
@@ -132,17 +151,36 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
-def load_top_up_stop_mode() -> str:
+def load_portfolio_config() -> dict:
+    """Premium Buy Point modülünün yazdığı portföy config'i (bkz.
+    github_config.py) - top_up_stop_mode, stop_algorithm ve hisse bazlı
+    symbol_settings override'ları burada. Dosya yoksa boş dict döner."""
+    if not os.path.exists(CONFIG_PATH):
+        return {}
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_top_up_stop_mode(config: dict | None = None) -> str:
     """Premium Buy Point modülünde kullanıcının seçtiği, ilave alım (top-up)
     sonrası resting stop davranışı - "keep" (varsayılan: sadece adet
     genişler, fiyat seviyesi değişmez) veya "tighten_to_new_entry" (yeni
     ortalama giriş fiyatına göre bir nefes payı adayı da eklenir - bkz.
     manage_position, sadece stop'u sıkılaştırırsa uygulanır)."""
-    if not os.path.exists(CONFIG_PATH):
-        return TOP_UP_STOP_MODE_DEFAULT
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        config = json.load(f)
+    if config is None:
+        config = load_portfolio_config()
     return config.get("top_up_stop_mode") or TOP_UP_STOP_MODE_DEFAULT
+
+
+def resolve_stop_algorithm(config: dict, symbol: str) -> str:
+    """Bir sembol için aktif stop-loss algoritmasını çözer: hisse bazlı
+    override (symbol_settings[symbol].stop_algorithm) varsa o, yoksa
+    portföy geneli varsayılan (config.stop_algorithm), o da yoksa/geçersizse
+    DEFAULT_STOP_ALGORITHM - buy_algorithms için alpaca_buy_points.py'nin
+    kullandığı aynı çözümleme deseni (bkz. run_once)."""
+    settings = (config.get("symbol_settings") or {}).get(symbol) or {}
+    algo = settings.get("stop_algorithm") or config.get("stop_algorithm") or DEFAULT_STOP_ALGORITHM
+    return algo if algo in STOP_ALGORITHMS else DEFAULT_STOP_ALGORITHM
 
 
 def _parse_iso(ts: str) -> datetime:
@@ -214,7 +252,7 @@ def get_bars_for_timeframe(
     her per-sembol bar çekiminde şart.
 
     `cache_file` verilirse (bkz. get_regular_hours_bars), "1Day" dalı da
-    kendi verisini DAILY_BARS_CACHE_PATH üzerinden alır (check_trend_filter/
+    kendi verisini DAILY_BARS_CACHE_PATH üzerinden alır (get_trend_daily_closes/
     _get_daily_closes ile aynı önbellek) - çağıran taraf hangi cache_file'ı
     geçerse geçsin, günlük bar'lar her zaman günlük cache'te tutulur; bu
     parametre sadece "önbellekleme açık mı" sinyalini taşır."""
@@ -288,22 +326,16 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
     return max(default_start, earliest)
 
 
-def check_trend_filter(client: AlpacaClient, symbol: str, side: str) -> bool:
-    """True if the higher-timeframe (daily) trend still supports trailing
-    further in this direction. Defaults to True (don't block) when there
-    isn't enough daily history yet, or the filter is disabled (period<=0)."""
+def get_trend_daily_closes(client: AlpacaClient, symbol: str) -> list[float]:
+    """Seçili stop algoritmasının trend filtresi (bkz. stop_algorithms._trend_ok)
+    için günlük kapanışlar - TREND_EMA_PERIOD*4 günlük pencere,
+    DAILY_BARS_CACHE_PATH önbelleği üzerinden. Filtre kapalıysa (period<=0)
+    boş liste döner (algoritma bunu "engelleme" olarak yorumlar)."""
     if TREND_EMA_PERIOD <= 0:
-        return True
-
+        return []
     start = datetime.now(timezone.utc) - timedelta(days=TREND_EMA_PERIOD * 4)
     raw_bars = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", start)
-    closes = [b["c"] for b in raw_bars if _parse_iso(b["t"]) >= start]
-    trend_ema = ema(closes, TREND_EMA_PERIOD)
-    if trend_ema is None:
-        return True
-
-    last_close = closes[-1]
-    return last_close > trend_ema if side == "long" else last_close < trend_ema
+    return [b["c"] for b in raw_bars if _parse_iso(b["t"]) >= start]
 
 
 def seconds_until_open(clock: dict) -> float:
@@ -315,8 +347,8 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
     """En son (open/replaced/canceled/expired fark etmez) stop emrinin
     fiyatı - ama sadece yakın zamanda (EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS
     içinde) kurulmuşsa; aksi halde None. manage_position, resting bir stop
-    bulamadığında koruma seviyesini INITIAL_STOP_PCT'e sıfırlamak yerine
-    buradan trail edilmiş son seviyeyi geri yükleyebilmesi için var - en
+    bulamadığında koruma seviyesini seçili algoritmanın naif ilk stop'una
+    sıfırlamak yerine buradan trail edilmiş son seviyeyi geri yükleyebilmesi için var - en
     tipik senaryo, extended-hours guard'ın acil limit emrinin seans
     bitiminde dolmadan düşmesi.
 
@@ -333,12 +365,16 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
     return float(latest["stop_price"])
 
 
-def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT) -> None:
+def manage_position(
+    client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM,
+) -> None:
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
     side = "long" if signed_qty > 0 else "short"
     entry_price = float(pos["avg_entry_price"])
+    algo = STOP_ALGORITHMS[stop_algorithm]
 
     topped_up = False
     stop_order = client.get_open_stop_order(symbol)
@@ -354,13 +390,14 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
                 f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
             return
 
-        naive_stop = entry_price * (1 - INITIAL_STOP_PCT) if side == "long" else entry_price * (1 + INITIAL_STOP_PCT)
+        naive_stop = algo.initial_stop(entry_price, side)
         restored = last_trailed_stop_price(client, symbol)
         if restored is not None:
             # Extended-hours guard'ın bıraktığı acil limit emri seans
             # bitiminde dolmadan düşmüş olabilir - bu durumda structure
-            # trail'in kazandırdığı ilerlemeyi INITIAL_STOP_PCT'e sıfırlamak
-            # yerine, son bilinen trail seviyesini geri yüklüyoruz. İki
+            # trail'in kazandırdığı ilerlemeyi seçili algoritmanın naif ilk
+            # stop'una sıfırlamak yerine, son bilinen trail seviyesini geri
+            # yüklüyoruz. İki
             # adaydan (restored, naive) gerçekten sıkı olanı seçiliyor -
             # aşağıdaki candidate seçimindeki "en çok sıkılaştıran" kuralıyla
             # aynı mantık.
@@ -394,66 +431,25 @@ def manage_position(client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP
         log(f"{symbol}: no regular-hours bars available, skipping.")
         return
 
-    last_price = bars[-1].c
-    candidates = []  # (price, reason) - the caller picks whichever tightens the stop most
-
-    if side == "long":
-        gain_pct = (last_price - entry_price) / entry_price
-    else:
-        gain_pct = (entry_price - last_price) / entry_price
-
-    if gain_pct >= BREAKEVEN_TRIGGER_PCT:
-        if side == "long" and entry_price > current_stop_price and entry_price < last_price:
-            candidates.append((entry_price, "breakeven"))
-        elif side == "short" and entry_price < current_stop_price and entry_price > last_price:
-            candidates.append((entry_price, "breakeven"))
-
-    if topped_up and top_up_stop_mode == "tighten_to_new_entry":
-        # Premium Buy Point modülünde kullanıcının seçtiği tercih: top-up,
-        # pozisyonun ortalama giriş fiyatını değiştirmiş olabilir - yeni
-        # ortalamaya göre bir INITIAL_STOP_PCT nefes payı adayı da eklenir.
-        # Aşağıdaki "en çok sıkılaştıran"+improves seçimi sayesinde bu aday
-        # mevcut korumayı asla gevşetmez, sadece sıkılaştırabilir.
-        if side == "long":
-            top_up_candidate = entry_price * (1 - INITIAL_STOP_PCT)
-            if top_up_candidate < last_price:
-                candidates.append((top_up_candidate, "top-up nefes payı"))
-        else:
-            top_up_candidate = entry_price * (1 + INITIAL_STOP_PCT)
-            if top_up_candidate > last_price:
-                candidates.append((top_up_candidate, "top-up nefes payı"))
-
-    if check_trend_filter(client, symbol, side):
-        pivot = validated_trailing_level(bars, side, SWING_ORDER, STALE_REFERENCE_DAYS)
-        if pivot is not None:
-            atr_value = atr(bars, ATR_PERIOD)
-            buffer_amount = atr_value * ATR_MULTIPLIER if atr_value is not None else pivot.price * FALLBACK_BUFFER_PCT
-
-            if side == "long":
-                candidate = pivot.price - buffer_amount
-                if candidate < last_price:
-                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
-            else:
-                candidate = pivot.price + buffer_amount
-                if candidate > last_price:
-                    candidates.append((candidate, f"structure@{pivot.price:.2f}"))
-
-    if not candidates:
-        return
-
-    if side == "long":
-        best_price, reason = max(candidates, key=lambda c: c[0])
-        improves = best_price > current_stop_price
-    else:
-        best_price, reason = min(candidates, key=lambda c: c[0])
-        improves = best_price < current_stop_price
-
-    if not improves:
+    daily_closes = get_trend_daily_closes(client, symbol)
+    ctx = StopContext(
+        side=side, entry_price=entry_price, current_stop_price=current_stop_price,
+        bars=bars, daily_closes=daily_closes, topped_up=topped_up, top_up_stop_mode=top_up_stop_mode,
+    )
+    # initial_stop_pct/breakeven_trigger_pct GEÇİLMİYOR - bunlar algoritmaya
+    # özgü sabitler (seçili algoritmanın kendi varsayılanı geçerli olsun diye,
+    # bkz. stop_algorithms.py). ATR/yapısal-trail ayarları ise algoritmalar
+    # arası paylaşılan genel tuning olduğu için buradan geçirilmeye devam eder.
+    decision = algo.trail(
+        ctx, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER, stale_reference_days=STALE_REFERENCE_DAYS,
+        trend_ema_period=TREND_EMA_PERIOD, swing_order=SWING_ORDER, fallback_buffer_pct=FALLBACK_BUFFER_PCT,
+    )
+    if decision is None:
         return
 
     try:
-        client.replace_stop_price(stop_order_id, best_price)
-        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {best_price:.2f} ({reason}).")
+        client.replace_stop_price(stop_order_id, decision.price)
+        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {decision.price:.2f} ({decision.reason}).")
     except requests.HTTPError as e:
         log(f"{symbol}: failed to replace stop order: {e}")
 
@@ -636,9 +632,11 @@ def run_once(client: AlpacaClient) -> None:
         log("No open equity positions.")
         return
 
-    top_up_stop_mode = load_top_up_stop_mode()
+    config = load_portfolio_config()
+    top_up_stop_mode = load_top_up_stop_mode(config)
     for pos in positions:
-        manage_position(client, pos, top_up_stop_mode)
+        stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
+        manage_position(client, pos, top_up_stop_mode, stop_algorithm)
 
 
 def run_loop(client: AlpacaClient) -> None:

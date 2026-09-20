@@ -1,12 +1,15 @@
 """Walk-forward backtest engine for the premium buy-point algorithms
-(buy_algorithms.py) paired with the structure-based trailing stop
-(alpaca_trailing_stop.py / structure.py), replayed against historical bars
-instead of live Alpaca orders.
+(buy_algorithms.py) paired with a pluggable stop-loss algorithm
+(stop_algorithms.py, same registry the live system uses in
+alpaca_trailing_stop.py), replayed against historical bars instead of live
+Alpaca orders.
 
 Reuses the exact same decision functions the live system uses
-(buy_algorithms.ALGORITHMS, reject_if_marketable, structure.
-validated_trailing_level, indicators.atr/ema) and the same tunable
-constants (alpaca_trailing_stop.INITIAL_STOP_PCT, ATR_PERIOD, etc.), so a
+(buy_algorithms.ALGORITHMS, reject_if_marketable, stop_algorithms.
+STOP_ALGORITHMS) and the same shared structure-trail tuning constants
+(alpaca_trailing_stop.ATR_PERIOD, etc. - algorithm-specific constants like
+each stop algorithm's own initial-stop/breakeven percentages live in
+stop_algorithms.py instead, as that algorithm's own defaults), so a
 backtest result reflects what the live bot would actually have done, not a
 separate approximation of it.
 
@@ -24,9 +27,9 @@ Order simulation mirrors the live system:
     alpaca_buy_points.check_symbol() would (signal moved / went invalid).
   - Position open -> stopped out if the bar's low touches the stop
     (filled at the stop price, or the bar's open if it gapped through);
-    otherwise the same breakeven/structure-trail candidates as
-    alpaca_trailing_stop.manage_position() are evaluated to (only) tighten
-    the stop for subsequent bars.
+    otherwise the selected stop algorithm's trail() is evaluated, same as
+    alpaca_trailing_stop.manage_position() does live, to (only) tighten the
+    stop for subsequent bars.
   - A position still open when the fetched window ends is closed at the
     last bar's close ("test_end_close") so P&L is always well-defined.
 """
@@ -37,16 +40,14 @@ from datetime import datetime, timedelta
 from alpaca_trailing_stop import (
     ATR_MULTIPLIER,
     ATR_PERIOD,
-    BREAKEVEN_TRIGGER_PCT,
     FALLBACK_BUFFER_PCT,
-    INITIAL_STOP_PCT,
     STALE_REFERENCE_DAYS,
     TREND_EMA_PERIOD,
 )
 from alpaca_trailing_stop import LOOKBACK_DAYS as TRAIL_LOOKBACK_DAYS
 from buy_algorithms import ALGORITHMS, reject_if_marketable
-from indicators import atr, ema
-from structure import Bar, validated_trailing_level
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext
+from structure import Bar
 
 SIGNAL_LOOKBACK_DAYS = 60  # matches alpaca_buy_points.py's BUY_LOOKBACK_DAYS default
 SWING_ORDER = 2
@@ -91,6 +92,7 @@ class BacktestResult:
     days_of_data: int
     days_before_trading: int
     starting_budget: float
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM
     trades: list = field(default_factory=list)
     final_value: float = 0.0
     stop_loss_triggered: bool = False
@@ -108,6 +110,7 @@ class BacktestResult:
 def run_backtest(
     symbol: str, algorithm: str, timeframe: str, bars: list[Bar], daily_pairs: list[tuple],
     days_of_data: int, days_before_trading: int, starting_budget: float, max_loss_pct: float | None = None,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM,
 ) -> BacktestResult:
     """daily_pairs: [(date, close), ...] sorted ascending, spanning at least
     from (bars[0] - ~400 days) to bars[-1] so SMA200-style daily gates have
@@ -117,13 +120,19 @@ def run_backtest(
     gerçekleşmiş (kapanmış işlemlerdeki) toplam zarar bu yüzdeye ulaştığı
     anda yeni alım/satım durdurulur - o ana kadar açık kalan pozisyon
     kendi stop'uyla (veya test sonunda kapanışla) yönetilmeye devam eder,
-    sadece yeni giriş sinyalleri artık işleme alınmaz."""
-    result = BacktestResult(symbol, algorithm, timeframe, days_of_data, days_before_trading, starting_budget)
+    sadece yeni giriş sinyalleri artık işleme alınmaz.
+
+    stop_algorithm: stop_algorithms.STOP_ALGORITHMS'ten seçilen id - canlı
+    sistemin (alpaca_trailing_stop.manage_position) hangi algoritmayla
+    çalıştığının aynısı simüle edilir."""
+    result = BacktestResult(symbol, algorithm, timeframe, days_of_data, days_before_trading, starting_budget,
+                             stop_algorithm=stop_algorithm)
     result.final_value = starting_budget
     if not bars:
         return result
 
     _, algo_fn = ALGORITHMS[algorithm]
+    stop_algo = STOP_ALGORITHMS[stop_algorithm]
     is_daily_tf = timeframe == "1Day"
 
     trading_start = _parse(bars[0].t) + timedelta(days=days_before_trading)
@@ -154,33 +163,21 @@ def run_backtest(
                 continue
 
             struct_bars = _window(bars, i, TRAIL_LOOKBACK_DAYS, floor_idx=position["entry_idx"])
-            candidates = []
-            entry_price, last_price = position["entry_price"], bar.c
-            gain_pct = (last_price - entry_price) / entry_price
-            if (gain_pct >= BREAKEVEN_TRIGGER_PCT and entry_price > position["stop_price"]
-                    and entry_price < last_price):
-                candidates.append((entry_price, "breakeven"))
-
-            trend_ok = True
-            if TREND_EMA_PERIOD > 0:
-                trend_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf)
-                trend_val = ema(trend_closes, TREND_EMA_PERIOD)
-                if trend_val is not None:
-                    trend_ok = trend_closes[-1] > trend_val
-
-            if trend_ok:
-                pivot = validated_trailing_level(struct_bars, "long", SWING_ORDER, STALE_REFERENCE_DAYS)
-                if pivot is not None:
-                    atr_value = atr(struct_bars, ATR_PERIOD)
-                    buffer_amount = atr_value * ATR_MULTIPLIER if atr_value is not None else pivot.price * FALLBACK_BUFFER_PCT
-                    candidate = pivot.price - buffer_amount
-                    if candidate < last_price:
-                        candidates.append((candidate, f"structure@{pivot.price:.2f}"))
-
-            if candidates:
-                best_price, _reason = max(candidates, key=lambda c: c[0])
-                if best_price > position["stop_price"]:
-                    position["stop_price"] = best_price
+            daily_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf)
+            ctx = StopContext(
+                side="long", entry_price=position["entry_price"], current_stop_price=position["stop_price"],
+                bars=struct_bars, daily_closes=daily_closes,
+            )
+            # initial_stop_pct/breakeven_trigger_pct GEÇİLMİYOR - bunlar
+            # algoritmaya özgü sabitler (bkz. alpaca_trailing_stop.manage_position'daki
+            # aynı gerekçe). ATR/yapısal-trail ayarları algoritmalar arası
+            # paylaşılan genel tuning olduğu için geçirilmeye devam eder.
+            decision = stop_algo.trail(
+                ctx, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER, stale_reference_days=STALE_REFERENCE_DAYS,
+                trend_ema_period=TREND_EMA_PERIOD, swing_order=SWING_ORDER, fallback_buffer_pct=FALLBACK_BUFFER_PCT,
+            )
+            if decision is not None and decision.price > position["stop_price"]:
+                position["stop_price"] = decision.price
             continue
 
         if result.stop_loss_triggered:
@@ -209,14 +206,16 @@ def run_backtest(
                 resting = None
             elif abs(signal.price - resting["price"]) >= 0.01:
                 qty = math.floor(cash / signal.price) if signal.price > 0 else 0
+                initial_stop = stop_algo.initial_stop(signal.price, "long")
                 resting = ({"price": round(signal.price, 2), "qty": qty,
-                            "stop_price": round(signal.price * (1 - INITIAL_STOP_PCT), 2), "reason": signal.reason}
+                            "stop_price": round(initial_stop, 2), "reason": signal.reason}
                            if qty > 0 else None)
         elif signal is not None:
             qty = math.floor(cash / signal.price) if signal.price > 0 else 0
             if qty > 0:
+                initial_stop = stop_algo.initial_stop(signal.price, "long")
                 resting = {"price": round(signal.price, 2), "qty": qty,
-                           "stop_price": round(signal.price * (1 - INITIAL_STOP_PCT), 2), "reason": signal.reason}
+                           "stop_price": round(initial_stop, 2), "reason": signal.reason}
 
     if position is not None:
         last_bar = bars[-1]
