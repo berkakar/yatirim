@@ -27,21 +27,24 @@ MODE_LABELS = {DAY: "☀️ Gündüz", NIGHT: "🌙 Gece"}
 # "Gece": camgöbeği/lacivert ağırlıklı, TradingView/Bloomberg tarzı koyu
 # terminal paleti (kontrast ve göz yorgunluğu için saf siyah değil).
 PALETTES = {
+    # Not: metin/arka plan çiftleri (text, text_muted, positive, negative,
+    # warning - hem bg_elevated hem bg_subtle üzerinde) WCAG AA (>=4.5:1)
+    # eşiğini geçecek şekilde seçildi; tablolarda okunabilirlik için önemli.
     DAY: dict(
         bg="#f4f9f8",
         bg_elevated="#ffffff",
-        bg_subtle="#e7f1ef",
+        bg_subtle="#dcebe6",
         sidebar_bg="#eef6f4",
-        border="#d7e6e3",
+        border="#c9ddd7",
         text="#0f2a2c",
-        text_muted="#5c7a78",
+        text_muted="#4f6b69",
         primary="#0a7f72",
         primary_hover="#086b60",
         on_primary="#ffffff",
         accent="#2f6fed",
-        positive="#1a8f4c",
-        negative="#d1293d",
-        warning="#b5720a",
+        positive="#0f6b38",
+        negative="#c31f35",
+        warning="#8a5606",
         info="#2f6fed",
         code_bg="#eef2f7",
         plotly_template="plotly_white",
@@ -49,9 +52,9 @@ PALETTES = {
     NIGHT: dict(
         bg="#0a0e17",
         bg_elevated="#131a29",
-        bg_subtle="#1a2338",
+        bg_subtle="#212c47",
         sidebar_bg="#0d1320",
-        border="#26314a",
+        border="#324066",
         text="#e7edf7",
         text_muted="#8b96ac",
         primary="#2dd4bf",
@@ -253,6 +256,17 @@ def inject_css(mode=None):
             border: 1px solid {p['border']};
             border-radius: 10px;
             padding: 0.75rem 1rem;
+        }}
+
+        /* st.dataframe ızgarası <canvas> üzerine çizilir; başlık satırının
+        (ve Styler ile boyanmamış hücrelerin) rengi Streamlit'in tek statik
+        temasından (config.toml) gelir ve CSS ile değiştirilemez. Burada en
+        azından ızgarayı temayla uyumlu bir çerçeveyle "kart" gibi sarmalıyoruz
+        ki başlık şeridi kopuk değil, kasıtlı bir tasarım gibi görünsün. */
+        [data-testid="stDataFrame"] {{
+            border: 1px solid {p['border']};
+            border-radius: 8px;
+            overflow: hidden;
         }}
 
         /* Segmented control / radio (görünüm anahtarı dahil) */
