@@ -2,3 +2,5 @@
 .streamlit/*
 !.streamlit/config.toml
 .env
+__pycache__/
+*.pyc
