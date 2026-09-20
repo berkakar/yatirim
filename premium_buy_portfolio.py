@@ -12,7 +12,7 @@ from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 GITHUB_REPO = "berkakar/yatirim"
 BUY_LOOKBACK_DAYS = 60
@@ -79,10 +79,12 @@ def _render_buy_point_table(
             row["Durum"] = "Pozisyon Açık" if has_position else ("Bekleniyor" if active_signal else "Sinyal Yok")
         rows.append(row)
 
+    freshness_caption(
+        f"Veri güncelliği: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT (Alpaca'dan anlık çekildi, "
+        f"{PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir)."
+    )
     st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
     st.caption(
-        f"Son güncelleme: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT "
-        f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
         "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
         "(\"—\" = sinyal yok). 'Kullanılan Algoritma', 'Stop Loss Algoritması' ve 'Kullanılacak Fiyat', o "
         "hisse için yukarıda (Hisse Bazlı Algoritma Seçimi) seçtiğiniz - yoksa aşağıdaki (Varsayılan "
@@ -517,6 +519,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         .sort_values("_sort_ts", ascending=False)
         .drop(columns=["_sort_ts"])
     )
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
     st.dataframe(zebra_style(history_df, extra_style_fn=rebuy_row_style), use_container_width=True, hide_index=True)
     st.caption(
         "Turuncu yazılı satırlar, Alım-Stop-Alım Ek Yeteneği ile stop sonrası otomatik yapılan yeniden "

@@ -189,6 +189,19 @@ def load_cached_dtw_results(max_warping_window, time_penalty):
     return None
 
 
+def load_cached_dtw_meta():
+    """load_cached_dtw_results'ın döndürmediği _meta bloğunu (last_update_date)
+    okur - sadece bir tablonun üzerinde güncellik notu göstermek için kullanılır,
+    hangi parametrelerle hesaplandığının bir önemi yok."""
+    if os.path.exists(DTW_RESULTS_CACHE_FILE):
+        try:
+            with open(DTW_RESULTS_CACHE_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f).get("_meta", {})
+        except Exception:
+            pass
+    return {}
+
+
 def save_cached_dtw_results(max_warping_window, time_penalty, self_sim):
     """Hesaplanan DTW öz-benzerlik sonuçlarını diske kaydeder."""
     today_str = str(date.today())

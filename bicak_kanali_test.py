@@ -9,6 +9,9 @@ Analizi" modülündeki gibi sütun başlıklarına tıklanarak sıralanabilir
 değildir, sadece yöntemin görsel doğrulaması amaçlıdır - bkz.
 bicak_kanali.py."""
 
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -20,6 +23,9 @@ from scanner import (
     bars_from_df, get_scanner_data,
 )
 from structure import Bar
+from ui_style import freshness_caption
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # "4Hour" bilinçli olarak scanner.SCAN_TIMEFRAMES'e eklenmedi (app.py'deki Alım
 # Bölgesi Tarama gibi diğer modüllerde de çıkmasın diye) - sadece bu modülde,
@@ -145,6 +151,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
                     })
 
             st.session_state.bicak_signals = signals
+            st.session_state.bicak_signals_fetched_at = datetime.now(TR_TZ)
             st.session_state.bicak_show_chart = False
 
     if "bicak_signals" in st.session_state:
@@ -153,6 +160,9 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             st.warning("Tarama sonucunda yeşil çizginin (alım çizgisi) fiyatla kesiştiği hisse bulunamadı.")
         else:
             st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
+            fetched_at = st.session_state.get("bicak_signals_fetched_at")
+            if fetched_at:
+                freshness_caption(f"Veri güncelliği: {fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
             st.caption(
                 "💡 Tablo, Güncel Muma Uzaklık'a göre sıralı geliyor (en yakın kesişim en üstte). "
                 "Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "

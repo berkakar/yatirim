@@ -6,10 +6,11 @@ import plotly.graph_objects as go
 import json
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
 from github_config import read_json_from_github, write_json_to_github
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 from scanner import (
     get_scanner_data, bars_from_df, fetch_daily_pairs, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
@@ -25,6 +26,7 @@ from dtw_analysis import (
     compute_two_day_trend,
     find_local_extremes,
     load_cached_dtw_results,
+    load_cached_dtw_meta,
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
@@ -39,6 +41,8 @@ from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
 from version_info import get_version_label
 from connection_status import check_all_connections
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 NAV_HOME = "🏠 Giriş Sayfası"
 MODULE_GROUPS = {
@@ -502,9 +506,13 @@ elif module == "Alım Bölgesi Tarama":
                     del st.session_state[key]
             st.session_state.pop("scan_backtest_runs", None)
             st.session_state.scan_signals = signals
+            st.session_state.scan_signals_fetched_at = datetime.now(TR_TZ)
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
         st.subheader("🎯 Bulunan Formasyonlar")
+        scan_fetched_at = st.session_state.get("scan_signals_fetched_at")
+        if scan_fetched_at:
+            freshness_caption(f"Veri güncelliği: {scan_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
         scan_results_df = pd.DataFrame(st.session_state.scan_signals)
 
         def _toggle_all_scan_rows():
@@ -620,6 +628,7 @@ elif module == "Alım Bölgesi Tarama":
             if new_runs:
                 append_results(username, new_runs)
             st.session_state.scan_backtest_runs = bt_runs
+            st.session_state.scan_backtest_runs_run_at = run_at
             if not bt_runs:
                 st.warning("Seçilenler için veri çekilemediğinden backtest çalıştırılamadı.")
     elif 'scan_signals' in st.session_state:
@@ -627,6 +636,8 @@ elif module == "Alım Bölgesi Tarama":
 
     if 'scan_backtest_runs' in st.session_state and st.session_state.scan_backtest_runs:
         st.subheader("🧪 Backtest Sonuçları")
+        if st.session_state.get("scan_backtest_runs_run_at"):
+            freshness_caption(f"Bu backtest çalıştırması: {st.session_state['scan_backtest_runs_run_at']} UTC.")
         st.caption(
             "Yahoo Finance verisiyle çalışır (Alpaca hesabı gerekmez) - sonuçlar BackTest modülünün kalıcı "
             "geçmişine \"Yahoo Finance\" kaynağıyla etiketlenerek ekleniyor, bu yüzden Premium Buy Point "
@@ -800,6 +811,7 @@ elif module == "Stop Loss Hesaplayıcı":
         if results:
             df_res = pd.DataFrame(results)
             st.subheader("📊 Detaylı Stop Loss & EMA Analizi")
+            freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten analiz anında çekildi, en fazla 30 dk önbellekli olabilir).")
             st.dataframe(zebra_style(df_res), use_container_width=True, hide_index=True)
 
 # ==============================================================================
@@ -834,7 +846,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
                 status_text.text(f"Veriler kontrol ediliyor ({done}/{total}): {ticker}")
                 progress_bar.progress(done / total)
 
-            raw_results, freshly_fetched = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
+            raw_results, freshly_fetched, cached_at = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
 
             status_text.empty()
             progress_bar.empty()
@@ -843,6 +855,8 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
 
             # İş modeli alt sektör ortalamalarına ve 100 puanlık matrise göre skorla
             st.session_state.val_results = calculate_sector_relative_scores(raw_results)
+            valid_dates = [d for d in cached_at.values() if d]
+            st.session_state.val_oldest_cached_at = min(valid_dates) if valid_dates else None
 
     if 'val_results' in st.session_state and st.session_state.val_results:
         df_val = pd.DataFrame(st.session_state.val_results)
@@ -855,6 +869,12 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             df_val = df_val[df_val["Alt Sektör (İş Modeli)"] == selected_sub_sector]
 
         st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
+        oldest_cached_at = st.session_state.get("val_oldest_cached_at")
+        if oldest_cached_at:
+            freshness_caption(
+                f"Veri güncelliği: en eski hisse {oldest_cached_at} tarihinde çekilmiş "
+                "(her hisse kendi son bilanço tarihine göre bağımsız yenilenir, bkz. valuation._needs_refresh)."
+            )
 
         # Kolon İpuçları (Hint / Tooltip Yapılandırması)
         column_config = {
@@ -1265,6 +1285,9 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
         with tab1:
             st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
             if 'self_sim_results' in st.session_state and st.session_state.self_sim_results:
+                dtw_last_update = load_cached_dtw_meta().get("last_update_date")
+                if dtw_last_update:
+                    freshness_caption(f"Veri güncelliği: {dtw_last_update} (Yahoo Finance 5 dakikalık veri, günde 1 kez önbelleklenir).")
                 df_self = pd.DataFrame(st.session_state.self_sim_results)
 
                 # JSON'dan gelen sayısal skorları kesin olarak float tipine dönüştür

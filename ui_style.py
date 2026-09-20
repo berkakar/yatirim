@@ -17,6 +17,16 @@ def get_zebra_colors():
     return LIGHT_COLORS if theme_type == "light" else DARK_COLORS
 
 
+def freshness_caption(text: str) -> None:
+    """Bir tablonun hemen üzerinde, verinin ne zaman/ne sıklıkta güncellendiğini
+    belirten tutarlı bir not gösterir. Metnin kendisi (canlı çekim mi,
+    önbellek zamanı mı, periyodik bir rapor tarihi mi) çağıran tarafından
+    hazırlanır - kaynaklar arası "güncellik" anlamı farklı olduğundan (ör.
+    Alpaca her zaman anlık, KAP sadece periyodik rapor tarihi) tek bir ayrıştırma
+    mantığına zorlamak yerine sadece görsel biçimi (🕒 ikonu) ortaklaştırır."""
+    st.caption(f"🕒 {text}")
+
+
 def zebra_style(df, extra_style_fn=None):
     """DataFrame'e tema-duyarlı satır bandı (zebra) stili uygular.
 

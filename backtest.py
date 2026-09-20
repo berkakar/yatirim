@@ -23,7 +23,7 @@ from stop_loss_settings import load_stop_loss_settings
 from structure import Bar
 from ters_fibo import analyze as ters_fibo_analyze
 from ters_fibo import nearest_support_below
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
@@ -514,6 +514,9 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 "İşlem Sayısı": len(r.get("trades") or []),
                 "Zarar Kes": _format_stop_loss(r),
             } for r in runs]
+            latest_run_at = max((r.get("run_at") or "" for r in runs), default="")
+            if latest_run_at:
+                freshness_caption(f"En son çalıştırma: {latest_run_at} UTC (her satırın kendi zamanı 'Çalıştırma (UTC)' sütununda).")
             st.dataframe(
                 _style_summary(pd.DataFrame(summary_rows)), column_config=_SUMMARY_COLUMN_CONFIG,
                 use_container_width=True, hide_index=True,
@@ -559,6 +562,8 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                     "Adet": t.get("qty"),
                     "Sebep": t.get("reason"),
                 } for t in trades]
+                if picked_run.get("run_at"):
+                    freshness_caption(f"Bu çalıştırma tarihi: {picked_run['run_at']} UTC.")
                 st.dataframe(
                     _style_trades(pd.DataFrame(trade_rows)), column_config=_TRADES_COLUMN_CONFIG,
                     use_container_width=True, hide_index=True,

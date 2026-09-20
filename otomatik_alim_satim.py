@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 import streamlit as st
 
@@ -11,7 +14,9 @@ from otomatik_alim_satim_core import (
     DEFAULT_MIN_BACKTEST_PROFIT_PCT, DEFAULT_MOMENTUM_LOOKBACK_DAYS, TIMEFRAME_LABELS, build_universe,
     filter_profitable, narrow_by_momentum, run_backtests, scan_universe,
 )
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 GITHUB_REPO = "berkakar/yatirim"
 
@@ -108,12 +113,16 @@ def render_otomatik_alim_satim(username: str):
             universe = build_universe(username, include_nasdaq, include_nyse, custom_groups)
             with st.spinner(f"{len(universe)} hisse taranıyor..."):
                 st.session_state["oas_scan_rows"] = scan_universe(client, universe, selected_algo_ids, selected_timeframes)
+            st.session_state["oas_scan_fetched_at"] = datetime.now(TR_TZ)
             st.session_state.pop("oas_candidates", None)
             st.session_state.pop("oas_backtest_rows", None)
 
     scan_rows = st.session_state.get("oas_scan_rows") or []
     if scan_rows:
         st.subheader(f"📋 Tarama Sonuçları ({len(scan_rows)})")
+        scan_fetched_at = st.session_state.get("oas_scan_fetched_at")
+        if scan_fetched_at:
+            freshness_caption(f"Veri güncelliği: {scan_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan tarama anında çekildi).")
         display_cols = ["Hisse", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi"]
         st.dataframe(zebra_style(pd.DataFrame(scan_rows)[display_cols]), use_container_width=True, hide_index=True)
 
@@ -131,6 +140,7 @@ def render_otomatik_alim_satim(username: str):
                 st.session_state["oas_candidates"] = narrow_by_momentum(
                     client, scan_rows, DEFAULT_MAX_CANDIDATES, int(momentum_lookback_days),
                 )
+            st.session_state["oas_candidates_fetched_at"] = datetime.now(TR_TZ)
             st.session_state.pop("oas_backtest_rows", None)
 
     candidates = st.session_state.get("oas_candidates")
@@ -146,6 +156,9 @@ def render_otomatik_alim_satim(username: str):
         if not candidates:
             st.info("Bu kriterlere uyan hisse bulunamadı.")
         else:
+            candidates_fetched_at = st.session_state.get("oas_candidates_fetched_at")
+            if candidates_fetched_at:
+                freshness_caption(f"Veri güncelliği: {candidates_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan tarama anında çekildi).")
             display_cols = ["Hisse", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi"]
             st.dataframe(zebra_style(pd.DataFrame(candidates)[display_cols]), use_container_width=True, hide_index=True)
 
@@ -175,6 +188,10 @@ def render_otomatik_alim_satim(username: str):
                 st.session_state["oas_backtest_picker_token"] += 1
                 st.session_state["oas_backtest_rows_token_source"] = backtest_rows
             picker_token = st.session_state["oas_backtest_picker_token"]
+
+            backtest_run_at = backtest_rows[0].get("run_at") if backtest_rows else None
+            if backtest_run_at:
+                freshness_caption(f"Bu backtest çalıştırması: {backtest_run_at} UTC.")
 
             df = pd.DataFrame(backtest_rows)[["symbol", "algorithm", "timeframe", "pnl_pct", "final_value"]].copy()
             df["algorithm"] = df["algorithm"].map(lambda a: ALGORITHMS[a][0])

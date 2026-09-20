@@ -8,7 +8,7 @@ from alpaca_client import AlpacaClient
 from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
 from config import load_initial_capital, save_initial_capital
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 HISTORY_DAYS = 30
@@ -181,6 +181,7 @@ def render_positions_summary_table(positions: list[dict]):
             "Kâr/Zarar (%)": round(float(pos["unrealized_plpc"]) * 100, 2),
         })
 
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
     st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
 
 
@@ -206,6 +207,7 @@ def render_realized_pnl_table(client: AlpacaClient, orders: list[dict], history_
             "Gerçekleşen K/Z %": round(pnl_pct, 2) if pnl_pct is not None else "—",
         })
 
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
     st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
     total_pnl = sum(d["pnl"] for d in realized.values())
     st.caption(
@@ -255,6 +257,7 @@ def render_alpaca_dashboard(username):
                 "Stoptan Uzaklık %": round((current - stop_price) / current * 100, 2) if stop_price is not None else "—",
             })
 
+        freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
 
@@ -310,6 +313,7 @@ def render_alpaca_dashboard(username):
         .sort_values("_sort_ts", ascending=False)
         .drop(columns=["_sort_ts"])
     )
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
     st.dataframe(zebra_style(history_df, extra_style_fn=rebuy_row_style), use_container_width=True, hide_index=True)
     st.caption(
         "Sütun başlıklarına tıklayarak sıralayabilirsiniz. Varsayılan sıralama: en yeni işlem en üstte. "

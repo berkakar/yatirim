@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from tefas_fonlari_data import CACHE_FILE, FUND_CATEGORIES, LOOKBACK_WINDOWS, load_cache
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -101,7 +101,7 @@ def render_turk_fonlari():
     if last_updated:
         try:
             ts = datetime.fromisoformat(last_updated).astimezone(TR_TZ)
-            st.caption(f"Son güncelleme: {ts.strftime('%d.%m.%Y %H:%M:%S')} TRT · {len(table)} fon.")
+            freshness_caption(f"Veri güncelliği: {ts.strftime('%d.%m.%Y %H:%M:%S')} TRT · {len(table)} fon.")
         except ValueError:
             pass
 

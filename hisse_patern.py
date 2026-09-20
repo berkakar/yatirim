@@ -10,12 +10,17 @@ Patern Benzerlik Tablosu'ndaki bir benzerlik % hücresine tıklamak (Streamlit
 hisse/periyoda açar - manuel "Hisse"/"Periyot" seçicileri hâlâ elde durur,
 tıklama sadece onları önceden dolduran bir kısayoldur.
 """
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 from hisse_patern_analysis import PERIOD_CONFIGS, build_detail_chart_series, compute_pattern_table
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 _SERIES_COLORS = ["#00d2ff", "#ff9f1c", "#2ec4b6", "#e63946", "#7209b7", "#ffbe0b", "#8ac926", "#ff006e", "#adb5bd", "#4361ee", "#f72585", "#4cc9f0"]
 _SIM_COLUMNS = [f"{cfg['label']} Benzerlik %" for cfg in PERIOD_CONFIGS.values()]
@@ -68,6 +73,7 @@ def render_hisse_patern(target_list):
             rows, segments = compute_pattern_table(selected, max_warping_window)
         st.session_state.hisse_patern_rows = rows
         st.session_state.hisse_patern_segments = segments
+        st.session_state.hisse_patern_fetched_at = datetime.now(TR_TZ)
         if not rows:
             st.error("⚠️ Seçilen hisseler için yeterli veri bulunamadı.")
 
@@ -82,6 +88,9 @@ def render_hisse_patern(target_list):
 
     st.divider()
     st.subheader("📊 Patern Benzerlik Tablosu")
+    fetched_at = st.session_state.get("hisse_patern_fetched_at")
+    if fetched_at:
+        freshness_caption(f"Veri güncelliği: {fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten analiz anında çekildi).")
 
     filt_col, thresh_col = st.columns([2, 2])
     with filt_col:

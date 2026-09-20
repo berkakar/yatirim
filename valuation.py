@@ -224,11 +224,14 @@ def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
     (GitHub üzerinden) okur/yazar, böylece bir kullanıcı için çekilen veri diğer
     kullanıcılar tarafından da tekrar çekilmeden kullanılabilir.
 
-    Döner: (ham_veri_listesi, bu_çalıştırmada_yeniden_çekilen_hisseler)
+    Döner: (ham_veri_listesi, bu_çalıştırmada_yeniden_çekilen_hisseler,
+    {hisse: cached_at} - her hissenin önbellekteki verisinin hangi tarihte
+    çekildiği, tabloların üzerinde güncellik notu göstermek için)
     """
     cache = _load_valuation_cache()
     results = []
     freshly_fetched = []
+    cached_at = {}
     updates = {}
 
     for i, ticker in enumerate(ticker_list):
@@ -241,11 +244,14 @@ def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
                 updates[ticker] = new_entry
                 freshly_fetched.append(ticker)
                 results.append(raw)
+                cached_at[ticker] = new_entry["cached_at"]
             elif entry:
                 # Yeniden çekim başarısız oldu (ör. geçici ağ hatası) - eski veriyi kullanmaya devam et
                 results.append(entry["raw"])
+                cached_at[ticker] = entry.get("cached_at")
         else:
             results.append(entry["raw"])
+            cached_at[ticker] = entry.get("cached_at")
 
         if progress_callback:
             progress_callback(i + 1, len(ticker_list), ticker)
@@ -253,7 +259,7 @@ def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
     if updates:
         _save_valuation_cache_updates(updates)
 
-    return results, freshly_fetched
+    return results, freshly_fetched, cached_at
 
 
 def calculate_sector_relative_scores(raw_data_list):
