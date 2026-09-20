@@ -39,6 +39,31 @@ def render_bicak_kanali_test(target_list):
         "sinyaline bağlı değildir, sadece yöntemin görsel doğrulaması amaçlıdır."
     )
 
+    with st.expander("ℹ️ Yöntem Nasıl Çalışıyor? (Kılavuz / Bıçak / Sıfır / Yeşil Çizgi)"):
+        st.markdown(
+            """
+1. **Düşüş bacağı**: Pivotlar (tepe/dip) taranıp maximum-drawdown mantığıyla en büyük
+   genlikli tepe→dip düşüşü bulunur. Bu tarama aşağıdaki **"Düşüş Bacağı Seçim
+   Yöntemi"** seçeneğine göre ya en güncel N bar ile sınırlanır ya da tüm seride yapılır.
+2. **Kılavuz çizgisi**: Bu bacak içindeki tepe pivotlarından fiyatça **en yüksek**
+   olanı ("en tepe") ile kronolojik olarak **en son** oluşanı ("son tepe") seçilip
+   bu iki noktadan geçen doğru çizilir - klasik direnç trend çizgisi mantığı.
+3. **Bıçak çizgisi**: Aynı bacaktaki en düşük dip pivotundan ("en dip nokta"),
+   kılavuz ile aynı eğimde geçen paralel doğru.
+4. **Dip kesişim mumu**: Bıçak çizgisinin, en dip'ten ÖNCEKİ barlarda soldan sağa
+   ilk kestiği YEŞİL mum.
+5. **Sıfır nokta**: Dip kesişim mumundan geriye dönük son 60 bar içindeki dip
+   pivotlarından fiyatça **en yükseği** ("en yüksek alım noktası") - kılavuz ile
+   aynı eğimde bu noktadan geçen paralel doğru "sıfır çizgisi"ni oluşturur.
+6. **Yeşil çizgi (alım çizgisi)**: Kılavuz-bıçak ve bıçak-sıfır çizgisi arasındaki
+   oranların çarpımı (**türetilmiş oran**) kadar, kılavuzun kanal genişliği
+   kadarının üstüne ötelenmiş paralel doğru. Bu çizginin fiyatla en son kesiştiği
+   bar, "en yakın alım noktası" olarak işaretlenir.
+
+Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabilir.
+"""
+        )
+
     st.caption("Mum Periyodu")
     tf_cols = st.columns(len(SCAN_TIMEFRAMES))
     selected_timeframes = [
