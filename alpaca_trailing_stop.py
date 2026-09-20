@@ -87,36 +87,34 @@ from dotenv import load_dotenv
 
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
-from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext
+from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
+from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
 from structure import Bar
 from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
 
 TIMEFRAME = os.environ.get("TRADE_TIMEFRAME", "30Min")
-SWING_ORDER = int(os.environ.get("TRADE_SWING_ORDER", "2"))
 POLL_SECONDS = int(os.environ.get("TRADE_POLL_SECONDS", "60"))
 
-# ATR/yapısal-trail ayarları - birden fazla stop algoritması arasında PAYLAŞILAN
-# (structure.validated_trailing_level'ı kullanan her algoritmanın aynı şekilde
-# çağırdığı) genel tuning; env var'larla operasyonel olarak ayarlanabilir.
-# initial_stop_pct/breakeven_trigger_pct gibi bir algoritmaya ÖZGÜ, o
-# algoritmanın tanımının parçası olan sabitler artık burada DEĞİL -
-# stop_algorithms.py'de ilgili algoritma fonksiyonunun kendi varsayılanı
-# olarak tanımlı (bkz. o dosyanın modül docstring'i).
+# Sadece bu pozisyon yönetim döngüsünün ne kadar geriye bar çekeceğini
+# belirler - bir stop algoritmasının parametresi DEĞİL (bkz. LOOKBACK_DAYS'in
+# kullanıldığı get_management_start). ATR/yapısal-trail/breakeven/kâr-kilidi
+# gibi TÜM stop-loss algoritma parametreleri artık Stop Loss Ayarları
+# sayfasında (stop_loss_settings.py) kullanıcı bazında kaydediliyor -
+# kaydedilmemiş bir değer için stop_algorithms.py'deki ilgili fonksiyonun
+# kod-varsayılanı geçerli olur (bkz. stop_algorithms.resolve_kwargs).
 LOOKBACK_DAYS = int(os.environ.get("TRADE_LOOKBACK_DAYS", "15"))
-ATR_PERIOD = int(os.environ.get("TRADE_ATR_PERIOD", "14"))
-ATR_MULTIPLIER = float(os.environ.get("TRADE_ATR_MULTIPLIER", "0.25"))
-STALE_REFERENCE_DAYS = float(os.environ.get("TRADE_STALE_REFERENCE_DAYS", "10"))
-TREND_EMA_PERIOD = int(os.environ.get("TRADE_TREND_EMA_PERIOD", "50"))
-
-FALLBACK_BUFFER_PCT = 0.001  # only used if ATR can't be computed yet (too few bars)
 
 # alpaca_buy_points.py'nin okuduğu aynı dosya (Premium Buy Point modülünde
 # write_portfolio_config ile commit edilir) - tek kullanıcı (berkakar)
 # varsayımı burada da geçerli.
 CONFIG_PATH = "portfolio_config_berkakar.json"
 TOP_UP_STOP_MODE_DEFAULT = "keep"
+
+# Stop Loss Ayarları modülünün (stop_loss_settings.py) GitHub'a commit ettiği
+# aynı dosya - tek kullanıcı (berkakar) varsayımı burada da geçerli.
+STOP_LOSS_SETTINGS_PATH = "stop_loss_settings_berkakar.json"
 
 # Extended-hours guard (bkz. run_extended_hours_guard) - normal "stop" emri
 # sadece normal seansta (aşağıdaki takvimden okunan open/close arası)
@@ -158,6 +156,18 @@ def load_portfolio_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
         return {}
     with open(CONFIG_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def load_stop_loss_settings() -> dict:
+    """Stop Loss Ayarları modülünün (stop_loss_settings.py) GitHub'a commit
+    ettiği, kullanıcının her stop-loss algoritması için kaydettiği parametre
+    override'ları - {"shared": {...}, "<algo_id>": {...}, ...}. Dosya yoksa
+    boş dict döner (stop_algorithms.resolve_kwargs bunu "hiç override yok,
+    her şey kod-varsayılanı" olarak yorumlar)."""
+    if not os.path.exists(STOP_LOSS_SETTINGS_PATH):
+        return {}
+    with open(STOP_LOSS_SETTINGS_PATH, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -326,14 +336,16 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
     return max(default_start, earliest)
 
 
-def get_trend_daily_closes(client: AlpacaClient, symbol: str) -> list[float]:
+def get_trend_daily_closes(client: AlpacaClient, symbol: str, trend_ema_period: int) -> list[float]:
     """Seçili stop algoritmasının trend filtresi (bkz. stop_algorithms._trend_ok)
-    için günlük kapanışlar - TREND_EMA_PERIOD*4 günlük pencere,
-    DAILY_BARS_CACHE_PATH önbelleği üzerinden. Filtre kapalıysa (period<=0)
-    boş liste döner (algoritma bunu "engelleme" olarak yorumlar)."""
-    if TREND_EMA_PERIOD <= 0:
+    için günlük kapanışlar - trend_ema_period*4 günlük pencere (Stop Loss
+    Ayarları'nda kullanıcının kaydettiği değer, yoksa stop_algorithms.
+    TREND_EMA_PERIOD), DAILY_BARS_CACHE_PATH önbelleği üzerinden. Filtre
+    kapalıysa (period<=0) boş liste döner (algoritma bunu "engelleme" olarak
+    yorumlar)."""
+    if trend_ema_period <= 0:
         return []
-    start = datetime.now(timezone.utc) - timedelta(days=TREND_EMA_PERIOD * 4)
+    start = datetime.now(timezone.utc) - timedelta(days=trend_ema_period * 4)
     raw_bars = get_cached_raw_bars(client, DAILY_BARS_CACHE_PATH, symbol, "1Day", start)
     return [b["c"] for b in raw_bars if _parse_iso(b["t"]) >= start]
 
@@ -367,7 +379,7 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
 
 def manage_position(
     client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT,
-    stop_algorithm: str = DEFAULT_STOP_ALGORITHM,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
 ) -> None:
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
@@ -375,6 +387,13 @@ def manage_position(
     side = "long" if signed_qty > 0 else "short"
     entry_price = float(pos["avg_entry_price"])
     algo = STOP_ALGORITHMS[stop_algorithm]
+    # Stop Loss Ayarları sayfasında kaydedilmiş override'lar (bkz.
+    # stop_loss_settings.py) - "shared" ATR/yapısal-trail ayarları + seçili
+    # algoritmaya özgü ayarlar. Kaydedilmemiş bir alan için ilgili
+    # fonksiyonun kod-varsayılanı geçerli olur (bkz. resolve_kwargs).
+    stop_settings = stop_settings or {}
+    shared_settings = stop_settings.get("shared") or {}
+    algo_settings = stop_settings.get(stop_algorithm) or {}
 
     topped_up = False
     stop_order = client.get_open_stop_order(symbol)
@@ -390,7 +409,7 @@ def manage_position(
                 f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
             return
 
-        naive_stop = algo.initial_stop(entry_price, side)
+        naive_stop = algo.initial_stop(entry_price, side, **resolve_kwargs(algo.initial_stop, algo_settings, shared_settings))
         restored = last_trailed_stop_price(client, symbol)
         if restored is not None:
             # Extended-hours guard'ın bıraktığı acil limit emri seans
@@ -431,19 +450,17 @@ def manage_position(
         log(f"{symbol}: no regular-hours bars available, skipping.")
         return
 
-    daily_closes = get_trend_daily_closes(client, symbol)
+    # trend_ema_period, ctx için gereken günlük kapanış penceresini boyutlamak
+    # için trail() çağrısından ÖNCE de gerekiyor (bkz. get_trend_daily_closes) -
+    # bu yüzden resolve_kwargs'ın trail() için kuracağı kwargs'tan bağımsız,
+    # doğrudan shared_settings'ten (kaydedilmemişse kod-varsayılanından) okunur.
+    effective_trend_ema_period = int(shared_settings.get("trend_ema_period", DEFAULT_TREND_EMA_PERIOD))
+    daily_closes = get_trend_daily_closes(client, symbol, effective_trend_ema_period)
     ctx = StopContext(
         side=side, entry_price=entry_price, current_stop_price=current_stop_price,
         bars=bars, daily_closes=daily_closes, topped_up=topped_up, top_up_stop_mode=top_up_stop_mode,
     )
-    # initial_stop_pct/breakeven_trigger_pct GEÇİLMİYOR - bunlar algoritmaya
-    # özgü sabitler (seçili algoritmanın kendi varsayılanı geçerli olsun diye,
-    # bkz. stop_algorithms.py). ATR/yapısal-trail ayarları ise algoritmalar
-    # arası paylaşılan genel tuning olduğu için buradan geçirilmeye devam eder.
-    decision = algo.trail(
-        ctx, atr_period=ATR_PERIOD, atr_multiplier=ATR_MULTIPLIER, stale_reference_days=STALE_REFERENCE_DAYS,
-        trend_ema_period=TREND_EMA_PERIOD, swing_order=SWING_ORDER, fallback_buffer_pct=FALLBACK_BUFFER_PCT,
-    )
+    decision = algo.trail(ctx, **resolve_kwargs(algo.trail, algo_settings, shared_settings))
     if decision is None:
         return
 
@@ -634,9 +651,10 @@ def run_once(client: AlpacaClient) -> None:
 
     config = load_portfolio_config()
     top_up_stop_mode = load_top_up_stop_mode(config)
+    stop_settings = load_stop_loss_settings()
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
-        manage_position(client, pos, top_up_stop_mode, stop_algorithm)
+        manage_position(client, pos, top_up_stop_mode, stop_algorithm, stop_settings)
 
 
 def run_loop(client: AlpacaClient) -> None:

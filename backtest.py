@@ -19,6 +19,7 @@ from backtest_data import append_results, group_by_algorithm, load_results, new_
 from backtest_engine import run_backtest
 from buy_algorithms import ALGORITHMS, egimli_ters_fibo_signal
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
+from stop_loss_settings import load_stop_loss_settings
 from structure import Bar
 from ters_fibo import analyze as ters_fibo_analyze
 from ters_fibo import nearest_support_below
@@ -444,6 +445,10 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
 
     run_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
     effective_max_loss_pct = max_loss_pct if stop_loss_enabled else None
+    # Stop Loss Ayarları sayfasında kullanıcının kaydettiği parametreler - böylece
+    # backtest, canlı sistemin şu an gerçekte kullandığı değerlerle çalışır
+    # (bkz. run_backtest'in stop_settings docstring'i).
+    stop_settings = load_stop_loss_settings(username)
     new_runs = []
     progress = st.progress(0.0)
     combos = [(a, tf, sa) for a in algorithms for tf in timeframes for sa in stop_algorithms]
@@ -452,6 +457,7 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
             symbol=symbol, algorithm=algo_id, timeframe=tf, bars=bars_by_tf.get(tf, []),
             daily_pairs=daily_pairs, days_of_data=days_of_data, days_before_trading=days_before_trading,
             starting_budget=budget, max_loss_pct=effective_max_loss_pct, stop_algorithm=stop_algo_id,
+            stop_settings=stop_settings,
         )
         new_runs.append({
             "run_id": new_run_id(symbol, algo_id, tf, stop_algo_id),

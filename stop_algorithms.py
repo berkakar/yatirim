@@ -14,15 +14,17 @@ yerine):
     tarafta (mevcut current_stop_price ile karşılaştırılarak) uygulanır -
     her algoritma bunu tekrar yazmak zorunda kalmasın diye.
 
-initial_stop_pct/breakeven_trigger_pct gibi bir algoritmaya ÖZGÜ sabitler
-(o algoritmanın tanımının parçası) her fonksiyonun kendi varsayılan değeri
-olarak burada yaşar - çağıranlar (alpaca_trailing_stop.manage_position,
-backtest_engine.run_backtest, alpaca_buy_points.py) bunları GEÇMEZ, seçili
-algoritma ne ise onun kendi değerleri kullanılır. ATR/yapısal-trail
-ayarları (atr_period, atr_multiplier, stale_reference_days,
-trend_ema_period, swing_order, fallback_buffer_pct) ise algoritmalar arası
-PAYLAŞILAN genel tuning olduğu için alpaca_trailing_stop.py'nin env-var
-destekli sabitlerinden geçirilmeye devam eder.
+Her parametrenin (initial_stop_pct, breakeven_trigger_pct, atr_period, ...)
+KOD içindeki varsayılanı burada, ilgili fonksiyonun kendi imza değeri olarak
+yaşar. Kullanıcı Stop Loss Ayarları sayfasında (stop_loss_settings.py) bir
+değeri değiştirip kaydederse, bu override'lar stop_loss_settings_<kullanıcı>.json
+dosyasında tutulur ve resolve_kwargs() ile - fonksiyonun imzasını inceleyerek,
+elle her parametreyi tek tek eşlemeden - çağıranlara (alpaca_trailing_stop.
+manage_position, backtest_engine.run_backtest, alpaca_buy_points.py) geçirilecek
+kwargs'a dönüştürülür. Kaydedilmiş bir değer yoksa (dosya hiç yok, ya da o
+alan hiç değiştirilmemiş) ilgili fonksiyonun kod-varsayılanı geçerli olur -
+yeni bir algoritma/parametre eklendiğinde resolve_kwargs'ta HİÇBİR değişiklik
+gerekmez.
 
 İki algoritma var:
   - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
@@ -35,6 +37,7 @@ destekli sabitlerinden geçirilmeye devam eder.
     yapısal trail (_structure_trail_candidate) devreye girer.
 """
 
+import inspect
 from dataclasses import dataclass
 from typing import Callable
 
@@ -66,6 +69,47 @@ class StopAlgorithm:
     label: str
     initial_stop: Callable[..., float]
     trail: Callable[..., "StopDecision | None"]
+
+
+_CTX_PARAM_NAMES = frozenset({"ctx", "entry_price", "side", "bars"})
+_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order"})
+
+
+def resolve_kwargs(fn: Callable, settings_for_algo: dict, shared_settings: dict) -> dict:
+    """Stop Loss Ayarları sayfasında (stop_loss_settings.py) kaydedilmiş
+    değerlerden, `fn` (bir algoritmanın initial_stop veya trail'i) için
+    geçirilecek kwargs'ı kurar - `fn`'in İMZASINI inceler, elle bir eşleme
+    listesi tutmaz, böylece yeni bir algoritma/parametre eklendiğinde bu
+    fonksiyon hiç değişmeden çalışmaya devam eder.
+
+    Her parametre için önce settings_for_algo'da (o algoritmaya özgü,
+    ör. "wait_then_trail"), yoksa shared_settings'te (atr_period gibi
+    algoritmalar arası paylaşılan) bir değer arar; ikisinde de yoksa o
+    parametre hiç kwargs'a eklenmez - fn'in kendi kod-varsayılanı geçerli
+    olur. "_pct" ile biten adlar kullanıcı tarafından yüzde olarak girildiği
+    için (ör. "1.5" -> 0.015) 100'e bölünür; atr_period/trend_ema_period/
+    swing_order int'e, diğerleri (atr_multiplier, stale_reference_days gibi)
+    float'a çevrilir. ctx/entry_price/side/bars (StopContext'ten ya da
+    doğrudan çağrıdan gelen asıl girdiler) hiç dokunulmaz."""
+    kwargs: dict = {}
+    for name in inspect.signature(fn).parameters:
+        if name in _CTX_PARAM_NAMES:
+            continue
+        if name in settings_for_algo:
+            raw = settings_for_algo[name]
+        elif name in shared_settings:
+            raw = shared_settings[name]
+        else:
+            continue
+        if raw is None:
+            continue
+        if name.endswith("_pct"):
+            kwargs[name] = float(raw) / 100
+        elif name in _INT_PARAM_NAMES:
+            kwargs[name] = int(raw)
+        else:
+            kwargs[name] = float(raw)
+    return kwargs
 
 
 # ---- Varsayılan algoritma: sabit-% ilk stop + breakeven floor + günlük EMA
