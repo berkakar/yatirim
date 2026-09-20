@@ -38,6 +38,7 @@ from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
 from version_info import get_version_label
+from connection_status import check_all_connections
 
 NAV_HOME = "🏠 Giriş Sayfası"
 MODULE_GROUPS = {
@@ -374,6 +375,17 @@ if module == NAV_HOME:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     else:
         st.info(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
+
+    st.divider()
+    st.subheader("🔌 Bağlantılar")
+    bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+    connections = check_all_connections(key_id, secret_key, bot_token)
+    conn_cols = st.columns(len(connections))
+    for col, (name, (is_connected, detail)) in zip(conn_cols, connections.items()):
+        icon = "🟢" if is_connected else "🔴"
+        col.markdown(f"{icon} **{name}**")
+        if not is_connected:
+            col.caption(detail)
 
     st.divider()
     st.subheader("📋 Hisse Listeleri")
