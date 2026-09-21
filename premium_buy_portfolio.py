@@ -31,6 +31,11 @@ def _render_buy_point_table(
     for symbol in current_symbols:
         settings = symbol_settings.get(symbol) or {}
         active_algorithm = settings.get("algorithm") or default_algorithm
+        if active_algorithm not in ALGORITHMS:
+            # Kaydedilmiş seçim artık mevcut olmayan (örn. yeniden adlandırılmış/kaldırılmış)
+            # bir algoritmaya işaret ediyor olabilir - alpaca_buy_points.py'nin canlı taramada
+            # yaptığı aynı düşüşle (bkz. check_symbol çağrılarından önceki guard) tutarlı olsun.
+            active_algorithm = default_algorithm
         active_stop_algorithm = settings.get("stop_algorithm") or default_stop_algorithm
         if active_stop_algorithm not in STOP_ALGORITHMS:
             active_stop_algorithm = default_stop_algorithm
@@ -315,7 +320,11 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         head_algo.markdown("**Buy-Point Algoritması**")
         head_stop.markdown("**Stop-Loss Algoritması**")
         for symbol in selected_symbols:
-            combos = best_per_symbol_combo(all_backtest_results, symbol)
+            # Eski (artık kaldırılmış/yeniden adlandırılmış) bir algoritmayla üretilmiş
+            # BackTest sonuçları kalıcı olarak saklanır (hiç silinmez) ama seçilebilir bir
+            # seçenek olarak sunulmamalı - seçilse bile canlı tarama onu default_algorithm'a
+            # düşürür (bkz. alpaca_buy_points.py), o yüzden burada baştan filtrelenir.
+            combos = [c for c in best_per_symbol_combo(all_backtest_results, symbol) if c["algorithm"] in ALGORITHMS]
             col_sym, col_combo, col_stop = st.columns([1, 2.6, 1.8])
             col_sym.markdown(f"**{symbol}**")
             saved = pending_symbol_settings.get(symbol) or existing_symbol_settings.get(symbol) or {}
