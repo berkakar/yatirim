@@ -41,10 +41,12 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     arasındaki konumuna göre iki parçaya bölünür (üst_oran: kılavuz-
     bıçak, alt_oran: bıçak-sıfır çizgisi; toplamları 1.0 olması gerekir
     ama zorlanmaz - gerçek veride bıçak bu aralığın dışına da çıkabilir).
-  - üst_oran * alt_oran = türetilmiş_oran; kılavuzun, kanal genişliği
-    (kılavuz-sıfır çizgisi mesafesi) kadarının türetilmiş_oran'ı kadar
-    ÜSTÜNE (kanalın dışına, yukarı) ötelenmiş paralel doğru -> yeşil
-    çizgi (alım çizgisi).
+  - üst_oran * fib_katsayısı (sabit bir Fibonacci oranı, varsayılan
+    0.618) = türetilmiş_oran; kılavuzun, kanal genişliği (kılavuz-sıfır
+    çizgisi mesafesi) kadarının türetilmiş_oran'ı kadar ÜSTÜNE (kanalın
+    dışına, yukarı) ötelenmiş paralel doğru -> yeşil çizgi (alım
+    çizgisi). alt_oran hâlâ hesaplanıp bilgi amaçlı döndürülür ama bu
+    formülde kullanılmaz.
 """
 
 from dataclasses import dataclass
@@ -64,8 +66,8 @@ class Kilavuz:
     sifir_nokta: Pivot                         # dip kesişim mumundan önceki (varsayılan: serinin tamamındaki) en yüksek lokal minimum
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
-    alt_oran: float                            # bıçak-sıfır çizgisi arası pay
-    turetilmis_oran: float                     # ust_oran * alt_oran
+    alt_oran: float                            # bıçak-sıfır çizgisi arası pay (bilgi amaçlı - turetilmis_oran'da kullanılmıyor)
+    turetilmis_oran: float                     # ust_oran * fib_katsayisi
     yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
     dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu bardan geriye (varsayılan: serinin tamamında) aranır
 
@@ -152,7 +154,7 @@ def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], kesisim: Pivot,
 
 
 def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
-                  sifir_pencere: int | None = None) -> Kilavuz | None:
+                  sifir_pencere: int | None = None, fib_katsayisi: float = 0.618) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
@@ -162,10 +164,11 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     noktasından önce ilk kestiği yeşil bardan ("dip kesişim mumu"),
     geçmişe dönük en yüksek lokal minimumdan ("sıfır nokta" - bkz.
     _find_sifir_nokta), yine kılavuz ile aynı eğimde geçen paralel doğru
-    sıfır çizgisi olarak kurulur; bu üç hat üzerinden
-    üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
-    türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
-    (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner.
+    sıfır çizgisi olarak kurulur; bu üç hat üzerinden üst_oran/alt_oran
+    hesaplanır, türetilmis_oran = üst_oran * fib_katsayısı olarak
+    kurulur ve kılavuzun türetilmis_oran kadar üstüne ötelenmiş paralel
+    doğru yeşil çizgi (alım çizgisi) olarak kurulur. Yeterli/uygun yapı
+    yoksa None döner.
 
     `pencere`: düşüş bacağı (leg) taraması, en güncel bara göre geriye
     doğru sadece son `pencere` bar içindeki pivotlarla sınırlanır - bu
@@ -176,7 +179,19 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     doğru sadece son `sifir_pencere` bar içindeki dip pivotlarıyla
     sınırlanır. Varsayılan None - sabit bir bar sayısına değil, zaten
     "kaç gün geriye gidilecek" ile sınırlanmış olan bar serisinin
-    tamamına bakılır (bkz. _find_sifir_nokta)."""
+    tamamına bakılır (bkz. _find_sifir_nokta).
+
+    `fib_katsayisi`: yeşil çizginin kılavuzun ne kadar üstüne
+    ötelendiğini belirleyen sabit Fibonacci oranı (varsayılan 0.618).
+    üst_oran (bıçağın kılavuz-sıfır aralığındaki konumu) bu sabit
+    oranla çarpılarak türetilmis_oran'ı verir - üst_oran küçükse (bıçak
+    kılavuza yakın, sığ düzeltme) çizgi kılavuza yakın kalır, üst_oran
+    1'e yaklaşırsa (bıçak sıfıra yakın, derin düzeltme) çizgi
+    fib_katsayısının tamamına yaklaşır. Not: alt_oran bu hesaba
+    katılmıyor (eski üst_oran*alt_oran formülünün yerine geçti), yani
+    türetilmis_oran artık ≤0.25 ile sınırlı değil - fib_katsayisi 1'den
+    büyük seçilirse (örn. 1.618) çizgi kılavuzun daha da uzağına
+    taşabilir."""
     pivots = find_pivots(bars, order)
 
     min_index = max(0, len(bars) - pencere) if pencere is not None else 0
@@ -221,7 +236,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
         return None
     ust_oran = (kilavuz_intercept - bicak_intercept) / toplam
     alt_oran = (bicak_intercept - sifir_intercept) / toplam
-    turetilmis_oran = ust_oran * alt_oran
+    turetilmis_oran = ust_oran * fib_katsayisi
     yesil_cizgi = (kilavuz_slope, kilavuz_intercept + turetilmis_oran * toplam)
 
     return Kilavuz(

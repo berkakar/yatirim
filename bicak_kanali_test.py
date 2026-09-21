@@ -73,10 +73,11 @@ def render_bicak_kanali_test(target_list):
    "kaç gün geriye gidilecek" ile sınırlanmış olan bar serisinin tamamında - dip
    pivotlarından fiyatça **en yükseği** ("en yüksek alım noktası") - kılavuz ile
    aynı eğimde bu noktadan geçen paralel doğru "sıfır çizgisi"ni oluşturur.
-6. **Yeşil çizgi (alım çizgisi)**: Kılavuz-bıçak ve bıçak-sıfır çizgisi arasındaki
-   oranların çarpımı (**türetilmiş oran**) kadar, kılavuzun kanal genişliği
-   kadarının üstüne ötelenmiş paralel doğru. Bu çizginin fiyatla en son kesiştiği
-   bar, "en yakın alım noktası" olarak işaretlenir.
+6. **Yeşil çizgi (alım çizgisi)**: Kılavuz-bıçak oranı (**üst_oran**) ile sabit bir
+   Fibonacci katsayısının (varsayılan **0.618**) çarpımı (**türetilmiş oran**)
+   kadar, kılavuzun kanal genişliği kadarının üstüne ötelenmiş paralel doğru. Bu
+   çizginin fiyatla en son kesiştiği bar, "en yakın alım noktası" olarak
+   işaretlenir.
 
 Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabilir.
 """
@@ -222,8 +223,8 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
                 )
                 st.caption(
                     f"üst_oran (kılavuz-bıçak): {result.ust_oran:.4f} · "
-                    f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
-                    f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
+                    f"alt_oran (bıçak-sıfır çizgisi, bilgi amaçlı): {result.alt_oran:.4f} · "
+                    f"türetilmiş_oran (üst_oran × 0.618): {result.turetilmis_oran:.4f}"
                 )
 
 
