@@ -28,12 +28,14 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     dip noktasından ÖNCEKİ (soldaki) taraftaki İLK kesiştiği YEŞİL
     (kapanışı açılışından yüksek) bar bulunur ("dip kesişim mumu" -
     bkz. _dip_cizgisi_ilk_yesil_kesisim).
-  - dip kesişim mumundan geçmişe dönük son 60 bar içindeki (kesişim
-    mumuna kadar) lokal minimumlardan (dip pivotlarından) fiyatça en
-    yükseği ("en yüksek alım noktası") bulunur; bu barın günlük en
-    düşük fiyatı sıfır nokta olarak alınır (bkz. _find_sifir_nokta).
-    Kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> sıfır
-    çizgisi.
+  - dip kesişim mumundan geçmişe dönük - varsayılan olarak (sabit bir
+    bar sayısı değil) serinin en başına kadar, yani zaten "kaç gün
+    geriye gidilecek" ile sınırlanmış olan bar serisinin tamamında;
+    `sifir_pencere` verilirse son o kadar bar içinde - lokal
+    minimumlardan (dip pivotlarından) fiyatça en yükseği ("en yüksek
+    alım noktası") bulunur; bu barın günlük en düşük fiyatı sıfır
+    nokta olarak alınır (bkz. _find_sifir_nokta). Kılavuz ile aynı
+    eğimde, bu noktadan geçen paralel doğru -> sıfır çizgisi.
   - kılavuz ile sıfır çizgisi arasındaki (eğim ortak olduğu için
     index'ten bağımsız, sabit) dikey mesafe, bıçak çizgisinin bu ikisi
     arasındaki konumuna göre iki parçaya bölünür (üst_oran: kılavuz-
@@ -59,13 +61,13 @@ class Kilavuz:
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
     en_dip: Pivot                             # trend boyunca en düşük dip pivotu
     bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
-    sifir_nokta: Pivot                         # dip kesişim mumundan önceki son 60 bardaki en yüksek lokal minimum
+    sifir_nokta: Pivot                         # dip kesişim mumundan önceki (varsayılan: serinin tamamındaki) en yüksek lokal minimum
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
     ust_oran: float                            # kılavuz-bıçak arası pay (kılavuz-sıfır çizgisi mesafesine göre)
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
     turetilmis_oran: float                     # ust_oran * alt_oran
     yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
-    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu bardan geriye 60 bar içinde aranır
+    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu bardan geriye (varsayılan: serinin tamamında) aranır
 
 
 def _select_decline_leg(pivots: list[Pivot], min_index: int = 0) -> tuple[Pivot, Pivot] | None:
@@ -128,23 +130,29 @@ def _dip_cizgisi_ilk_yesil_kesisim(bars: list[Bar], en_dip: Pivot, dip_cizgisi: 
     return None
 
 
-_SIFIR_PENCERE = 60
+def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], kesisim: Pivot,
+                       pencere: int | None = None) -> Pivot | None:
+    """Dip kesişim mumundan (`kesisim`) geçmişe dönük - `pencere` verilmişse
+    son `pencere` bar içindeki, None ise (varsayılan) serinin en başından
+    kesişim mumuna kadarki TÜM - lokal minimumlardan (dip pivotlarından)
+    fiyatça en yükseğini ("en yüksek alım noktası") döner; hiç dip pivotu
+    yoksa None. `pivots`, aynı `bars` üzerinde zaten hesaplanmış olmalı
+    (bkz. structure.find_pivots).
 
-
-def _find_sifir_nokta(bars: list[Bar], pivots: list[Pivot], kesisim: Pivot) -> Pivot | None:
-    """Dip kesişim mumundan (`kesisim`) geçmişe dönük son _SIFIR_PENCERE
-    bar içindeki (kesişim mumuna kadar) lokal minimumlardan (dip
-    pivotlarından) fiyatça en yükseğini ("en yüksek alım noktası")
-    döner; hiç dip pivotu yoksa None. `pivots`, aynı `bars` üzerinde
-    zaten hesaplanmış olmalı (bkz. structure.find_pivots)."""
-    baslangic = max(0, kesisim.index - _SIFIR_PENCERE)
+    Varsayılan (None, sabit bir bar sayısı değil) davranışta ek bir
+    pencere sınırı uygulanmaz - zaten veri çekilirken "kaç gün geriye
+    gidilecek" ile sınırlanmış olan bar serisinin tamamı taranır, yani
+    arama menzili kullanıcının o mum periyodu için seçtiği gün sayısına
+    göre kendiliğinden ölçeklenir."""
+    baslangic = 0 if pencere is None else max(0, kesisim.index - pencere)
     adaylar = [p for p in pivots if p.kind == "low" and baslangic <= p.index < kesisim.index]
     if not adaylar:
         return None
     return max(adaylar, key=lambda p: p.price)
 
 
-def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30) -> Kilavuz | None:
+def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
+                  sifir_pencere: int | None = None) -> Kilavuz | None:
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
@@ -152,17 +160,23 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30) -> K
     ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
     çizgisi olarak kurulur. Dip çizgisinin (bıçak ile aynı hat) en dip
     noktasından önce ilk kestiği yeşil bardan ("dip kesişim mumu"),
-    geçmişe dönük son 60 bar içindeki en yüksek lokal minimumdan
-    ("sıfır nokta" - bkz. _find_sifir_nokta), yine kılavuz ile aynı
-    eğimde geçen paralel doğru sıfır çizgisi olarak kurulur; bu üç hat
-    üzerinden üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
+    geçmişe dönük en yüksek lokal minimumdan ("sıfır nokta" - bkz.
+    _find_sifir_nokta), yine kılavuz ile aynı eğimde geçen paralel doğru
+    sıfır çizgisi olarak kurulur; bu üç hat üzerinden
+    üst_oran/alt_oran/turetilmis_oran hesaplanır ve kılavuzun
     türetilmis_oran kadar üstüne ötelenmiş paralel doğru yeşil çizgi
     (alım çizgisi) olarak kurulur. Yeterli/uygun yapı yoksa None döner.
 
     `pencere`: düşüş bacağı (leg) taraması, en güncel bara göre geriye
     doğru sadece son `pencere` bar içindeki pivotlarla sınırlanır - bu
     en güncel düşüşü, tarihteki en büyük genlikli düşüşe göre önceliklendirir.
-    Varsayılan 30 bar. None verilirse tüm seri (sınırsız) taranır."""
+    Varsayılan 30 bar. None verilirse tüm seri (sınırsız) taranır.
+
+    `sifir_pencere`: sıfır nokta taraması, dip kesişim mumundan geriye
+    doğru sadece son `sifir_pencere` bar içindeki dip pivotlarıyla
+    sınırlanır. Varsayılan None - sabit bir bar sayısına değil, zaten
+    "kaç gün geriye gidilecek" ile sınırlanmış olan bar serisinin
+    tamamına bakılır (bkz. _find_sifir_nokta)."""
     pivots = find_pivots(bars, order)
 
     min_index = max(0, len(bars) - pencere) if pencere is not None else 0
@@ -195,7 +209,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30) -> K
     dip_kesisim_mumu = _dip_cizgisi_ilk_yesil_kesisim(bars, en_dip, bicak)
     if dip_kesisim_mumu is None:
         return None
-    sifir_nokta = _find_sifir_nokta(bars, pivots, dip_kesisim_mumu)
+    sifir_nokta = _find_sifir_nokta(bars, pivots, dip_kesisim_mumu, sifir_pencere)
     if sifir_nokta is None:
         return None
     sifir_intercept = sifir_nokta.price - kilavuz_slope * sifir_nokta.index
