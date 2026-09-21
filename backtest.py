@@ -172,19 +172,21 @@ def _render_trade_detail_chart(bars: list[Bar], trades: list[dict], symbol: str,
     st.plotly_chart(fig, use_container_width=True)
 
 
-def _render_bicak_kanali_chart(bars: list[Bar], symbol: str, timeframe: str):
+def _render_bicak_kanali_chart(bars: list[Bar], symbol: str, timeframe: str, pencere: int = 30):
     """Bıçak Kanalı algoritmasının kurduğu yapıyı - kılavuz/bıçak/sıfır/yeşil
     çizgi, dip kesişim mumu ve (varsa) yeşil çizginin fiyatla en son kesiştiği
     "en yakın alım noktası" - tek bir grafikte gösterir. Grafik çizimi
     bicak_kanali_test.py'deki (🔪 Bıçak Kanalı Testi modülü) ile aynı
     fonksiyonu (render_bicak_kanali_chart) kullanır, böylece iki modülde de
-    birebir aynı yapı görselleştirilir; buy_algorithms.bicak_kanali_signal
-    ile aynı order/pencere varsayılanlarıyla kurulur. bkz. bicak_kanali.py."""
+    birebir aynı yapı görselleştirilir. pencere, o backtest çalıştırmasının
+    BackTest arayüzünde seçtiği aynı değerdir (bkz. buy_algorithms.
+    bicak_kanali_signal) - eski (bicak_pencere alanı olmayan) kayıtlarda
+    kod-varsayılanına (30) düşer. bkz. bicak_kanali.py."""
     if not bars:
         st.warning("Grafik için mum verisi bulunamadı.")
         return
 
-    result = find_kilavuz(bars)
+    result = find_kilavuz(bars, pencere=pencere)
     if result is None:
         st.info("Bu veri için Bıçak Kanalı yapısı kurulamadı (uygun bir düşüş bacağı/kılavuz bulunamadı).")
         return
@@ -286,6 +288,14 @@ def _render_settings():
         if col.checkbox(label, key=f"bt_algo_{algo_id}")
     ]
 
+    bicak_pencere = 30
+    if "bicak_kanali" in selected_algorithms:
+        bicak_pencere = st.number_input(
+            "Bıçak Kanalı - Pencere (bar)", min_value=1, value=30, step=5, key="bt_bicak_pencere",
+            help="Düşüş bacağı taraması sadece en güncel bu kadar bar içindeki pivotlarla sınırlanır - "
+                 "Bıçak Kanalı Test modülündeki (🔪) aynı ayar.",
+        )
+
     st.subheader("🛡️ Stop-Loss Algoritmaları")
     st.caption("Her seçili buy-point algoritması × mum periyodu kombinasyonu, aşağıda seçtiğiniz her stop-loss algoritmasıyla ayrı ayrı koşulur.")
     stop_algo_cols = st.columns(len(STOP_ALGORITHMS))
@@ -341,11 +351,11 @@ def _render_settings():
     )
 
     return (selected_algorithms, selected_stop_algorithms, selected_timeframes, int(days_of_data),
-            int(days_before_trading), float(budget), bool(stop_loss_enabled), float(max_loss_pct))
+            int(days_before_trading), float(budget), bool(stop_loss_enabled), float(max_loss_pct), int(bicak_pencere))
 
 
 def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days_of_data, days_before_trading,
-                    budget, stop_loss_enabled, max_loss_pct, username):
+                    budget, stop_loss_enabled, max_loss_pct, username, bicak_pencere):
     start = datetime.now(timezone.utc) - timedelta(days=days_of_data)
     bars_by_tf = {}
     for tf in timeframes:
@@ -375,7 +385,7 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
             symbol=symbol, algorithm=algo_id, timeframe=tf, bars=bars_by_tf.get(tf, []),
             daily_pairs=daily_pairs, days_of_data=days_of_data, days_before_trading=days_before_trading,
             starting_budget=budget, max_loss_pct=effective_max_loss_pct, stop_algorithm=stop_algo_id,
-            stop_settings=stop_settings,
+            stop_settings=stop_settings, bicak_pencere=bicak_pencere,
         )
         new_runs.append({
             "run_id": new_run_id(symbol, algo_id, tf, stop_algo_id),
@@ -396,6 +406,7 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
             "stop_loss_triggered_at": result.stop_loss_triggered_at,
             "trades": [vars(t) for t in result.trades],
             "source": "Alpaca",
+            "bicak_pencere": bicak_pencere if algo_id == "bicak_kanali" else None,
         })
         progress.progress((i + 1) / len(combos))
     progress.empty()
@@ -468,6 +479,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                             bicak_bars = []
                     _render_bicak_kanali_chart(
                         bicak_bars, picked_run.get("symbol"), picked_run.get("timeframe"),
+                        pencere=picked_run.get("bicak_pencere") or 30,
                     )
 
             trades = picked_run.get("trades") or []
@@ -533,7 +545,7 @@ def render_backtest(target_list: list[str], username: str):
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()
     (selected_algorithms, selected_stop_algorithms, selected_timeframes, days_of_data, days_before_trading,
-     budget, stop_loss_enabled, max_loss_pct) = _render_settings()
+     budget, stop_loss_enabled, max_loss_pct, bicak_pencere) = _render_settings()
 
     st.divider()
     can_run = bool(selected_symbol and selected_algorithms and selected_stop_algorithms and selected_timeframes)
@@ -544,7 +556,7 @@ def render_backtest(target_list: list[str], username: str):
         ):
             all_results = _run_backtests(
                 client, selected_symbol, selected_algorithms, selected_stop_algorithms, selected_timeframes,
-                days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct, username,
+                days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct, username, bicak_pencere,
             )
         st.success("Backtest tamamlandı ve sonuçlar kaydedildi.")
     else:

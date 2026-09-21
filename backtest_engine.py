@@ -101,7 +101,7 @@ class BacktestResult:
 def run_backtest(
     symbol: str, algorithm: str, timeframe: str, bars: list[Bar], daily_pairs: list[tuple],
     days_of_data: int, days_before_trading: int, starting_budget: float, max_loss_pct: float | None = None,
-    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None, bicak_pencere: int = 30,
 ) -> BacktestResult:
     """daily_pairs: [(date, close), ...] sorted ascending, spanning at least
     from (bars[0] - ~400 days) to bars[-1] so SMA200-style daily gates have
@@ -120,7 +120,13 @@ def run_backtest(
     stop_settings: Stop Loss Ayarları sayfasında kullanıcının kaydettiği
     {"shared": {...}, "<algo_id>": {...}} - verilmezse (ya da bir alan hiç
     kaydedilmemişse) stop_algorithms.py'deki ilgili fonksiyonun kod-varsayılanı
-    kullanılır (bkz. stop_algorithms.resolve_kwargs)."""
+    kullanılır (bkz. stop_algorithms.resolve_kwargs).
+
+    bicak_pencere: algorithm="bicak_kanali" olduğunda buy_algorithms.
+    bicak_kanali_signal'e geçirilen "pencere" (düşüş bacağı taramasının en
+    güncel kaç bar ile sınırlanacağı) - Bıçak Kanalı Test modülündeki
+    (bicak_kanali_test.py) aynı ayar, BackTest arayüzünden ayarlanabilir.
+    Diğer algoritmalar için görmezden gelinir."""
     result = BacktestResult(symbol, algorithm, timeframe, days_of_data, days_before_trading, starting_budget,
                              stop_algorithm=stop_algorithm)
     result.final_value = starting_budget
@@ -196,7 +202,10 @@ def run_backtest(
 
         sig_bars = _window(bars, i, SIGNAL_LOOKBACK_DAYS)
         daily_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf) if algorithm == "trend_pullback" else None
-        signal = algo_fn(sig_bars, daily_closes)
+        if algorithm == "bicak_kanali":
+            signal = algo_fn(sig_bars, daily_closes, pencere=bicak_pencere)
+        else:
+            signal = algo_fn(sig_bars, daily_closes)
         if signal is not None:
             signal = reject_if_marketable(signal, bar.c)
 
