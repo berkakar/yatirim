@@ -5,6 +5,7 @@ uygulanır, tema (gündüz/gece) theme.py üzerinden okunur.
 """
 
 import pandas as pd
+import streamlit as st
 
 from theme import get_palette
 
