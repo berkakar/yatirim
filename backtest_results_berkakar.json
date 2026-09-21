@@ -51923,5 +51923,68 @@
       }
     ],
     "source": "Alpaca"
+  },
+  {
+    "run_id": "TTWO-bicak_kanali-1Day-wait_then_trail-20260921T105054",
+    "run_at": "2026-09-21T10:50:54+00:00",
+    "symbol": "TTWO",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 360,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9550.61,
+    "pnl": -449.39,
+    "pnl_pct": -4.49,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2025-12-23T05:00:00Z",
+        "price": 248.35,
+        "qty": 40,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-01-12T05:00:00Z",
+        "price": 248.35,
+        "qty": 40,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-01-16T05:00:00Z",
+        "price": 239.41,
+        "qty": 41,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-01-22T05:00:00Z",
+        "price": 234.62,
+        "qty": 41,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-15T04:00:00Z",
+        "price": 218.01,
+        "qty": 44,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-16T04:00:00Z",
+        "price": 212.26,
+        "qty": 44,
+        "reason": "stop"
+      }
+    ],
+    "source": "Alpaca"
   }
 ]
