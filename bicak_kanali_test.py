@@ -182,10 +182,14 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             selected_cells = table_event.selection.cells if table_event and table_event.selection else []
             if selected_cells:
                 row_idx, _col_name = selected_cells[0]
-                picked = signals_df.iloc[row_idx]
-                st.session_state.bicak_selected_ticker = picked["Hisse"]
-                st.session_state.bicak_selected_tf = picked["_tf_code"]
-                st.session_state.bicak_show_chart = True
+                # Streamlit, "bicak_signals_table" seçim durumunu (row_idx) rerun'lar
+                # arasında session_state'te tutar - yeni bir tarama öncekinden daha az
+                # satır döndürürse, eski seçim artık geçersiz bir index'e işaret edebilir.
+                if row_idx < len(signals_df):
+                    picked = signals_df.iloc[row_idx]
+                    st.session_state.bicak_selected_ticker = picked["Hisse"]
+                    st.session_state.bicak_selected_tf = picked["_tf_code"]
+                    st.session_state.bicak_show_chart = True
 
     if st.session_state.get("bicak_show_chart") and st.session_state.get("bicak_selected_ticker"):
         active_t = st.session_state.bicak_selected_ticker
