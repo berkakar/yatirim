@@ -5,9 +5,11 @@ uygular; yeşil çizginin (alım çizgisi) gerçek fiyatla en son kesiştiği
 bulup hisseleri bir tabloda listeler (bkz. "Alım Bölgesi Tarama"
 modülündeki tarama deseni - app.py). Sonuç tablosu, "Hisse Patern
 Analizi" modülündeki gibi sütun başlıklarına tıklanarak sıralanabilir
-(st.dataframe + hücre seçimi). Herhangi bir alım/satım sinyaline bağlı
-değildir, sadece yöntemin görsel doğrulaması amaçlıdır - bkz.
-bicak_kanali.py."""
+(st.dataframe + hücre seçimi). Bu sayfanın kendisi herhangi bir alım/satım
+sinyaline bağlı değildir, sadece yöntemin görsel doğrulaması amaçlıdır -
+bkz. bicak_kanali.py. Buradaki grafik fonksiyonu (render_bicak_kanali_chart)
+BackTest modülünde de ("Bıçak Kanalı" algoritması - buy_algorithms.
+bicak_kanali_signal) aynı yapıyı görselleştirmek için yeniden kullanılır."""
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -207,7 +209,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             if result is None:
                 st.info("ℹ️ Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
             else:
-                _render_chart(bars, active_t, active_tf, result)
+                render_bicak_kanali_chart(bars, active_t, active_tf, result)
                 en_tepe, son_tepe = result.kilavuz_noktalari
                 st.caption(
                     f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
@@ -224,7 +226,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
                 )
 
 
-def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
+def render_bicak_kanali_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
     n = len(bars)
     xs = list(range(n))
     dates = [b.t[:10] for b in bars]
