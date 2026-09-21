@@ -52217,5 +52217,96 @@
       }
     ],
     "source": "Alpaca"
+  },
+  {
+    "run_id": "ADI-bicak_kanali-1Day-wait_then_trail-20260921T111413",
+    "run_at": "2026-09-21T11:14:13+00:00",
+    "symbol": "ADI",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 300,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9596.82,
+    "pnl": -403.18,
+    "pnl_pct": -4.03,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-18T04:00:00Z",
+        "price": 308.57,
+        "qty": 32,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-19T04:00:00Z",
+        "price": 302.4,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-27T04:00:00Z",
+        "price": 309.05,
+        "qty": 31,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-30T04:00:00Z",
+        "price": 302.87,
+        "qty": 31,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T04:00:00Z",
+        "price": 393.47,
+        "qty": 24,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-15T04:00:00Z",
+        "price": 385.6,
+        "qty": 24,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-17T04:00:00Z",
+        "price": 374.6,
+        "qty": 25,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-23T04:00:00Z",
+        "price": 374.6,
+        "qty": 25,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-10T04:00:00Z",
+        "price": 357.24,
+        "qty": 26,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-14T04:00:00Z",
+        "price": 363.96,
+        "qty": 26,
+        "reason": "stop"
+      }
+    ],
+    "source": "Alpaca"
   }
 ]
