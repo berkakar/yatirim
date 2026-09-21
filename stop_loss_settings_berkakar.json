@@ -1,0 +1,20 @@
+{
+  "shared": {
+    "atr_period": 14,
+    "atr_multiplier": 0.25,
+    "stale_reference_days": 10.0,
+    "trend_ema_period": 50,
+    "swing_order": 2,
+    "fallback_buffer_pct": 0.1
+  },
+  "breakeven_atr_structure": {
+    "initial_stop_pct": 1.5,
+    "breakeven_trigger_pct": 1.0
+  },
+  "wait_then_trail": {
+    "initial_stop_pct": 10.0,
+    "breakeven_trigger_pct": 1.0,
+    "profit_lock_trigger_pct": 5.0,
+    "profit_lock_pct": 6.0
+  }
+}

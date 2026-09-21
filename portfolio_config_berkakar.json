@@ -1,7 +1,7 @@
 {
   "budget": 69137.83,
   "weights": {
-    "MSFT": 27.18,
+    "MSFT": 15.0,
     "AMZN": 6.62,
     "NVDA": 5.0,
     "INTC": 5.0,
@@ -9,13 +9,13 @@
     "PAYX": 7.54,
     "NXPI": 5.0,
     "NOW": 5.0,
-    "MDB": 20.29,
-    "TTWO": 5.0,
+    "MDB": 10.0,
+    "TTWO": 20.0,
     "VEEV": 1.5,
     "SKHY": 1.36,
     "UROY": 2.05
   },
-  "algorithm": "trend_pullback",
+  "algorithm": "demand_zone",
   "stop_algorithm": "breakeven_atr_structure",
   "symbol_settings": {
     "MSFT": {
@@ -82,5 +82,7 @@
   },
   "stop_loss_enabled": true,
   "max_loss_pct": 2.5,
-  "top_up_stop_mode": "keep"
+  "top_up_stop_mode": "keep",
+  "buy_stop_rebuy_enabled": false,
+  "buy_stop_rebuy_window_hours": 2.0
 }

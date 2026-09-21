@@ -5,6 +5,7 @@ import streamlit as st
 from scipy.signal import argrelextrema
 
 from structure import Bar
+from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
 
 def bars_from_df(df: pd.DataFrame) -> list[Bar]:
@@ -196,8 +197,11 @@ FOUR_HOUR_MAX_DAYS = 730  # 1 saatlik barların yfinance'de izin verilen üst s�
 def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
     """get_scanner_data ve fetch_daily_pairs'in ortak veri çekme/temizleme
     mantığı: BIST .IS fallback'i, sütun normalizasyonu, saat dilimi
-    temizliği. Temiz bir OHLCV DataFrame döner, yetersiz/boş veride None."""
+    temizliği. Temiz bir OHLCV DataFrame döner, yetersiz/boş/bayat/anlamsız
+    veride None (bkz. yf_data_quality - güncellik ve iç tutarlılık
+    kontrolleri)."""
     formatted_ticker = ticker_symbol
+    resolved_ticker = formatted_ticker
 
     ticker_obj = yf.Ticker(formatted_ticker)
     df = ticker_obj.history(period=period, interval=interval)
@@ -205,10 +209,23 @@ def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
     # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
     if df is None or df.empty or len(df) < min_rows:
         if not formatted_ticker.endswith(".IS"):
-            ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
+            resolved_ticker = f"{formatted_ticker}.IS"
+            ticker_obj = yf.Ticker(resolved_ticker)
             df = ticker_obj.history(period=period, interval=interval)
 
     if df is None or df.empty or len(df) < min_rows:
+        return None
+
+    # Yahoo'nun döndürdüğü barların iç tutarlılığını (High/Low/Open/Close),
+    # BIST sembollerinde günlük taban/tavan marjını aşan sıçramaları (bozuk
+    # tick) ve işlem görmeyen/durdurulmuş bir sembol için bayat/tekrarlanan
+    # fiyat döndürülüp döndürülmediğini doğrula - anlamsız veriyle
+    # tarama/sinyal üretmemek için.
+    if (
+        not is_ohlc_consistent(df)
+        or has_implausible_daily_move(df['Close'], resolved_ticker)
+        or has_flat_prices(df['Close'])
+    ):
         return None
 
     # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir
@@ -231,6 +248,12 @@ def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
 
     if len(df) < min_rows:
         return None
+
+    # Son bar beklenenden fazla eskiyse (Yahoo'dan bayat/önbelleklenmiş bir
+    # yanıt geldiyse) veriyi güncel kabul etme.
+    if not is_fresh(df['Date'].iloc[-1].date()):
+        return None
+
     return df
 
 

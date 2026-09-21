@@ -16,7 +16,7 @@ import kap_client
 import telegram_notify
 import turk_fonlari_takip_data as data
 from tefas_client import fetch_fund_by_code
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 
 def _init_state(username: str) -> None:
@@ -216,6 +216,18 @@ def render_turk_fonlari_takip(username: str) -> None:
         }
         for f in st.session_state.takip_fonlari
     ]
+    latest_reports = [
+        (r["report_date_sort"], r["report_date"])
+        for f in st.session_state.takip_fonlari
+        for r in (st.session_state.kap_portfoy_cache.get(f["code"], {}).get("reports") or [])[:1]
+    ]
+    if latest_reports:
+        _, latest_display = max(latest_reports, key=lambda x: x[0])
+        freshness_caption(
+            f"En güncel KAP raporu: {latest_display} (KAP periyodik yayınlar, her fonun kendi "
+            "rapor tarihi hücre içinde de gösterilir - bu 'şu an çekildi' anlamına gelmez)."
+        )
+
     df = pd.DataFrame(table_rows)
     st.dataframe(
         zebra_style(df),

@@ -3,15 +3,16 @@ from datetime import datetime, timedelta, timezone
 import pandas as pd
 import streamlit as st
 
+import buy_stop_rebuy
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import format_order_row, TR_TZ
+from alpaca_dashboard import format_order_row, rebuy_row_style, TR_TZ
 from alpaca_trailing_stop import get_bars_for_timeframe, TIMEFRAME
 from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
 
 GITHUB_REPO = "berkakar/yatirim"
 BUY_LOOKBACK_DAYS = 60
@@ -30,6 +31,11 @@ def _render_buy_point_table(
     for symbol in current_symbols:
         settings = symbol_settings.get(symbol) or {}
         active_algorithm = settings.get("algorithm") or default_algorithm
+        if active_algorithm not in ALGORITHMS:
+            # Kaydedilmiş seçim artık mevcut olmayan (örn. yeniden adlandırılmış/kaldırılmış)
+            # bir algoritmaya işaret ediyor olabilir - alpaca_buy_points.py'nin canlı taramada
+            # yaptığı aynı düşüşle (bkz. check_symbol çağrılarından önceki guard) tutarlı olsun.
+            active_algorithm = default_algorithm
         active_stop_algorithm = settings.get("stop_algorithm") or default_stop_algorithm
         if active_stop_algorithm not in STOP_ALGORITHMS:
             active_stop_algorithm = default_stop_algorithm
@@ -78,10 +84,12 @@ def _render_buy_point_table(
             row["Durum"] = "Pozisyon Açık" if has_position else ("Bekleniyor" if active_signal else "Sinyal Yok")
         rows.append(row)
 
+    freshness_caption(
+        f"Veri güncelliği: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT (Alpaca'dan anlık çekildi, "
+        f"{PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir)."
+    )
     st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
     st.caption(
-        f"Son güncelleme: {datetime.now(TR_TZ).strftime('%H:%M:%S')} TRT "
-        f"({PRICE_REFRESH_SECONDS} saniyede bir otomatik yenilenir). "
         "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
         "(\"—\" = sinyal yok). 'Kullanılan Algoritma', 'Stop Loss Algoritması' ve 'Kullanılacak Fiyat', o "
         "hisse için yukarıda (Hisse Bazlı Algoritma Seçimi) seçtiğiniz - yoksa aşağıdaki (Varsayılan "
@@ -312,7 +320,11 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         head_algo.markdown("**Buy-Point Algoritması**")
         head_stop.markdown("**Stop-Loss Algoritması**")
         for symbol in selected_symbols:
-            combos = best_per_symbol_combo(all_backtest_results, symbol)
+            # Eski (artık kaldırılmış/yeniden adlandırılmış) bir algoritmayla üretilmiş
+            # BackTest sonuçları kalıcı olarak saklanır (hiç silinmez) ama seçilebilir bir
+            # seçenek olarak sunulmamalı - seçilse bile canlı tarama onu default_algorithm'a
+            # düşürür (bkz. alpaca_buy_points.py), o yüzden burada baştan filtrelenir.
+            combos = [c for c in best_per_symbol_combo(all_backtest_results, symbol) if c["algorithm"] in ALGORITHMS]
             col_sym, col_combo, col_stop = st.columns([1, 2.6, 1.8])
             col_sym.markdown(f"**{symbol}**")
             saved = pending_symbol_settings.get(symbol) or existing_symbol_settings.get(symbol) or {}
@@ -423,6 +435,50 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "mı - hiçbir durumda mevcut korumayı gevşetmez.",
     )
 
+    st.subheader("🔁 Alım-Stop-Alım Ek Yeteneği")
+    buy_stop_rebuy_enabled = st.checkbox(
+        "Alım-Stop-Alım Ek Yeteneğini Etkinleştir",
+        value=bool(config.get("buy_stop_rebuy_enabled")), key="pbp_buy_stop_rebuy_enabled",
+        help="Etkinleştirilirse, bir hissenin stop'u tetiklenip pozisyon satıldığında, fiyatın gelen "
+             "barlarda önceki alım fiyatına aşağıdaki süre penceresi içinde geri dönüp dönmediği izlenir - "
+             "dönerse hisse otomatik olarak yeniden alınır.",
+    )
+    buy_stop_rebuy_window_hours = st.number_input(
+        "Yeniden alım için zaman penceresi (saat)", min_value=0.25, max_value=24.0,
+        value=float(config.get("buy_stop_rebuy_window_hours") or buy_stop_rebuy.DEFAULT_WINDOW_HOURS), step=0.25,
+        disabled=not buy_stop_rebuy_enabled, key="pbp_buy_stop_rebuy_window_hours",
+        help="Stop tetiklendikten sonra fiyatın önceki alım fiyatına dönmesi için tanınan süre - bu süre "
+             "içinde dönmezse yeniden alım yapılmaz. Süre, her hissenin kendi mum periyoduna göre bir bar "
+             "sayısına çevrilir (ör. varsayılan 2 saat: 1 saatlik barda 2 bar, 30 dakikalık barda 4 bar, "
+             "15 dakikalık barda 8 bar).",
+    )
+    st.info(
+        "ℹ️ **Alım-Stop-Alım Ek Yeteneği nasıl çalışır?** Bu ek yetenek etkinken, Premium Buy Point ile "
+        "alım her zamanki gibi yapılır ve pozisyon açılır açılmaz stop-loss mantığı (seçili stop-loss "
+        "algoritması) hemen devreye girer - bunda bir değişiklik yok. Farkı, stop tetiklenip hisse "
+        "satıldıktan SONRA başlıyor: sistem o hisse için gelen mum barlarını izlemeye devam eder; fiyat, "
+        "yukarıdaki süre penceresi içinde (o hissenin mum periyoduna göre bar sayısına çevrilmiş hâliyle) "
+        "tekrar ÖNCEKİ alım fiyatına ulaşırsa, hisse otomatik olarak **yeniden alınır** ve yeni pozisyon "
+        "için hemen yeni bir stop kurulur - tıpkı taze bir girişte olduğu gibi. Pencere süresi içinde fiyat "
+        "o seviyeye geri dönmezse hiçbir işlem yapılmaz, hisse nakitte kalır. Yeniden alınan işlemler, "
+        "aşağıdaki ve Alpaca Canlı Pozisyonlar sayfasındaki İşlem Geçmişi tablolarında **turuncu yazıyla** "
+        "ve 'Alım-Stop-Alım' açıklamasıyla ayrıca belirtilir.\n\n"
+        "**Önemli kısıtlama:** Bu ek yetenek yalnızca gün-içi mum periyotlarında (15 Dakika, 30 Dakika, "
+        "1 Saat) çalışır - **1 Günlük mum periyodunda uygulanamaz**; o periyottaki hisseler için stop "
+        "sonrası hiçbir izleme/yeniden alım yapılmaz, normal Zarar Kes/stop davranışı değişmeden devam "
+        "eder."
+    )
+    if buy_stop_rebuy_enabled and selected_symbols:
+        ineligible = [
+            s for s in selected_symbols
+            if (symbol_settings.get(s, {}).get("timeframe") or TIMEFRAME) not in buy_stop_rebuy.ELIGIBLE_TIMEFRAME_MINUTES
+        ]
+        if ineligible:
+            st.caption(
+                f"⚠️ 1 Günlük periyotta olduğu için Alım-Stop-Alım bu hisselerde uygulanmayacak: "
+                f"{', '.join(ineligible)}."
+            )
+
     weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
 
     if st.button("💾 Portföyü Kaydet", type="primary"):
@@ -443,6 +499,8 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
                 "stop_loss_enabled": bool(stop_loss_enabled),
                 "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
                 "top_up_stop_mode": top_up_stop_mode,
+                "buy_stop_rebuy_enabled": bool(buy_stop_rebuy_enabled),
+                "buy_stop_rebuy_window_hours": float(buy_stop_rebuy_window_hours),
             }
             write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
             st.success("Portföy kaydedildi.")
@@ -470,4 +528,9 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         .sort_values("_sort_ts", ascending=False)
         .drop(columns=["_sort_ts"])
     )
-    st.dataframe(zebra_style(history_df), use_container_width=True, hide_index=True)
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
+    st.dataframe(zebra_style(history_df, extra_style_fn=rebuy_row_style), use_container_width=True, hide_index=True)
+    st.caption(
+        "Turuncu yazılı satırlar, Alım-Stop-Alım Ek Yeteneği ile stop sonrası otomatik yapılan yeniden "
+        "alımları gösterir (bkz. 'Açıklama' sütunu)."
+    )

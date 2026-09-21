@@ -21,6 +21,7 @@ import pandas as pd
 import yfinance as yf
 
 from dtw_analysis import compute_dtw_similarity
+from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
 CACHE_FILE = "hisse_patern_cache.json"
 FETCH_PERIOD = "4y"  # yıllık (son 3 tam takvim yılı) karşılaştırması için en az 4 yıllık veri gerekir
@@ -44,6 +45,15 @@ def _fetch_single_ticker_daily(ticker):
         if df is None or df.empty:
             return ticker, None
 
+        # Barların iç tutarlılığını, (BIST sembollerinde) günlük taban/tavan
+        # marjını aşan bozuk tick'leri ve bayat/tekrarlanan fiyat verisini doğrula.
+        if (
+            not is_ohlc_consistent(df)
+            or has_implausible_daily_move(df['Close'], ticker)
+            or has_flat_prices(df['Close'])
+        ):
+            return ticker, None
+
         df = df.reset_index()
         df.columns = [str(c).capitalize() for c in df.columns]
         if not {"Date", "Close"}.issubset(df.columns):
@@ -52,6 +62,11 @@ def _fetch_single_ticker_daily(ticker):
         df["Date"] = pd.to_datetime(df["Date"]).dt.tz_localize(None)
         df = df.dropna(subset=["Close"])
         if df.empty:
+            return ticker, None
+
+        # Son bar beklenenden fazla eskiyse (Yahoo'dan bayat bir yanıt
+        # geldiyse) veriyi güncel kabul etme.
+        if not is_fresh(df["Date"].iloc[-1].date()):
             return ticker, None
 
         return ticker, {

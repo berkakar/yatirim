@@ -5,9 +5,14 @@ uygular; yeşil çizginin (alım çizgisi) gerçek fiyatla en son kesiştiği
 bulup hisseleri bir tabloda listeler (bkz. "Alım Bölgesi Tarama"
 modülündeki tarama deseni - app.py). Sonuç tablosu, "Hisse Patern
 Analizi" modülündeki gibi sütun başlıklarına tıklanarak sıralanabilir
-(st.dataframe + hücre seçimi). Herhangi bir alım/satım sinyaline bağlı
-değildir, sadece yöntemin görsel doğrulaması amaçlıdır - bkz.
-bicak_kanali.py."""
+(st.dataframe + hücre seçimi). Bu sayfanın kendisi herhangi bir alım/satım
+sinyaline bağlı değildir, sadece yöntemin görsel doğrulaması amaçlıdır -
+bkz. bicak_kanali.py. Buradaki grafik fonksiyonu (render_bicak_kanali_chart)
+BackTest modülünde de ("Bıçak Kanalı" algoritması - buy_algorithms.
+bicak_kanali_signal) aynı yapıyı görselleştirmek için yeniden kullanılır."""
+
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -20,6 +25,10 @@ from scanner import (
     bars_from_df, get_scanner_data,
 )
 from structure import Bar
+from theme import get_plotly_template
+from ui_style import freshness_caption
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # "4Hour" bilinçli olarak scanner.SCAN_TIMEFRAMES'e eklenmedi (app.py'deki Alım
 # Bölgesi Tarama gibi diğer modüllerde de çıkmasın diye) - sadece bu modülde,
@@ -145,6 +154,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
                     })
 
             st.session_state.bicak_signals = signals
+            st.session_state.bicak_signals_fetched_at = datetime.now(TR_TZ)
             st.session_state.bicak_show_chart = False
 
     if "bicak_signals" in st.session_state:
@@ -153,6 +163,9 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             st.warning("Tarama sonucunda yeşil çizginin (alım çizgisi) fiyatla kesiştiği hisse bulunamadı.")
         else:
             st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
+            fetched_at = st.session_state.get("bicak_signals_fetched_at")
+            if fetched_at:
+                freshness_caption(f"Veri güncelliği: {fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
             st.caption(
                 "💡 Tablo, Güncel Muma Uzaklık'a göre sıralı geliyor (en yakın kesişim en üstte). "
                 "Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "
@@ -196,7 +209,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             if result is None:
                 st.info("ℹ️ Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
             else:
-                _render_chart(bars, active_t, active_tf, result)
+                render_bicak_kanali_chart(bars, active_t, active_tf, result)
                 en_tepe, son_tepe = result.kilavuz_noktalari
                 st.caption(
                     f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
@@ -213,7 +226,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
                 )
 
 
-def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
+def render_bicak_kanali_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz):
     n = len(bars)
     xs = list(range(n))
     dates = [b.t[:10] for b in bars]
@@ -326,7 +339,7 @@ def _render_chart(bars: list[Bar], ticker: str, timeframe: str, result: Kilavuz)
 
     fig.update_layout(
         title=f"{ticker} - Kılavuz + Bıçak + Sıfır + Yeşil Çizgi ({_BICAK_TIMEFRAME_LABELS.get(timeframe, timeframe)})",
-        template="plotly_dark", height=650, xaxis_rangeslider_visible=False,
+        template=get_plotly_template(), height=650, xaxis_rangeslider_visible=False,
         xaxis_title="Bar # (üzerine gelince tarih görünür)",
         yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
     )
