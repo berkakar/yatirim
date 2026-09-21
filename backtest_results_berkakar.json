@@ -52133,5 +52133,40 @@
       }
     ],
     "source": "Alpaca"
+  },
+  {
+    "run_id": "TXN-bicak_kanali-1Day-wait_then_trail-20260921T110841",
+    "run_at": "2026-09-21T11:08:41+00:00",
+    "symbol": "TXN",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 185,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9959.34,
+    "pnl": -40.66,
+    "pnl_pct": -0.41,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-09-10T04:00:00Z",
+        "price": 258.86,
+        "qty": 38,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-14T04:00:00Z",
+        "price": 257.79,
+        "qty": 38,
+        "reason": "stop"
+      }
+    ],
+    "source": "Alpaca"
   }
 ]
