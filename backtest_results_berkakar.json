@@ -52940,5 +52940,55 @@
     ],
     "source": "Alpaca",
     "bicak_pencere": 30
+  },
+  {
+    "run_id": "ADI-bicak_kanali-1Day-wait_then_trail-20260921T201011",
+    "run_at": "2026-09-21T20:10:11+00:00",
+    "symbol": "ADI",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9575.47,
+    "pnl": -424.53,
+    "pnl_pct": -4.25,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-07-13T04:00:00Z",
+        "price": 393.47,
+        "qty": 25,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-17T04:00:00Z",
+        "price": 369.5,
+        "qty": 25,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-10T04:00:00Z",
+        "price": 357.24,
+        "qty": 26,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-14T04:00:00Z",
+        "price": 363.96,
+        "qty": 26,
+        "reason": "stop - kâr kilidi (+%4)"
+      }
+    ],
+    "source": "Alpaca",
+    "bicak_pencere": 30
   }
 ]
