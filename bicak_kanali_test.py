@@ -69,7 +69,8 @@ def render_bicak_kanali_test(target_list):
    kılavuz ile aynı eğimde geçen paralel doğru.
 4. **Dip kesişim mumu**: Bıçak çizgisinin, en dip'ten ÖNCEKİ barlarda soldan sağa
    ilk kestiği YEŞİL mum.
-5. **Sıfır nokta**: Dip kesişim mumundan geriye dönük son 60 bar içindeki dip
+5. **Sıfır nokta**: Dip kesişim mumundan geriye dönük - varsayılan olarak zaten
+   "kaç gün geriye gidilecek" ile sınırlanmış olan bar serisinin tamamında - dip
    pivotlarından fiyatça **en yükseği** ("en yüksek alım noktası") - kılavuz ile
    aynı eğimde bu noktadan geçen paralel doğru "sıfır çizgisi"ni oluşturur.
 6. **Yeşil çizgi (alım çizgisi)**: Kılavuz-bıçak ve bıçak-sıfır çizgisi arasındaki
