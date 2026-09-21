@@ -140,8 +140,12 @@ def run_backtest(
         start_idx += 1
 
     cash = starting_budget
-    position = None  # {"entry_price", "qty", "stop_price", "entry_idx"}
-    resting = None   # {"price", "qty", "stop_price", "reason"}
+    # stop_reason: seçili stop algoritmasının hangi aşaması şu anki stop_price'ı
+    # kurdu (bkz. StopDecision.reason) - "ilk stop" (pozisyon yeni açıldı),
+    # "breakeven", "kâr kilidi (+%X)", "structure@<fiyat>" gibi. Stop tetiklendiğinde
+    # işlem tablosunda bu, sadece "stop" değil, HANGİ aşamanın sattırdığını gösterir.
+    position = None  # {"entry_price", "qty", "stop_price", "stop_reason", "entry_idx"}
+    resting = None   # {"price", "qty", "stop_price", "stop_reason", "reason"}
 
     for i in range(start_idx, len(bars)):
         bar = bars[i]
@@ -151,7 +155,9 @@ def run_backtest(
             if bar.l <= position["stop_price"]:
                 fill = bar.o if bar.o < position["stop_price"] else position["stop_price"]
                 cash += position["qty"] * fill
-                result.trades.append(Trade("sell", bar.t, round(fill, 4), position["qty"], "stop"))
+                result.trades.append(
+                    Trade("sell", bar.t, round(fill, 4), position["qty"], f"stop - {position['stop_reason']}")
+                )
                 position = None
                 if max_loss_pct and not result.stop_loss_triggered and starting_budget:
                     loss_pct = (starting_budget - cash) / starting_budget * 100
@@ -170,6 +176,7 @@ def run_backtest(
             decision = stop_algo.trail(ctx, **resolve_kwargs(stop_algo.trail, algo_settings, shared_settings))
             if decision is not None and decision.price > position["stop_price"]:
                 position["stop_price"] = decision.price
+                position["stop_reason"] = decision.reason
             continue
 
         if result.stop_loss_triggered:
@@ -182,7 +189,7 @@ def run_backtest(
             qty = resting["qty"]
             cash -= qty * resting["price"]
             position = {"entry_price": resting["price"], "qty": qty,
-                        "stop_price": resting["stop_price"], "entry_idx": i}
+                        "stop_price": resting["stop_price"], "stop_reason": resting["stop_reason"], "entry_idx": i}
             result.trades.append(Trade("buy", bar.t, resting["price"], qty, resting["reason"]))
             resting = None
             continue
@@ -202,7 +209,7 @@ def run_backtest(
                     signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = ({"price": round(signal.price, 2), "qty": qty,
-                            "stop_price": round(initial_stop, 2), "reason": signal.reason}
+                            "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
                            if qty > 0 else None)
         elif signal is not None:
             qty = math.floor(cash / signal.price) if signal.price > 0 else 0
@@ -211,7 +218,7 @@ def run_backtest(
                     signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = {"price": round(signal.price, 2), "qty": qty,
-                           "stop_price": round(initial_stop, 2), "reason": signal.reason}
+                           "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
 
     if position is not None:
         last_bar = bars[-1]
