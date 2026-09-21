@@ -5,6 +5,7 @@ import streamlit as st
 from scipy.signal import argrelextrema
 
 from structure import Bar
+from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
 
 def bars_from_df(df: pd.DataFrame) -> list[Bar]:
@@ -175,18 +176,32 @@ SCAN_TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1
 # (gün-içi periyotlar - 15dk/30dk/1sa - için ortak bir değer, günlük için
 # ayrı bir değer). Yahoo tarafındaki gerçek üst sınırlar: gün-içi ~60 gün,
 # günlük pratikte ~730 gün - varsayılan/maksimumlar buna göre seçildi.
-_YF_INTERVALS = {"15Min": "15m", "30Min": "30m", "1Hour": "1h", "1Day": "1d"}
+#
+# "4Hour" bilinçli olarak SCAN_TIMEFRAMES'e eklenmedi - yfinance native
+# olarak 4 saatlik interval desteklemiyor (izin verilen aralıklar: 1m/2m/
+# 5m/15m/30m/60m/90m/1d/...), bu yüzden 1 saatlik barlar çekilip
+# _resample_to_4h ile sentetik 4 saatlik bara dönüştürülüyor (bkz.
+# get_scanner_data). SCAN_TIMEFRAMES tüm tarama modüllerinde (app.py'deki
+# Alım Bölgesi Tarama dahil) paylaşıldığı için buraya eklenirse istenmeyen
+# yerlerde de çıkar; ihtiyacı olan modül (bkz. bicak_kanali_test.py)
+# "4Hour" değerini get_scanner_data'ya doğrudan geçerek kullanır.
+_YF_INTERVALS = {"15Min": "15m", "30Min": "30m", "1Hour": "1h", "4Hour": "1h", "1Day": "1d"}
 INTRADAY_DEFAULT_DAYS = 15
 INTRADAY_MAX_DAYS = 60
 DAILY_DEFAULT_DAYS = 365
 DAILY_MAX_DAYS = 730
+FOUR_HOUR_DEFAULT_DAYS = 180
+FOUR_HOUR_MAX_DAYS = 730  # 1 saatlik barların yfinance'de izin verilen üst sınırıyla aynı (resample kaynağı bu)
 
 
 def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
     """get_scanner_data ve fetch_daily_pairs'in ortak veri çekme/temizleme
     mantığı: BIST .IS fallback'i, sütun normalizasyonu, saat dilimi
-    temizliği. Temiz bir OHLCV DataFrame döner, yetersiz/boş veride None."""
+    temizliği. Temiz bir OHLCV DataFrame döner, yetersiz/boş/bayat/anlamsız
+    veride None (bkz. yf_data_quality - güncellik ve iç tutarlılık
+    kontrolleri)."""
     formatted_ticker = ticker_symbol
+    resolved_ticker = formatted_ticker
 
     ticker_obj = yf.Ticker(formatted_ticker)
     df = ticker_obj.history(period=period, interval=interval)
@@ -194,10 +209,23 @@ def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
     # Eğer veri gelmediyse BIST hissesi olma ihtimaline karşı .IS ekleyip tekrar dene
     if df is None or df.empty or len(df) < min_rows:
         if not formatted_ticker.endswith(".IS"):
-            ticker_obj = yf.Ticker(f"{formatted_ticker}.IS")
+            resolved_ticker = f"{formatted_ticker}.IS"
+            ticker_obj = yf.Ticker(resolved_ticker)
             df = ticker_obj.history(period=period, interval=interval)
 
     if df is None or df.empty or len(df) < min_rows:
+        return None
+
+    # Yahoo'nun döndürdüğü barların iç tutarlılığını (High/Low/Open/Close),
+    # BIST sembollerinde günlük taban/tavan marjını aşan sıçramaları (bozuk
+    # tick) ve işlem görmeyen/durdurulmuş bir sembol için bayat/tekrarlanan
+    # fiyat döndürülüp döndürülmediğini doğrula - anlamsız veriyle
+    # tarama/sinyal üretmemek için.
+    if (
+        not is_ohlc_consistent(df)
+        or has_implausible_daily_move(df['Close'], resolved_ticker)
+        or has_flat_prices(df['Close'])
+    ):
         return None
 
     # Indeks olan 'Date'/'Datetime' sütununu normal bir 'Date' sütununa çevir
@@ -220,7 +248,29 @@ def _fetch_yf_ohlcv(ticker_symbol, period, interval, min_rows=60):
 
     if len(df) < min_rows:
         return None
+
+    # Son bar beklenenden fazla eskiyse (Yahoo'dan bayat/önbelleklenmiş bir
+    # yanıt geldiyse) veriyi güncel kabul etme.
+    if not is_fresh(df['Date'].iloc[-1].date()):
+        return None
+
     return df
+
+
+def _resample_to_4h(df: pd.DataFrame) -> pd.DataFrame | None:
+    """1 saatlik barları takvim saatine göre 4 saatlik gruplara toplayarak
+    sentetik 4 saatlik bar üretir (bkz. get_scanner_data - yfinance native
+    olarak 4h interval desteklemediği için 1h barlar buradan türetiliyor).
+    Gruplar takvim saatine hizalanır (00:00, 04:00, 08:00, ...), gerçek
+    borsa seans açılış saatine göre değil."""
+    d = df.set_index("Date")
+    agg = d.resample("4h").agg({
+        "Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum",
+    })
+    agg = agg.dropna(subset=["Open", "High", "Low", "Close"])
+    if agg.empty:
+        return None
+    return agg.reset_index()
 
 
 @st.cache_data(ttl=1800)  # Verileri 30 dakika hafızada tutar, Yahoo engeline takılmaz
@@ -228,15 +278,22 @@ def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
     """
     app.py tarafından çağrılan ana fonksiyon.
     Veriyi çeker, temizler ve formasyon analizlerini yapar.
-    timeframe: SCAN_TIMEFRAMES içinden biri ("15Min", "30Min", "1Hour", "1Day").
+    timeframe: SCAN_TIMEFRAMES içindeki değerlerden biri ("15Min", "30Min",
+    "1Hour", "1Day") veya (SCAN_TIMEFRAMES'e dahil olmayan, sadece Bıçak
+    Kanalı modülünün kullandığı) "4Hour" - bu durumda 1 saatlik barlar
+    çekilip _resample_to_4h ile 4 saatliğe dönüştürülür.
     period_days: Kaç gün geriye gidileceği. None ise timeframe'e göre varsayılan
-    kullanılır; her durumda ilgili maksimuma (gün-içi 60, günlük 730) sıkıştırılır.
+    kullanılır; her durumda ilgili maksimuma (gün-içi 60, 4 saatlik 730,
+    günlük 730) sıkıştırılır.
     """
     try:
         interval = _YF_INTERVALS.get(timeframe, _YF_INTERVALS["1Day"])
         if timeframe == "1Day":
             days = DAILY_DEFAULT_DAYS if period_days is None else int(period_days)
             days = max(1, min(days, DAILY_MAX_DAYS))
+        elif timeframe == "4Hour":
+            days = FOUR_HOUR_DEFAULT_DAYS if period_days is None else int(period_days)
+            days = max(1, min(days, FOUR_HOUR_MAX_DAYS))
         else:
             days = INTRADAY_DEFAULT_DAYS if period_days is None else int(period_days)
             days = max(1, min(days, INTRADAY_MAX_DAYS))
@@ -244,6 +301,11 @@ def get_scanner_data(ticker_symbol, timeframe="1Day", period_days=None):
         df = _fetch_yf_ohlcv(ticker_symbol, f"{days}d", interval)
         if df is None:
             return None, None, None, None
+
+        if timeframe == "4Hour":
+            df = _resample_to_4h(df)
+            if df is None or len(df) < 60:
+                return None, None, None, None
 
         # --- FORMASYON ANALİZLERİ ---
         cup_pattern = detect_cup_and_handle(df)

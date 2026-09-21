@@ -139,14 +139,17 @@ class AlpacaClient:
         closing_side = "sell" if side == "long" else "buy"
         return any(o["side"] == closing_side for o in r.json())
 
-    def place_market_entry(self, symbol: str, qty: float, side: str) -> dict:
-        return self._post("/orders", {
+    def place_market_entry(self, symbol: str, qty: float, side: str, client_order_id: str | None = None) -> dict:
+        payload = {
             "symbol": symbol,
             "qty": qty,
             "side": "buy" if side == "long" else "sell",
             "type": "market",
             "time_in_force": "day",
-        })
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
 
     def get_open_limit_buy_order(self, symbol: str) -> dict | None:
         r = self._get("/orders", params={"status": "open", "symbols": symbol})

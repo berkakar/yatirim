@@ -24,7 +24,7 @@
       "fills": []
     },
     "MU": {
-      "last_checked_at": "2026-09-18T22:07:31.991916+00:00",
+      "last_checked_at": "2026-09-21T18:22:37.979132+00:00",
       "fills": [
         {
           "id": "359ec2da-b68a-40c2-b55a-c8341a29eec5",
@@ -57,7 +57,7 @@
       ]
     },
     "NOW": {
-      "last_checked_at": "2026-09-18T22:07:32.523038+00:00",
+      "last_checked_at": "2026-09-21T18:22:39.573841+00:00",
       "fills": [
         {
           "id": "91ecacd6-a348-495b-8c1f-4d491f5b0954",
@@ -90,7 +90,7 @@
       ]
     },
     "NXPI": {
-      "last_checked_at": "2026-09-18T22:07:33.213938+00:00",
+      "last_checked_at": "2026-09-21T18:22:42.862870+00:00",
       "fills": [
         {
           "id": "346018e7-5d3f-457c-8e31-cfc341ec1a16",
@@ -156,23 +156,38 @@
       ]
     },
     "TTWO": {
-      "last_checked_at": "2026-09-18T22:07:34.598183+00:00",
+      "last_checked_at": "2026-09-21T18:22:45.407015+00:00",
       "fills": []
     },
     "MDB": {
-      "last_checked_at": "2026-09-18T22:07:31.642171+00:00",
+      "last_checked_at": "2026-09-21T18:22:36.323452+00:00",
       "fills": []
     },
     "UROY": {
-      "last_checked_at": "2026-09-17T17:21:25.909928+00:00",
-      "fills": []
+      "last_checked_at": "2026-09-21T18:22:46.443093+00:00",
+      "fills": [
+        {
+          "id": "26e5232a-4ca1-4d8c-9e46-37be834e1404",
+          "side": "buy",
+          "filled_avg_price": "4.55",
+          "filled_qty": "312",
+          "filled_at": "2026-09-18T16:46:58.891974Z"
+        },
+        {
+          "id": "724e05a4-1037-4faa-9f78-c355e97ec05d",
+          "side": "sell",
+          "filled_avg_price": "4.47",
+          "filled_qty": "312",
+          "filled_at": "2026-09-21T13:33:56.663326Z"
+        }
+      ]
     },
     "VEEV": {
-      "last_checked_at": "2026-09-18T19:13:59.192751+00:00",
+      "last_checked_at": "2026-09-21T18:22:47.737475+00:00",
       "fills": []
     },
     "INTC": {
-      "last_checked_at": "2026-09-18T19:13:52.727374+00:00",
+      "last_checked_at": "2026-09-21T18:22:34.479202+00:00",
       "fills": [
         {
           "id": "6005dfb0-eef7-4ff0-ab83-a25667eed088",
@@ -191,7 +206,7 @@
       ]
     },
     "NVDA": {
-      "last_checked_at": "2026-09-18T19:13:56.028193+00:00",
+      "last_checked_at": "2026-09-21T18:22:41.047053+00:00",
       "fills": [
         {
           "id": "20a33715-f051-470e-bd1e-43fede8bfb2b",
@@ -206,6 +221,25 @@
           "filled_avg_price": "209.766",
           "filled_qty": "10",
           "filled_at": "2026-08-26T16:37:51.255823Z"
+        }
+      ]
+    },
+    "PAYX": {
+      "last_checked_at": "2026-09-21T18:22:43.452150+00:00",
+      "fills": [
+        {
+          "id": "ecfcbefa-91b2-4c67-a55c-2893a9cef402",
+          "side": "buy",
+          "filled_avg_price": "115.893334",
+          "filled_qty": "45",
+          "filled_at": "2026-09-17T13:33:46.969003Z"
+        },
+        {
+          "id": "2f86b526-7f1d-46b5-8bb6-f2e99792f6c8",
+          "side": "sell",
+          "filled_avg_price": "114.17",
+          "filled_qty": "45",
+          "filled_at": "2026-09-21T14:35:26.904035Z"
         }
       ]
     }

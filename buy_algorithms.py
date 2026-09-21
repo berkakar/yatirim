@@ -9,10 +9,10 @@ seçilen bir "aktif algoritma") kullanılabilir - bkz. premium_buy_portfolio.py
 from dataclasses import dataclass
 from datetime import date, timedelta
 
+from bicak_kanali import find_kilavuz
 from demand_zones import find_buy_point
 from indicators import atr, ema
 from structure import Bar
-from ters_fibo import find_channel
 
 
 @dataclass(frozen=True)
@@ -161,41 +161,31 @@ def breakout_volume_signal(bars: list[Bar], daily_closes: list[float] | None = N
     )
 
 
-EGIMLI_TERS_FIBO_RATIOS = (0.382, 0.5, 0.618, 0.786)
-EGIMLI_TERS_FIBO_TOUCH_TOLERANCE_PCT = 0.005
-
-
-def egimli_ters_fibo_signal(bars: list[Bar], daily_closes: list[float] | None = None,
-                             order: int = 2, symmetry_tolerance: int = 1) -> BuySignal | None:
-    """Eğimli Ters Fibo: tepe/dip simetrisiyle bulunan "dönüm noktası" ile
-    pencerede en solda kalan ilk tepe arasındaki hattın eğiminde çizilen
-    paralel Fibonacci kanalı (bkz. ters_fibo.py). Günlük mumlarla
-    kullanılmak üzere tasarlandı (BackTest'te "1 Gün" periyodu seçilerek
-    çalıştırılmalı). Güncel bar, kanalın destek hatlarından birine değip
-    yeşil kapanırsa alım sinyali üretir."""
+def bicak_kanali_signal(bars: list[Bar], daily_closes: list[float] | None = None,
+                         order: int = 2, pencere: int | None = 30) -> BuySignal | None:
+    """Bıçak Kanalı: kılavuz/bıçak/sıfır çizgisi + türetilmiş oran yöntemiyle
+    (bkz. bicak_kanali.py) kurulan "yeşil çizgi"nin (alım çizgisi) güncel
+    bardaki seviyesi alım noktası olarak alınır. Yapı her bar için yeniden
+    kurulur - uygun bir düşüş bacağı/kılavuz bulunamazsa (dolayısıyla alım
+    noktası da) o bar için sinyal oluşmaz. Sinyal, hesaplanan seviyede
+    bekleyen bir limit emri olarak işlenir (bkz. backtest_engine.py /
+    alpaca_buy_points.py) - fiyat bu seviyeye gerileyip değdiğinde,
+    hesaplanan seviyenin kendisinden alım gerçekleşir."""
     if len(bars) < 5:
         return None
-    channel = find_channel(bars, order, symmetry_tolerance)
-    if channel is None:
+    kilavuz = find_kilavuz(bars, order, pencere)
+    if kilavuz is None:
         return None
 
-    last = bars[-1]
-    if last.c <= last.o:
-        return None  # konfirmasyon mumu yeşil değil
-
-    last_index = len(bars) - 1
-    for ratio in EGIMLI_TERS_FIBO_RATIOS:
-        level = channel.level(ratio, last_index)
-        if level <= 0:
-            continue
-        tolerance = level * EGIMLI_TERS_FIBO_TOUCH_TOLERANCE_PCT
-        if last.l <= level + tolerance and last.c >= level:
-            return BuySignal(
-                algorithm="egimli_ters_fibo", price=round(last.c, 2),
-                reason=f"Eğimli Ters Fibo kanalı {ratio:.3f} destek hattına değip yeşil kapandı",
-                style="pullback",
-            )
-    return None
+    slope, intercept = kilavuz.yesil_cizgi
+    level = slope * (len(bars) - 1) + intercept
+    if level <= 0:
+        return None
+    return BuySignal(
+        algorithm="bicak_kanali", price=round(level, 2),
+        reason="Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi",
+        style="pullback",
+    )
 
 
 ALGORITHMS = {
@@ -203,7 +193,7 @@ ALGORITHMS = {
     "trend_pullback": ("Trend İçi Dinamik Düzeltme", trend_pullback_signal),
     "volatility_support": ("Oynaklığa Duyarlı Dinamik Destek", volatility_support_signal),
     "breakout_volume": ("Kırılım + Hacim İvmesi", breakout_volume_signal),
-    "egimli_ters_fibo": ("Eğimli Ters Fibo", egimli_ters_fibo_signal),
+    "bicak_kanali": ("Bıçak Kanalı", bicak_kanali_signal),
 }
 DEFAULT_ALGORITHM = "demand_zone"
 

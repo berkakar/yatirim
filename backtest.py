@@ -17,26 +17,40 @@ from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
 from backtest_engine import run_backtest
-from buy_algorithms import ALGORITHMS, egimli_ters_fibo_signal
+from bicak_kanali import find_kilavuz
+from bicak_kanali_test import render_bicak_kanali_chart
+from buy_algorithms import ALGORITHMS
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
 from stop_loss_settings import load_stop_loss_settings
 from structure import Bar
-from ters_fibo import analyze as ters_fibo_analyze
-from ters_fibo import nearest_support_below
-from ui_style import zebra_style
+from theme import get_plotly_template, negative_color, positive_color
+from ui_style import zebra_style, freshness_caption
 
 TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
-# valuation.py / tefas_fonlari.py ile aynı palet (uygulama genelinde tutarlılık için).
+# Grafik üzerindeki mum/işaretçi renkleri kasıtlı olarak sabit: gerçek alım-satım
+# terminallerinde (TradingView vb.) yükseliş/düşüş rengi gündüz/gece temasından
+# bağımsızdır. valuation.py / tefas_fonlari.py ile aynı palet.
 _POSITIVE_HEX = "#2ec4b6"
 _NEGATIVE_HEX = "#e63946"
-_POSITIVE_COLOR = f"color: {_POSITIVE_HEX}; font-weight: bold;"
-_NEGATIVE_COLOR = f"color: {_NEGATIVE_HEX}; font-weight: bold;"
-_SIDE_COLORS = {"Alış": _POSITIVE_COLOR, "Satış": _NEGATIVE_COLOR}
 _BUY_MARKER_COLOR = "#FFFFFF"   # işlem detay grafiğinde alım zamanı
 _SELL_MARKER_COLOR = "#800000"  # işlem detay grafiğinde satım zamanı (bordo)
+
+
+# Tablo hücrelerindeki K/Z metin rengi ise sayfa arka planı üzerinde okunurluk
+# için gündüz/gece moduna göre değişir - çağrı anında hesaplanır.
+def _positive_text_style():
+    return f"color: {positive_color()}; font-weight: bold;"
+
+
+def _negative_text_style():
+    return f"color: {negative_color()}; font-weight: bold;"
+
+
+def _side_style(side):
+    return {"Alış": _positive_text_style(), "Satış": _negative_text_style()}.get(side, "")
 
 _SUMMARY_COLUMN_CONFIG = {
     "Başlangıç Bütçe": st.column_config.NumberColumn(format="localized"),
@@ -82,11 +96,11 @@ def _style_summary(df: pd.DataFrame):
             for idx in data.index:
                 v = data.loc[idx, col]
                 if pd.notna(v):
-                    style_df.loc[idx, col] = _POSITIVE_COLOR if v > 0 else (_NEGATIVE_COLOR if v < 0 else "")
+                    style_df.loc[idx, col] = _positive_text_style() if v > 0 else (_negative_text_style() if v < 0 else "")
         if "Zarar Kes" in data.columns:
             for idx in data.index:
                 if str(data.loc[idx, "Zarar Kes"]).startswith("Tetiklendi"):
-                    style_df.loc[idx, "Zarar Kes"] = _NEGATIVE_COLOR
+                    style_df.loc[idx, "Zarar Kes"] = _negative_text_style()
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
@@ -99,7 +113,7 @@ def _style_trades(df: pd.DataFrame):
         style_df = pd.DataFrame("", index=data.index, columns=data.columns)
         if "Yön" in data.columns:
             for idx in data.index:
-                style_df.loc[idx, "Yön"] = _SIDE_COLORS.get(data.loc[idx, "Yön"], "")
+                style_df.loc[idx, "Yön"] = _side_style(data.loc[idx, "Yön"])
         return style_df
 
     return zebra_style(df, extra_style_fn=apply_styles)
@@ -153,138 +167,42 @@ def _render_trade_detail_chart(bars: list[Bar], trades: list[dict], symbol: str,
 
     fig.update_layout(
         title=f"{symbol} - İşlem Detay Grafiği ({timeframe_label})",
-        template="plotly_dark", height=600, xaxis_rangeslider_visible=False,
+        template=get_plotly_template(), height=600, xaxis_rangeslider_visible=False,
     )
     st.plotly_chart(fig, use_container_width=True)
 
 
-# ratio -> (renk, çizgi stili) - 0 kanalın ana referans hattı (ilk tepe - dönüm
-# noktası), pozitifler destek tarafında (aşağı ötelenmiş), negatifler direnç
-# tarafında (yukarı ötelenmiş) genişleme seviyeleri.
-_EGIMLI_TERS_FIBO_CHART_LEVELS = (
-    (-1.0, "#1d3557"), (-0.618, "#457b9d"), (-0.382, "#8ecae6"), (-0.236, "#a8dadc"),
-    (0.0, "#ffffff"),
-    (0.236, "#ffe066"), (0.382, "#ffc300"), (0.5, "#ffb703"), (0.618, "#fb8500"),
-    (0.786, "#e63946"), (1.0, "#9d0208"),
-)
-
-
-def _render_egimli_ters_fibo_chart(bars: list[Bar], symbol: str, timeframe_label: str):
-    """Eğimli Ters Fibo algoritmasının kurduğu yapıyı - tepe/dip
-    pivotları, dip ve tepe hatları, dönüm noktası, tüm Fibonacci kanal
-    hatları ve (varsa) muhtemel/gerçekleşmiş alım noktasını - tek bir
-    grafikte gösterir. bkz. ters_fibo.py."""
+def _render_bicak_kanali_chart(bars: list[Bar], symbol: str, timeframe: str):
+    """Bıçak Kanalı algoritmasının kurduğu yapıyı - kılavuz/bıçak/sıfır/yeşil
+    çizgi, dip kesişim mumu ve (varsa) yeşil çizginin fiyatla en son kesiştiği
+    "en yakın alım noktası" - tek bir grafikte gösterir. Grafik çizimi
+    bicak_kanali_test.py'deki (🔪 Bıçak Kanalı Testi modülü) ile aynı
+    fonksiyonu (render_bicak_kanali_chart) kullanır, böylece iki modülde de
+    birebir aynı yapı görselleştirilir; buy_algorithms.bicak_kanali_signal
+    ile aynı order/pencere varsayılanlarıyla kurulur. bkz. bicak_kanali.py."""
     if not bars:
         st.warning("Grafik için mum verisi bulunamadı.")
         return
 
-    analysis = ters_fibo_analyze(bars)
-    if analysis is None:
-        st.info("Bu veri için Eğimli Ters Fibo yapısı kurulamadı (yeterli tepe/dip simetrisi bulunamadı).")
+    result = find_kilavuz(bars)
+    if result is None:
+        st.info("Bu veri için Bıçak Kanalı yapısı kurulamadı (uygun bir düşüş bacağı/kılavuz bulunamadı).")
         return
 
-    n = len(bars)
-    xs = list(range(n))
-    dates = [b.t[:10] for b in bars]
-    fig = go.Figure(data=[go.Candlestick(
-        x=xs, open=[b.o for b in bars], high=[b.h for b in bars],
-        low=[b.l for b in bars], close=[b.c for b in bars], name="Fiyat",
-        increasing=dict(line=dict(color=_POSITIVE_HEX), fillcolor=_POSITIVE_HEX),
-        decreasing=dict(line=dict(color=_NEGATIVE_HEX), fillcolor=_NEGATIVE_HEX),
-        text=dates, hoverinfo="x+text",
-    )])
-
-    # Bar index x ekseninde okunabilirlik için seyrek aralıklarla tarih etiketi.
-    tick_step = max(1, n // 12)
-    fig.update_xaxes(tickmode="array", tickvals=xs[::tick_step], ticktext=dates[::tick_step])
-
-    fig.add_trace(go.Scatter(
-        x=[p.index for p in analysis.highs], y=[p.price for p in analysis.highs],
-        mode="markers", name="Tepe",
-        marker=dict(symbol="triangle-down", size=11, color=_NEGATIVE_HEX, line=dict(color="#000000", width=1)),
-    ))
-    fig.add_trace(go.Scatter(
-        x=[p.index for p in analysis.validated_lows], y=[p.price for p in analysis.validated_lows],
-        mode="markers", name="Geçerli Dip",
-        marker=dict(symbol="triangle-up", size=11, color=_POSITIVE_HEX, line=dict(color="#000000", width=1)),
-    ))
-
-    channel = analysis.channel
-    turning_index_i = channel.turning_index
-    # Dip/tepe hatlarını, mevcut veri aralığının en fazla bir katı kadar
-    # (dönüm noktası veri dışında kalıyorsa) ileri/geri uzat.
-    line_start = max(min(0, turning_index_i), -n)
-    line_end = min(max(n - 1, turning_index_i), 2 * n)
-    line_x = list(range(int(line_start), int(line_end) + 1))
-    dip_slope, dip_intercept = analysis.dip_line
-    peak_slope, peak_intercept = analysis.peak_line
-    fig.add_trace(go.Scatter(
-        x=line_x, y=[dip_slope * x + dip_intercept for x in line_x],
-        mode="lines", name="Dip Hattı (destek)", line=dict(color=_POSITIVE_HEX, dash="dot", width=1.5),
-    ))
-    fig.add_trace(go.Scatter(
-        x=line_x, y=[peak_slope * x + peak_intercept for x in line_x],
-        mode="lines", name="Tepe Hattı (direnç)", line=dict(color=_NEGATIVE_HEX, dash="dot", width=1.5),
-    ))
-
-    fig.add_trace(go.Scatter(
-        x=[channel.turning_index], y=[channel.turning_price], mode="markers+text",
-        name="Dönüm Noktası", text=["Dönüm Noktası"], textposition="bottom center",
-        marker=dict(symbol="star", size=16, color="#f4a300", line=dict(color="#000000", width=1)),
-    ))
-    fig.add_trace(go.Scatter(
-        x=[channel.first_peak_index], y=[channel.first_peak_price], mode="markers+text",
-        name="İlk Tepe", text=["İlk Tepe"], textposition="top center",
-        marker=dict(symbol="star", size=14, color="#f4a300", line=dict(color="#000000", width=1)),
-    ))
-
-    for ratio, color in _EGIMLI_TERS_FIBO_CHART_LEVELS:
-        fig.add_trace(go.Scatter(
-            x=xs, y=[channel.level(ratio, x) for x in xs], mode="lines",
-            name=f"Fib {ratio:g}", line=dict(color=color, width=1, dash="dash"), opacity=0.85,
-        ))
-
-    last_index = n - 1
-    last_bar = bars[-1]
-    signal = egimli_ters_fibo_signal(bars)
-    if signal is not None:
-        fig.add_trace(go.Scatter(
-            x=[last_index], y=[signal.price], mode="markers+text", name="Alım Sinyali",
-            text=["Alım Sinyali"], textposition="top center",
-            marker=dict(symbol="star", size=20, color="#ffd60a", line=dict(color="#000000", width=1.5)),
-        ))
-    else:
-        candidate = nearest_support_below(channel, last_index, last_bar.c)
-        if candidate is not None:
-            ratio, level = candidate
-            fig.add_trace(go.Scatter(
-                x=[last_index], y=[level], mode="markers+text", name="Muhtemel Alım Noktası",
-                text=[f"Muhtemel Alım ({ratio:g})"], textposition="bottom center",
-                marker=dict(symbol="diamond", size=13, color="#ffd60a", line=dict(color="#000000", width=1)),
-            ))
-
-    # Dönüm noktası (ve buna bağlı dip/tepe hatları) çok uzağa ekstrapole
-    # olabilir - eksen ölçeğini buna göre değil, gerçek mum verisine göre
-    # sabitliyoruz; dönüm noktası görünür aralığın dışında kalsa da
-    # trace/altyazıda bilgisi kalır.
-    x_margin = max(5, int(0.15 * n))
-    x_range = [-x_margin, (n - 1) + x_margin]
-    price_values = [b.h for b in bars] + [b.l for b in bars]
-    for ratio, _color in _EGIMLI_TERS_FIBO_CHART_LEVELS:
-        price_values += [channel.level(ratio, 0), channel.level(ratio, n - 1)]
-    y_min, y_max = min(price_values), max(price_values)
-    y_pad = (y_max - y_min) * 0.08 or 1.0
-
-    fig.update_layout(
-        title=f"{symbol} - Eğimli Ters Fibo Analizi ({timeframe_label})",
-        template="plotly_dark", height=700, xaxis_rangeslider_visible=False,
-        xaxis_title="Bar # (üzerine gelince tarih görünür)",
-        xaxis=dict(range=x_range), yaxis=dict(range=[y_min - y_pad, y_max + y_pad]),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    render_bicak_kanali_chart(bars, symbol, timeframe, result)
+    en_tepe, son_tepe = result.kilavuz_noktalari
     st.caption(
-        f"Dönüm Noktası: bar #{channel.turning_index:.1f} · {channel.turning_price:.2f} · "
-        f"İlk Tepe: bar #{channel.first_peak_index} · {channel.first_peak_price:.2f}"
+        f"Seçilen düşüş: {result.leg_tepe.t[:10]} ({result.leg_tepe.price:.2f}) → "
+        f"{result.leg_dip.t[:10]} ({result.leg_dip.price:.2f}) · "
+        f"kılavuz noktaları: {en_tepe.t[:10]} ({en_tepe.price:.2f}) ve "
+        f"{son_tepe.t[:10]} ({son_tepe.price:.2f}) · "
+        f"en dip nokta: {result.en_dip.t[:10]} ({result.en_dip.price:.2f}) · "
+        f"sıfır nokta: {result.sifir_nokta.t[:10]} ({result.sifir_nokta.price:.2f})"
+    )
+    st.caption(
+        f"üst_oran (kılavuz-bıçak): {result.ust_oran:.4f} · "
+        f"alt_oran (bıçak-sıfır çizgisi): {result.alt_oran:.4f} · "
+        f"türetilmiş_oran: {result.turetilmis_oran:.4f}"
     )
 
 
@@ -514,6 +432,9 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 "İşlem Sayısı": len(r.get("trades") or []),
                 "Zarar Kes": _format_stop_loss(r),
             } for r in runs]
+            latest_run_at = max((r.get("run_at") or "" for r in runs), default="")
+            if latest_run_at:
+                freshness_caption(f"En son çalıştırma: {latest_run_at} UTC (her satırın kendi zamanı 'Çalıştırma (UTC)' sütununda).")
             st.dataframe(
                 _style_summary(pd.DataFrame(summary_rows)), column_config=_SUMMARY_COLUMN_CONFIG,
                 use_container_width=True, hide_index=True,
@@ -527,27 +448,26 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
             picked = st.selectbox("İşlem detayı için bir çalıştırma seç", options, key=f"bt_detail_pick_{algo_id}")
             picked_run = runs[options.index(picked)]
 
-            if algo_id == "egimli_ters_fibo":
-                fibo_chart_key = f"bt_show_fibo_chart_{algo_id}"
-                if fibo_chart_key not in st.session_state:
-                    st.session_state[fibo_chart_key] = False
-                if st.button("📐 Eğimli Ters Fibo Analiz Grafiği", key=f"bt_fibo_chart_btn_{algo_id}"):
-                    st.session_state[fibo_chart_key] = not st.session_state[fibo_chart_key]
+            if algo_id == "bicak_kanali":
+                bicak_chart_key = f"bt_show_bicak_chart_{algo_id}"
+                if bicak_chart_key not in st.session_state:
+                    st.session_state[bicak_chart_key] = False
+                if st.button("🔪 Bıçak Kanalı Analiz Grafiği", key=f"bt_bicak_chart_btn_{algo_id}"):
+                    st.session_state[bicak_chart_key] = not st.session_state[bicak_chart_key]
 
-                if st.session_state[fibo_chart_key]:
+                if st.session_state[bicak_chart_key]:
                     fallback_start = datetime.now(timezone.utc) - timedelta(days=(picked_run.get("days_of_data") or 180) + 5)
-                    with st.spinner("Eğimli Ters Fibo grafiği için mum verileri çekiliyor..."):
+                    with st.spinner("Bıçak Kanalı grafiği için mum verileri çekiliyor..."):
                         try:
-                            fibo_bars = _fetch_chart_bars(
+                            bicak_bars = _fetch_chart_bars(
                                 key_id, secret_key, picked_run.get("symbol"), picked_run.get("timeframe"),
                                 fallback_start.date().isoformat(),
                             )
                         except Exception as e:
                             st.error(f"Mum verileri çekilemedi: {e}")
-                            fibo_bars = []
-                    _render_egimli_ters_fibo_chart(
-                        fibo_bars, picked_run.get("symbol"),
-                        TIMEFRAME_LABELS.get(picked_run.get("timeframe"), picked_run.get("timeframe")),
+                            bicak_bars = []
+                    _render_bicak_kanali_chart(
+                        bicak_bars, picked_run.get("symbol"), picked_run.get("timeframe"),
                     )
 
             trades = picked_run.get("trades") or []
@@ -559,6 +479,8 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                     "Adet": t.get("qty"),
                     "Sebep": t.get("reason"),
                 } for t in trades]
+                if picked_run.get("run_at"):
+                    freshness_caption(f"Bu çalıştırma tarihi: {picked_run['run_at']} UTC.")
                 st.dataframe(
                     _style_trades(pd.DataFrame(trade_rows)), column_config=_TRADES_COLUMN_CONFIG,
                     use_container_width=True, hide_index=True,

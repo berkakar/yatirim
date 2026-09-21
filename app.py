@@ -6,10 +6,12 @@ import plotly.graph_objects as go
 import json
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
 from github_config import read_json_from_github, write_json_to_github
-from ui_style import zebra_style
+from ui_style import zebra_style, freshness_caption
+from theme import inject_css, render_mode_switcher, get_plotly_template
 from scanner import (
     get_scanner_data, bars_from_df, fetch_daily_pairs, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
@@ -25,6 +27,7 @@ from dtw_analysis import (
     compute_two_day_trend,
     find_local_extremes,
     load_cached_dtw_results,
+    load_cached_dtw_meta,
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
@@ -38,6 +41,9 @@ from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
 from version_info import get_version_label
+from connection_status import check_all_connections
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
 
 NAV_HOME = "🏠 Giriş Sayfası"
 MODULE_GROUPS = {
@@ -111,6 +117,7 @@ def load_selections(username):
 
 # Sayfa Yapılandırması
 st.set_page_config(layout="wide", page_title="Yatırım Terminali")
+inject_css()
 
 # ------------------------------------------------------------------------------
 # GİRİŞ (AUTHENTICATION)
@@ -124,7 +131,8 @@ authenticator = stauth.Authenticate(
 )
 _LOGO_PATH = "assets/logo.jpg"
 _LOGIN_BOX_WIDTH = 380
-if st.session_state.get("authentication_status") is not True and os.path.exists(_LOGO_PATH):
+_not_authenticated = st.session_state.get("authentication_status") is not True
+if _not_authenticated and os.path.exists(_LOGO_PATH):
     # Giriş formu (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
     # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
     st.markdown(
@@ -139,10 +147,13 @@ if st.session_state.get("authentication_status") is not True and os.path.exists(
     )
     _login_col, _logo_col = st.columns([1, 1], gap="large")
     with _login_col:
+        render_mode_switcher(key="login_theme_switcher")
         authenticator.login(location="main")
     with _logo_col:
         st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
 else:
+    if _not_authenticated:
+        render_mode_switcher(key="login_theme_switcher")
     authenticator.login(location="main")
 
 _auth_status = st.session_state.get("authentication_status")
@@ -182,6 +193,8 @@ if removed_group and "selected_stock_groups" in st.session_state:
 # ------------------------------------------------------------------------------
 # YAN MENÜ (SIDEBAR) AYARLARI
 # ------------------------------------------------------------------------------
+with st.sidebar:
+    render_mode_switcher(key="sidebar_theme_switcher")
 market = st.sidebar.selectbox("Piyasa Seçimi", MARKETS)
 
 # Piyasa değiştiğinde, artık seçili piyasaya ait olmayan grup seçimlerini
@@ -376,6 +389,17 @@ if module == NAV_HOME:
         st.info(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
 
     st.divider()
+    st.subheader("🔌 Bağlantılar")
+    bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
+    connections = check_all_connections(key_id, secret_key, bot_token)
+    conn_cols = st.columns(len(connections))
+    for col, (name, (is_connected, detail)) in zip(conn_cols, connections.items()):
+        icon = "🟢" if is_connected else "🔴"
+        col.markdown(f"{icon} **{name}**")
+        if not is_connected:
+            col.caption(detail)
+
+    st.divider()
     st.subheader("📋 Hisse Listeleri")
     lc1, lc2, lc3, lc4 = st.columns(4)
     lc1.metric("NASDAQ 100 Listesi", len(st.session_state.ticker_lists["NASDAQ 100"]))
@@ -490,9 +514,13 @@ elif module == "Alım Bölgesi Tarama":
                     del st.session_state[key]
             st.session_state.pop("scan_backtest_runs", None)
             st.session_state.scan_signals = signals
+            st.session_state.scan_signals_fetched_at = datetime.now(TR_TZ)
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
         st.subheader("🎯 Bulunan Formasyonlar")
+        scan_fetched_at = st.session_state.get("scan_signals_fetched_at")
+        if scan_fetched_at:
+            freshness_caption(f"Veri güncelliği: {scan_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
         scan_results_df = pd.DataFrame(st.session_state.scan_signals)
 
         def _toggle_all_scan_rows():
@@ -608,6 +636,7 @@ elif module == "Alım Bölgesi Tarama":
             if new_runs:
                 append_results(username, new_runs)
             st.session_state.scan_backtest_runs = bt_runs
+            st.session_state.scan_backtest_runs_run_at = run_at
             if not bt_runs:
                 st.warning("Seçilenler için veri çekilemediğinden backtest çalıştırılamadı.")
     elif 'scan_signals' in st.session_state:
@@ -615,6 +644,8 @@ elif module == "Alım Bölgesi Tarama":
 
     if 'scan_backtest_runs' in st.session_state and st.session_state.scan_backtest_runs:
         st.subheader("🧪 Backtest Sonuçları")
+        if st.session_state.get("scan_backtest_runs_run_at"):
+            freshness_caption(f"Bu backtest çalıştırması: {st.session_state['scan_backtest_runs_run_at']} UTC.")
         st.caption(
             "Yahoo Finance verisiyle çalışır (Alpaca hesabı gerekmez) - sonuçlar BackTest modülünün kalıcı "
             "geçmişine \"Yahoo Finance\" kaynağıyla etiketlenerek ekleniyor, bu yüzden Premium Buy Point "
@@ -713,7 +744,7 @@ elif module == "Alım Bölgesi Tarama":
                 )
             fig.update_layout(
                 title=f"{active_t} ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)}) - Alım Bölgesi Grafiği",
-                template="plotly_dark", height=500, xaxis_rangeslider_visible=False,
+                template=get_plotly_template(), height=500, xaxis_rangeslider_visible=False,
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -788,6 +819,7 @@ elif module == "Stop Loss Hesaplayıcı":
         if results:
             df_res = pd.DataFrame(results)
             st.subheader("📊 Detaylı Stop Loss & EMA Analizi")
+            freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten analiz anında çekildi, en fazla 30 dk önbellekli olabilir).")
             st.dataframe(zebra_style(df_res), use_container_width=True, hide_index=True)
 
 # ==============================================================================
@@ -822,7 +854,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
                 status_text.text(f"Veriler kontrol ediliyor ({done}/{total}): {ticker}")
                 progress_bar.progress(done / total)
 
-            raw_results, freshly_fetched = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
+            raw_results, freshly_fetched, cached_at = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
 
             status_text.empty()
             progress_bar.empty()
@@ -831,6 +863,8 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
 
             # İş modeli alt sektör ortalamalarına ve 100 puanlık matrise göre skorla
             st.session_state.val_results = calculate_sector_relative_scores(raw_results)
+            valid_dates = [d for d in cached_at.values() if d]
+            st.session_state.val_oldest_cached_at = min(valid_dates) if valid_dates else None
 
     if 'val_results' in st.session_state and st.session_state.val_results:
         df_val = pd.DataFrame(st.session_state.val_results)
@@ -843,6 +877,12 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             df_val = df_val[df_val["Alt Sektör (İş Modeli)"] == selected_sub_sector]
 
         st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
+        oldest_cached_at = st.session_state.get("val_oldest_cached_at")
+        if oldest_cached_at:
+            freshness_caption(
+                f"Veri güncelliği: en eski hisse {oldest_cached_at} tarihinde çekilmiş "
+                "(her hisse kendi son bilanço tarihine göre bağımsız yenilenir, bkz. valuation._needs_refresh)."
+            )
 
         # Kolon İpuçları (Hint / Tooltip Yapılandırması)
         column_config = {
@@ -932,7 +972,7 @@ elif module == "📊 Bağımsız Hisse Grafiği":
                     low=df_viz['Low'], close=df_viz['Close'], name='Fiyat'
                 )])
                 
-                fig.update_layout(title=f"{active_t} - Mum Grafiği", template="plotly_dark", height=550, xaxis_rangeslider_visible=False)
+                fig.update_layout(title=f"{active_t} - Mum Grafiği", template=get_plotly_template(), height=550, xaxis_rangeslider_visible=False)
                 st.plotly_chart(fig, use_container_width=True)
 
 
@@ -1253,6 +1293,9 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
         with tab1:
             st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
             if 'self_sim_results' in st.session_state and st.session_state.self_sim_results:
+                dtw_last_update = load_cached_dtw_meta().get("last_update_date")
+                if dtw_last_update:
+                    freshness_caption(f"Veri güncelliği: {dtw_last_update} (Yahoo Finance 5 dakikalık veri, günde 1 kez önbelleklenir).")
                 df_self = pd.DataFrame(st.session_state.self_sim_results)
 
                 # JSON'dan gelen sayısal skorları kesin olarak float tipine dönüştür
@@ -1322,7 +1365,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
                 fig.update_layout(
                     title=f"{selected_t} - 5 Dakikalık Fiyat Karşılaştırması (Türkiye Saati - TRT)",
-                    template="plotly_dark", height=600,
+                    template=get_plotly_template(), height=600,
                     xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"Fiyat {t_data['day1']['date']} ($)", font=dict(color="#00d2ff"))),
                     yaxis2=dict(title=dict(text=f"Fiyat {t_data['day2']['date']} ($)", font=dict(color="#ff9f1c")), overlaying="y", side="right")
@@ -1357,7 +1400,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
                 fig.update_layout(
                     title=f"{t1_sel} vs {t2_sel} - Son Gün 5m Fiyat Hareketi Kıyaslaması (TRT)",
-                    template="plotly_dark", height=600,
+                    template=get_plotly_template(), height=600,
                     xaxis=dict(title="Zaman (Türkiye Yerel Saati)"),
                     yaxis=dict(title=dict(text=f"{t1_sel} Fiyat ($)", font=dict(color="#2ec4b6"))),
                     yaxis2=dict(title=dict(text=f"{t2_sel} Fiyat ($)", font=dict(color="#e63946")), overlaying="y", side="right")
@@ -1422,7 +1465,7 @@ elif module == "📐 Hisse Patern Analizi":
 # ==============================================================================
 elif module == "BackTest":
     st.header("🧪 BackTest")
-    st.caption("Premium buy-point algoritmalarını ve Alpaca'daki structure-based trailing stop'u seçtiğiniz hisse üzerinde geçmiş veriyle yeniden oynatır.")
+    st.caption("Seçtiğiniz hisse üzerinde, seçtiğiniz buy-point algoritması × mum periyodu × stop-loss algoritması kombinasyonlarının her birini canlı sistemle birebir aynı karar mantığıyla geçmiş veri üzerinde yeniden oynatır - sonuçlar, o kombinasyonun canlıda gerçekte ne yapacağını yansıtır. Her çalıştırma algoritma bazlı sekmelerde kalıcı olarak biriktirilir; özet tablonun yanında işlem detayları ve grafiği de incelenebilir.")
     render_backtest(target_list, username)
 
 # ==============================================================================
