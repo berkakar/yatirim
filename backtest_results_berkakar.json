@@ -52420,5 +52420,82 @@
       }
     ],
     "source": "Alpaca"
+  },
+  {
+    "run_id": "ADI-bicak_kanali-1Day-wait_then_trail-20260921T112821",
+    "run_at": "2026-09-21T11:28:21+00:00",
+    "symbol": "ADI",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 300,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9921.91,
+    "pnl": -78.09,
+    "pnl_pct": -0.78,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-03-18T04:00:00Z",
+        "price": 308.57,
+        "qty": 32,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-03-25T04:00:00Z",
+        "price": 320.9128,
+        "qty": 32,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-03-27T04:00:00Z",
+        "price": 309.05,
+        "qty": 33,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-04-07T04:00:00Z",
+        "price": 321.412,
+        "qty": 33,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-07-13T04:00:00Z",
+        "price": 393.47,
+        "qty": 27,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-29T04:00:00Z",
+        "price": 354.12,
+        "qty": 27,
+        "reason": "stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-10T04:00:00Z",
+        "price": 357.24,
+        "qty": 27,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-14T04:00:00Z",
+        "price": 363.96,
+        "qty": 27,
+        "reason": "stop"
+      }
+    ],
+    "source": "Alpaca"
   }
 ]
