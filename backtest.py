@@ -28,6 +28,7 @@ from ui_style import zebra_style, freshness_caption
 
 TIMEFRAMES = ["15Min", "30Min", "1Hour", "1Day"]
 TIMEFRAME_LABELS = {"15Min": "15 Dakika", "30Min": "30 Dakika", "1Hour": "1 Saat", "1Day": "1 Gün"}
+STOP_TIMEFRAME_SAME_AS_ENTRY = "__same__"  # "Alım mumuyla aynı" - run_backtest'e stop_bars/stop_timeframe hiç geçirilmez
 DAILY_TREND_LOOKBACK_DAYS = 400  # trend_pullback SMA200 + trend filtresi için yeterli pay
 
 # Grafik üzerindeki mum/işaretçi renkleri kasıtlı olarak sabit: gerçek alım-satım
@@ -311,6 +312,17 @@ def _render_settings():
         if col.checkbox(TIMEFRAME_LABELS[tf], key=f"bt_tf_{tf}")
     ]
 
+    stop_timeframe_choice = st.selectbox(
+        "Stop-Loss Mum Periyodu", options=[STOP_TIMEFRAME_SAME_AS_ENTRY] + TIMEFRAMES,
+        format_func=lambda tf: "Alım mumuyla aynı" if tf == STOP_TIMEFRAME_SAME_AS_ENTRY else TIMEFRAME_LABELS[tf],
+        key="bt_stop_timeframe",
+        help="Alım sinyali yukarıda seçilen mum periyodu/periyotlarıyla üretilir; bu seçenek sadece stop-loss "
+             "tetiklenmesinin ve iz sürmenin (trailing) hangi mum periyoduyla kontrol edileceğini belirler - "
+             "canlı sistemde de alım (alpaca_buy_points.py, sembole özel periyot) ve stop/trail "
+             "(alpaca_trailing_stop.py, ayrı TRADE_TIMEFRAME) zaten farklı periyotlarda çalışıyor. Örn. alımı "
+             "'1 Gün' ile üretip stop'u '30 Dakika' ile daha sık kontrol edebilirsin.",
+    )
+
     with st.expander("📅 Mum verisi hangi saatleri kapsıyor?"):
         st.markdown(
             "- **15 Dakika / 30 Dakika / 1 Saat:** Sadece normal seans (09:30-16:00 ET) "
@@ -350,12 +362,13 @@ def _render_settings():
         help="Başlangıç bütçesine göre toplam zarar bu yüzdeye ulaştığında, o çalıştırma için yeni alım/satım işlemleri durdurulur.",
     )
 
-    return (selected_algorithms, selected_stop_algorithms, selected_timeframes, int(days_of_data),
-            int(days_before_trading), float(budget), bool(stop_loss_enabled), float(max_loss_pct), int(bicak_pencere))
+    return (selected_algorithms, selected_stop_algorithms, selected_timeframes, stop_timeframe_choice,
+            int(days_of_data), int(days_before_trading), float(budget), bool(stop_loss_enabled),
+            float(max_loss_pct), int(bicak_pencere))
 
 
-def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days_of_data, days_before_trading,
-                    budget, stop_loss_enabled, max_loss_pct, username, bicak_pencere):
+def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, stop_timeframe_choice, days_of_data,
+                    days_before_trading, budget, stop_loss_enabled, max_loss_pct, username, bicak_pencere):
     start = datetime.now(timezone.utc) - timedelta(days=days_of_data)
     bars_by_tf = {}
     for tf in timeframes:
@@ -364,6 +377,22 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
         except Exception as e:
             st.error(f"{symbol} için {TIMEFRAME_LABELS[tf]} barları çekilemedi: {e}")
             bars_by_tf[tf] = []
+
+    # Stop-Loss Mum Periyodu "Alım mumuyla aynı" dışında bir şey seçildiyse,
+    # o periyodun barları BİR KEZ çekilir ve tüm kombinasyonlarda stop-loss
+    # tetiklenmesi/trail için (alım sinyalinin kendi periyodundan bağımsız
+    # olarak) kullanılır - bkz. run_backtest'in stop_bars/stop_timeframe
+    # parametreleri.
+    stop_bars_override = None
+    if stop_timeframe_choice != STOP_TIMEFRAME_SAME_AS_ENTRY:
+        if stop_timeframe_choice in bars_by_tf:
+            stop_bars_override = bars_by_tf[stop_timeframe_choice]
+        else:
+            try:
+                stop_bars_override = _fetch_bars_for_timeframe(client, symbol, stop_timeframe_choice, start)
+            except Exception as e:
+                st.error(f"{symbol} için {TIMEFRAME_LABELS[stop_timeframe_choice]} stop-loss barları çekilemedi: {e}")
+                stop_bars_override = []
 
     try:
         daily_pairs = _daily_pairs(client, symbol, days_of_data)
@@ -379,13 +408,18 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
     stop_settings = load_stop_loss_settings(username)
     new_runs = []
     progress = st.progress(0.0)
+    effective_stop_timeframe = None if stop_timeframe_choice == STOP_TIMEFRAME_SAME_AS_ENTRY else stop_timeframe_choice
     combos = [(a, tf, sa) for a in algorithms for tf in timeframes for sa in stop_algorithms]
     for i, (algo_id, tf, stop_algo_id) in enumerate(combos):
+        # stop_bars_override, tf ile AYNI periyot seçildiyse (bars_by_tf[tf] ile
+        # aynı liste) zaten stop_bars=bars ile birebir eşdeğer olur - run_backtest
+        # yine de doğru çalışır, sadece gereksiz yere "ayrı" bir liste geçilmiş olur.
         result = run_backtest(
             symbol=symbol, algorithm=algo_id, timeframe=tf, bars=bars_by_tf.get(tf, []),
             daily_pairs=daily_pairs, days_of_data=days_of_data, days_before_trading=days_before_trading,
             starting_budget=budget, max_loss_pct=effective_max_loss_pct, stop_algorithm=stop_algo_id,
             stop_settings=stop_settings, bicak_pencere=bicak_pencere,
+            stop_bars=stop_bars_override, stop_timeframe=effective_stop_timeframe,
         )
         new_runs.append({
             "run_id": new_run_id(symbol, algo_id, tf, stop_algo_id),
@@ -393,6 +427,7 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, days
             "symbol": symbol,
             "algorithm": algo_id,
             "timeframe": tf,
+            "stop_timeframe": effective_stop_timeframe or tf,
             "stop_algorithm": stop_algo_id,
             "days_of_data": days_of_data,
             "days_before_trading": days_before_trading,
@@ -432,6 +467,9 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 "Çalıştırma (UTC)": r.get("run_at", ""),
                 "Hisse": r.get("symbol", ""),
                 "Mum Periyodu": TIMEFRAME_LABELS.get(r.get("timeframe"), r.get("timeframe")),
+                "Stop-Loss Mum Periyodu": TIMEFRAME_LABELS.get(
+                    r.get("stop_timeframe") or r.get("timeframe"), r.get("stop_timeframe") or r.get("timeframe")
+                ),
                 "Stop-Loss Algoritması": _stop_algorithm_label(r),
                 "Kaynak": r.get("source") or "Alpaca",
                 "Veri (gün)": r.get("days_of_data"),
@@ -544,8 +582,8 @@ def render_backtest(target_list: list[str], username: str):
 
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()
-    (selected_algorithms, selected_stop_algorithms, selected_timeframes, days_of_data, days_before_trading,
-     budget, stop_loss_enabled, max_loss_pct, bicak_pencere) = _render_settings()
+    (selected_algorithms, selected_stop_algorithms, selected_timeframes, stop_timeframe_choice, days_of_data,
+     days_before_trading, budget, stop_loss_enabled, max_loss_pct, bicak_pencere) = _render_settings()
 
     st.divider()
     can_run = bool(selected_symbol and selected_algorithms and selected_stop_algorithms and selected_timeframes)
@@ -556,7 +594,8 @@ def render_backtest(target_list: list[str], username: str):
         ):
             all_results = _run_backtests(
                 client, selected_symbol, selected_algorithms, selected_stop_algorithms, selected_timeframes,
-                days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct, username, bicak_pencere,
+                stop_timeframe_choice, days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct,
+                username, bicak_pencere,
             )
         st.success("Backtest tamamlandı ve sonuçlar kaydedildi.")
     else:
