@@ -127,19 +127,19 @@
   "AKBNK.IS": {
     "raw": {
       "Hisse": "AKBNK.IS",
-      "Alt Sektör (İş Modeli)": "Diğer",
-      "Ana Sektör": "Diğer",
-      "F/K": null,
-      "PD/DD": null,
+      "Alt Sektör (İş Modeli)": "Banks - Regional",
+      "Ana Sektör": "Financial Services",
+      "F/K": 5.72,
+      "PD/DD": 1.18,
       "FD/FAVÖK": null,
-      "PEG": null,
-      "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": null,
-      "Öz Sermaye Getirisi (ROE) %": null,
-      "Net Kar Marjı %": null,
-      "Brüt Kar Marjı %": null,
+      "PEG": 1.79,
+      "EPS Büyümesi %": 36.7,
+      "Gelir Büyümesi %": 42.0,
+      "Öz Sermaye Getirisi (ROE) %": 22.86,
+      "Net Kar Marjı %": 29.49,
+      "Brüt Kar Marjı %": 0.0,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": null,
+      "Varlık Getirisi (ROA) %": 1.91,
       "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
       "Cari Oran": null,
@@ -147,7 +147,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-09-07"
+    "cached_at": "2026-09-22"
   },
   "SISE.IS": {
     "raw": {
@@ -277,19 +277,19 @@
   "YKBNK.IS": {
     "raw": {
       "Hisse": "YKBNK.IS",
-      "Alt Sektör (İş Modeli)": "Diğer",
-      "Ana Sektör": "Diğer",
-      "F/K": null,
-      "PD/DD": null,
+      "Alt Sektör (İş Modeli)": "Banks - Regional",
+      "Ana Sektör": "Financial Services",
+      "F/K": 5.66,
+      "PD/DD": 1.09,
       "FD/FAVÖK": null,
-      "PEG": null,
-      "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": null,
-      "Öz Sermaye Getirisi (ROE) %": null,
-      "Net Kar Marjı %": null,
-      "Brüt Kar Marjı %": null,
+      "PEG": 0.43,
+      "EPS Büyümesi %": -5.2,
+      "Gelir Büyümesi %": 29.4,
+      "Öz Sermaye Getirisi (ROE) %": 21.79,
+      "Net Kar Marjı %": 24.92,
+      "Brüt Kar Marjı %": 0.0,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": null,
+      "Varlık Getirisi (ROA) %": 1.58,
       "Borç / Özsermaye": null,
       "Borç / Varlık %": null,
       "Cari Oran": null,
@@ -297,7 +297,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": null
     },
-    "cached_at": "2026-09-07"
+    "cached_at": "2026-09-22"
   },
   "PGSUS.IS": {
     "raw": {
