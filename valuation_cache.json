@@ -2704,10 +2704,10 @@
       "Hisse": "PEP",
       "Alt Sektör (İş Modeli)": "Beverages - Non-Alcoholic",
       "Ana Sektör": "Consumer Defensive",
-      "F/K": 18.49,
-      "PD/DD": 8.72,
-      "FD/FAVÖK": 12.46,
-      "PEG": 1.51,
+      "F/K": 16.98,
+      "PD/DD": 8.01,
+      "FD/FAVÖK": 11.63,
+      "PEG": 1.33,
       "EPS Büyümesi %": 137.0,
       "Gelir Büyümesi %": 6.4,
       "Öz Sermaye Getirisi (ROE) %": 51.51,
@@ -2722,17 +2722,17 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-06-13"
     },
-    "cached_at": "2026-08-31"
+    "cached_at": "2026-09-22"
   },
   "COST": {
     "raw": {
       "Hisse": "COST",
       "Alt Sektör (İş Modeli)": "Discount Stores",
       "Ana Sektör": "Consumer Defensive",
-      "F/K": 45.04,
-      "PD/DD": 11.85,
-      "FD/FAVÖK": 27.94,
-      "PEG": 4.38,
+      "F/K": 45.24,
+      "PD/DD": 11.89,
+      "FD/FAVÖK": 28.04,
+      "PEG": 4.39,
       "EPS Büyümesi %": 15.2,
       "Gelir Büyümesi %": 11.6,
       "Öz Sermaye Getirisi (ROE) %": 29.15,
@@ -2747,7 +2747,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-10"
     },
-    "cached_at": "2026-09-19"
+    "cached_at": "2026-09-22"
   },
   "ADBE": {
     "raw": {
@@ -3304,9 +3304,9 @@
       "Hisse": "MU",
       "Alt Sektör (İş Modeli)": "Semiconductors",
       "Ana Sektör": "Technology",
-      "F/K": 22.94,
-      "PD/DD": 11.39,
-      "FD/FAVÖK": 16.53,
+      "F/K": 23.59,
+      "PD/DD": 11.7,
+      "FD/FAVÖK": 16.99,
       "PEG": 0.15,
       "EPS Büyümesi %": 1368.5,
       "Gelir Büyümesi %": 345.7,
@@ -3322,7 +3322,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-28"
     },
-    "cached_at": "2026-09-20"
+    "cached_at": "2026-09-22"
   },
   "SNPS": {
     "raw": {
@@ -3529,10 +3529,10 @@
       "Hisse": "CTAS",
       "Alt Sektör (İş Modeli)": "Specialty Business Services",
       "Ana Sektör": "Industrials",
-      "F/K": 40.33,
-      "PD/DD": 15.39,
-      "FD/FAVÖK": 27.21,
-      "PEG": 3.16,
+      "F/K": 40.18,
+      "PD/DD": 15.33,
+      "FD/FAVÖK": 27.11,
+      "PEG": 3.14,
       "EPS Büyümesi %": 15.6,
       "Gelir Büyümesi %": 8.9,
       "Öz Sermaye Getirisi (ROE) %": 40.71,
@@ -3547,7 +3547,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-31"
     },
-    "cached_at": "2026-09-19"
+    "cached_at": "2026-09-22"
   },
   "LRCX": {
     "raw": {
@@ -3604,10 +3604,10 @@
       "Hisse": "PAYX",
       "Alt Sektör (İş Modeli)": "Software - Application",
       "Ana Sektör": "Technology",
-      "F/K": 23.75,
-      "PD/DD": 11.06,
-      "FD/FAVÖK": 14.86,
-      "PEG": 2.05,
+      "F/K": 23.52,
+      "PD/DD": 10.95,
+      "FD/FAVÖK": 14.72,
+      "PEG": 2.04,
       "EPS Büyümesi %": 43.4,
       "Gelir Büyümesi %": 12.5,
       "Öz Sermaye Getirisi (ROE) %": 44.77,
@@ -3622,7 +3622,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-31"
     },
-    "cached_at": "2026-09-19"
+    "cached_at": "2026-09-22"
   },
   "MCHP": {
     "raw": {
