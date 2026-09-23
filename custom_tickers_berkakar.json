@@ -112,7 +112,8 @@
     "CBRS",
     "RKLB",
     "TGTX",
-    "ARM"
+    "ARM",
+    "VRT"
   ],
   "NYSE": [
     "ONTO",

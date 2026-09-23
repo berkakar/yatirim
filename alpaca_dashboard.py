@@ -296,7 +296,12 @@ def render_alpaca_dashboard(username):
                 "  - Bu acil emir de seans sonuna (20:00 ET) kadar dolmadan kalırsa, pozisyon "
                 "bir sonraki iş gününü beklemeden korumasız kalmasın diye bir sonraki guard "
                 "çalışması (~10 dk sonra) son bilinen stop seviyesini otomatik olarak geri kurar.\n"
-                "  - Mekanizma her devreye girdiğinde Telegram'dan bildirim gönderir.\n"
+                "  - **Kırılmamışsa da** (stop hâlâ korumadaysa) aynı guard, fiyat pre-market/"
+                "after-hours'ta LEHE hareket ettiyse yukarıdaki breakeven/yapısal-trail mantığını "
+                "extended-hours barlarıyla (pre-market/after-hours dahil) tekrar değerlendirir ve "
+                "uygunsa stopu sıkılaştırır - böylece stop, seans açılana kadar donmuş kalmaz.\n"
+                "  - Mekanizma bir kırılmayı yakalayıp acil emir gönderdiğinde Telegram'dan bildirim "
+                "gönderir; sadece stopu sıkılaştırdığında (kırılma yoksa) bildirim göndermez.\n"
                 "- Tüm bu kontroller GitHub Actions üzerinden normal seansta 5 dakikada, seans "
                 "dışında ~10 dakikada bir otomatik çalışır - manuel müdahale gerekmez."
             )
