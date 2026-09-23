@@ -15,8 +15,14 @@ HISTORY_DAYS = 30
 
 STATUS_TR = {
     "new": "Aktif (Bekliyor)",
-    "held": "Aktif (Bekliyor)",
     "accepted": "Aktif (Bekliyor)",
+    # "held": bracket (order_class "oto") emrinin stop-loss ayağı - ana (giriş)
+    # emri henüz dolmadığı sürece Alpaca'da BORSADA BEKLEMİYOR, sadece kayıtlı
+    # duruyor; ana emir dolduğu an otomatik "new"e geçip gerçek bir resting
+    # emre dönüşür. "new"/"accepted" ile aynı etiketi kullanmak, henüz hiç
+    # pozisyon açılmamışken (dolayısıyla Canlı Pozisyonlar'da o hisse hiç
+    # görünmezken) sanki aktif bir stop emri varmış izlenimi veriyordu.
+    "held": "Pasif (Ana Emrin Dolmasını Bekliyor)",
     "replaced": "Trail Edildi",
     "filled": "Tetiklendi",
     "canceled": "İptal Edildi",
