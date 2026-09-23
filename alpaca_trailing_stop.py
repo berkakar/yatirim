@@ -67,6 +67,17 @@ that history isn't recent enough to trust either (see its own docstring)
 does the gap actually widen to the next regular session, where point 1
 above restores the same way.
 
+The guard also covers the opposite gap: when the stop is still safely
+below/above price (not breached) during pre-market/after-hours, it now
+also runs the SAME trail() the regular session uses (see
+_extended_hours_trail) - with the bar window fetched WITH extended hours
+included, since otherwise a pre-market move is invisible to trail() until
+the next regular-session bar closes. Without this, a stop that should
+already be at breakeven (or further, via structure) stays frozen at
+whatever the last regular session left it at until the market reopens and
+the regular cron catches up - which can be most of a session if the move
+happened right after the prior close.
+
 Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
 between passes and until the market reopens. --extended-hours-guard runs the
@@ -210,7 +221,7 @@ def _timeframe_duration(timeframe: str) -> timedelta:
 
 def get_regular_hours_bars(
     client: AlpacaClient, symbol: str, timeframe: str, start: datetime, exclude_forming: bool = False,
-    cache_file: str | None = None,
+    cache_file: str | None = None, include_extended_hours: bool = False,
 ) -> list[Bar]:
     """`cache_file` verilirse (GitHub Actions cron script'leri), bar'lar
     alpaca_bars_cache üzerinden - sadece eksik/oluşum-halindeki kısmı Alpaca'dan
@@ -219,7 +230,19 @@ def get_regular_hours_bars(
     çağıranın (ör. bu script ile alpaca_buy_points.py) FARKLI `start`
     pencereleri istediği aynı sembol+timeframe için önbellekten fazlasını
     döndürebileceğinden, aşağıdaki `ts >= start` filtresi her iki yolda da
-    isteneni aşan bar'ları eler."""
+    isteneni aşan bar'ları eler. Alpaca'nın döndürdüğü ham bar'lar zaten
+    pre-market/after-hours'ı da içeriyor (get_raw_bars hiçbir seans
+    parametresi geçmiyor) - normal seans filtresi tamamen bu fonksiyonun
+    kendi tarafında uygulanıyor, o yüzden aynı cache_file hem bu fonksiyonun
+    hem include_extended_hours=True çağıran kodun (bkz. aşağısı) arasında
+    güvenle paylaşılabiliyor.
+
+    include_extended_hours: True verilirse 09:30-16:00 ET seans penceresi
+    hiç uygulanmaz - sadece hafta sonu bar'ları elenir. Sadece Extended
+    Hours Guard'ın pre-market/after-hours'ta stopu sıkılaştırabilmesi için
+    (bkz. _extended_hours_trail) kullanılır; canlı sistemin normal trail'i
+    (manage_position) ve backtest hâlâ varsayılan (False, sadece normal
+    seans) davranışı kullanır."""
     if cache_file is not None:
         raw_bars = get_cached_raw_bars(client, cache_file, symbol, timeframe, start)
     else:
@@ -233,7 +256,7 @@ def get_regular_hours_bars(
         ts = ts_utc.astimezone(ET)
         if ts.weekday() >= 5:
             continue
-        if not (9, 30) <= (ts.hour, ts.minute) < (16, 0):
+        if not include_extended_hours and not (9, 30) <= (ts.hour, ts.minute) < (16, 0):
             continue
         bars.append(Bar(t=b["t"], o=b["o"], h=b["h"], l=b["l"], c=b["c"], v=b["v"]))
 
@@ -507,7 +530,58 @@ def load_telegram_settings() -> tuple[str | None, str | None]:
     return bot_token, chat_id
 
 
-def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_id: str | None) -> None:
+def _extended_hours_trail(
+    client: AlpacaClient, symbol: str, side: str, entry_price: float, current_stop_price: float,
+    stop_order_id: str, stop_algorithm: str, stop_settings: dict | None,
+) -> None:
+    """guard_position, stop hâlâ korumadaysa (kırılmamışsa) normalde hiçbir
+    şey yapmıyordu - ama bu, pre-market/after-hours'ta fiyat LEHE hareket
+    etse bile (ör. breakeven eşiği aşılsa da) stopun bir sonraki normal
+    seansa kadar hiç sıkılaştırılamaması demekti (manage_position'ın trail()
+    çağrısı sadece normal seans cron'unda, 13:00-21:00 UTC'de çalışıyor).
+    Bu fonksiyon aynı boşluğu kapatıyor: manage_position'ın normal seansta
+    yaptığı BİREBİR AYNI trail() çağrısını burada da yapıyor, tek fark bar
+    penceresinin include_extended_hours=True ile çekilmesi - aksi halde
+    "son bar"ın kapanışı (ctx.bars[-1].c) hep dünkü kapanışta donuk kalır ve
+    pre-market'teki fiyat hareketi trail() tarafından hiç görülmez.
+    Sadece replace_stop_price çağırır - breach/emergency-limit mantığına
+    (guard_position'ın geri kalanı) hiç dokunmaz, resting emrin TİPİNİ
+    (stop) değiştirmez; trail() zaten "sadece sıkılaştır" kuralını kendi
+    içinde uyguladığı için burada ayrı bir improve kontrolüne gerek yok."""
+    algo = STOP_ALGORITHMS[stop_algorithm]
+    stop_settings = stop_settings or {}
+    shared_settings = stop_settings.get("shared") or {}
+    algo_settings = stop_settings.get(stop_algorithm) or {}
+
+    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
+    bars = get_regular_hours_bars(
+        client, symbol, TIMEFRAME, management_start,
+        cache_file=INTRADAY_BARS_CACHE_PATH, include_extended_hours=True,
+    )
+    if not bars:
+        return
+
+    effective_trend_ema_period = int(shared_settings.get("trend_ema_period", DEFAULT_TREND_EMA_PERIOD))
+    daily_closes = get_trend_daily_closes(client, symbol, effective_trend_ema_period)
+    ctx = StopContext(
+        side=side, entry_price=entry_price, current_stop_price=current_stop_price,
+        bars=bars, daily_closes=daily_closes,
+    )
+    decision = algo.trail(ctx, **resolve_kwargs(algo.trail, algo_settings, shared_settings))
+    if decision is None:
+        return
+
+    try:
+        client.replace_stop_price(stop_order_id, decision.price)
+        log(f"{symbol}: extended-hours trail {current_stop_price:.2f} -> {decision.price:.2f} ({decision.reason}).")
+    except requests.HTTPError as e:
+        log(f"{symbol}: extended-hours'ta stop güncellenemedi: {e}")
+
+
+def guard_position(
+    client: AlpacaClient, pos: dict, bot_token: str | None, chat_id: str | None,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
+) -> None:
     """Normal bir "stop" emri şu an (extended hours) tetiklenemeyeceği için,
     fiyat zaten stop seviyesini kırmışsa onun yerine geçebilecek tek şeyi -
     day+extended_hours bir limit emri - gönderir.
@@ -530,8 +604,11 @@ def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_
        bölge, bir sonraki iş gününü değil, bir sonraki guard çalışmasını
        (mevcut cron ile ~10 dk) bekliyor.
 
-    Stop hâlâ korumadaysa (henüz kırılmamışsa) ya da guard'ın önceki emri
-    hâlâ resting'se hiçbir şey yapmaz.
+    Stop hâlâ korumadaysa (henüz kırılmamışsa) VE resting bir stop varsa,
+    breach/emergency-limit mantığına hiç girmeden _extended_hours_trail'i
+    dener - fiyat pre-market/after-hours'ta lehe hareket ettiyse (breakeven,
+    yapısal trail) stopu sıkılaştırır; hiçbir aday uygulanmıyorsa (henüz
+    eşik aşılmadıysa) o da hiçbir şey yapmaz.
 
     Kalan sınır: last_trailed_stop_price hiçbir güvenilir geçmiş bulamazsa
     (gerçekten hiç stop'u olmamış bir pozisyon, ya da geçmiş
@@ -541,6 +618,7 @@ def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
     side = "long" if signed_qty > 0 else "short"
+    entry_price = float(pos["avg_entry_price"])
 
     stop_order = client.get_open_stop_order(symbol)
     if stop_order is not None:
@@ -561,7 +639,10 @@ def guard_position(client: AlpacaClient, pos: dict, bot_token: str | None, chat_
     breached = last_price <= reference_price if side == "long" else last_price >= reference_price
     if not breached:
         if resting_order_id is not None:
-            return  # resting stop hâlâ korumada ve kırılmamış - yapacak bir şey yok
+            _extended_hours_trail(
+                client, symbol, side, entry_price, reference_price, resting_order_id, stop_algorithm, stop_settings,
+            )
+            return
         # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, sadece normal
         # stop'un yerini tutacak pasif bir limit koyuyoruz - tam referans
         # seviyesinden (bir stop da zaten tam o fiyattan tetiklenirdi).
@@ -633,8 +714,14 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
         return
 
     bot_token, chat_id = load_telegram_settings()
+    # run_once ile aynı - _extended_hours_trail'in her pozisyon için doğru
+    # (sembole özel override varsa onu, yoksa portföy-geneli varsayılanı)
+    # stop algoritmasıyla çalışmasını sağlar.
+    config = load_portfolio_config()
+    stop_settings = load_stop_loss_settings()
     for pos in positions:
-        guard_position(client, pos, bot_token, chat_id)
+        stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
+        guard_position(client, pos, bot_token, chat_id, stop_algorithm, stop_settings)
 
 
 def run_once(client: AlpacaClient) -> None:
