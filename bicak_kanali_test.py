@@ -70,7 +70,7 @@ def render_bicak_kanali_test(target_list):
    aşırı/sivri dibin çizgiyi fazla aşağı çekmesini önlemek için), kılavuz ile
    aynı eğimde geçen paralel doğru.
 4. **Dip kesişim mumu**: Bıçak çizgisinin, en dip'ten ÖNCEKİ barlarda soldan sağa
-   ilk kestiği KIRMIZI mum.
+   ilk kestiği YEŞİL mum.
 5. **Sıfır nokta**: Dip kesişim mumundan geriye dönük - varsayılan olarak zaten
    "kaç gün geriye gidilecek" ile sınırlanmış olan bar serisinin tamamında - dip
    pivotlarından fiyatça **en yükseği** ("en yüksek alım noktası") - kılavuz ile
