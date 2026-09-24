@@ -1,0 +1,13 @@
+{
+  "enabled": false,
+  "cash_allocation_pct": 0.0,
+  "include_nasdaq": true,
+  "include_nyse": true,
+  "include_russell": false,
+  "custom_groups": [],
+  "min_avg_dollar_volume": 5000000.0,
+  "top_n": 10,
+  "lookback_weeks": 8,
+  "min_score_pct": 0.0,
+  "stop_algorithm": "breakeven_atr_structure"
+}
