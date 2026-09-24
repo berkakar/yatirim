@@ -11,8 +11,9 @@ from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
 from otomatik_alim_satim_core import (
     DEFAULT_ALGORITHM_ID, DEFAULT_DAYS_BEFORE_TRADING, DEFAULT_DAYS_OF_DATA, DEFAULT_MAX_CANDIDATES,
-    DEFAULT_MIN_BACKTEST_PROFIT_PCT, DEFAULT_MOMENTUM_LOOKBACK_DAYS, TIMEFRAME_LABELS, build_universe,
-    filter_profitable, narrow_by_momentum, run_backtests, scan_universe,
+    DEFAULT_MIN_AVG_DOLLAR_VOLUME, DEFAULT_MIN_BACKTEST_PROFIT_PCT, DEFAULT_MOMENTUM_LOOKBACK_DAYS,
+    TIMEFRAME_LABELS, build_universe, filter_by_liquidity, filter_profitable, narrow_by_momentum,
+    run_backtests, scan_universe,
 )
 from ui_style import zebra_style, freshness_caption
 
@@ -72,19 +73,40 @@ def render_otomatik_alim_satim(username: str):
 
     st.subheader("🌐 Tarama Evreni")
     st.caption(
-        "Bu tarama **NASDAQ 100**, **NYSE** ve bu piyasalara bağlı (🗂️ Hisse Gruplarını Yönet'te "
-        "atanmış) kullanıcı tanımlı hisse gruplarını kapsar - Alpaca'da işlem görmeyen BIST hisseleri "
-        "bu modüle dahil değildir."
+        "Bu tarama **NASDAQ 100**, **NYSE**, **Russell 2000** ve bu piyasalara bağlı (🗂️ Hisse "
+        "Gruplarını Yönet'te atanmış) kullanıcı tanımlı hisse gruplarını kapsar - Alpaca'da işlem "
+        "görmeyen BIST hisseleri bu modüle dahil değildir."
     )
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns(3)
     include_nasdaq = c1.checkbox("NASDAQ 100", value=config.get("include_nasdaq", True), key="oas_include_nasdaq")
     include_nyse = c2.checkbox("NYSE", value=config.get("include_nyse", True), key="oas_include_nyse")
+    include_russell = c3.checkbox(
+        "Russell 2000", value=config.get("include_russell", False), key="oas_include_russell",
+        help="NASDAQ 100/NYSE'den farklı olarak küçük/orta ölçekli, likidite açısından çok daha "
+             "değişken bir evren - ORB (Açılış Aralığı Kırılımı) gibi kırılım tarzı algoritmaların "
+             "aradığı volatil profile daha yakın, ama market emriyle giren bir sistemde düşük hacimli "
+             "isimlerde kayma (slippage) riski taşır. Bu yüzden seçildiğinde aşağıdaki likidite "
+             "eşiğinin altında kalan semboller taramadan önce otomatik elenir.",
+    )
+    if include_russell:
+        min_avg_dollar_volume = st.number_input(
+            "Russell 2000 likidite eşiği - ortalama günlük ciro ($, son 20 işlem günü)",
+            min_value=0.0, value=float(config.get("min_avg_dollar_volume") or DEFAULT_MIN_AVG_DOLLAR_VOLUME),
+            step=500_000.0, format="%.0f", key="oas_min_avg_dollar_volume",
+            help="Bu eşiğin altında ortalama günlük dolar cirosu olan semboller (Russell 2000 dahil, "
+                 "tüm evrenden) taramaya hiç girmez - amaç, kırılım tarzı sinyallerin kullandığı market "
+                 "emrinin kötü bir fiyattan dolmasını (slippage) önlemek. NASDAQ 100/NYSE listeleri "
+                 "zaten büyük/likit isimlerden oluştuğundan bu eşik onlarda pratikte neredeyse hiç "
+                 "sembol elemez.",
+        )
+    else:
+        min_avg_dollar_volume = float(config.get("min_avg_dollar_volume") or DEFAULT_MIN_AVG_DOLLAR_VOLUME)
 
     group_markets = load_group_markets(username)
     stock_groups = load_stock_groups(username)
-    eligible_groups = [g for g in stock_groups if group_markets.get(g) in ("NASDAQ 100", "NYSE")]
+    eligible_groups = [g for g in stock_groups if group_markets.get(g) in ("NASDAQ 100", "NYSE", "Russell 2000")]
     custom_groups = st.multiselect(
-        "NASDAQ/NYSE'ye bağlı özel hisse grupları (varsa)",
+        "NASDAQ/NYSE/Russell 2000'e bağlı özel hisse grupları (varsa)",
         eligible_groups,
         default=[g for g in (config.get("custom_groups") or []) if g in eligible_groups],
         key="oas_custom_groups",
@@ -110,7 +132,10 @@ def render_otomatik_alim_satim(username: str):
         if not selected_algo_ids or not selected_timeframes:
             st.error("En az bir algoritma ve bir mum periyodu seçin.")
         else:
-            universe = build_universe(username, include_nasdaq, include_nyse, custom_groups)
+            universe = build_universe(username, include_nasdaq, include_nyse, custom_groups, include_russell)
+            if include_russell:
+                with st.spinner(f"{len(universe)} hisse likidite eşiğine göre süzülüyor..."):
+                    universe = filter_by_liquidity(client, universe, min_avg_dollar_volume)
             with st.spinner(f"{len(universe)} hisse taranıyor..."):
                 st.session_state["oas_scan_rows"] = scan_universe(client, universe, selected_algo_ids, selected_timeframes)
             st.session_state["oas_scan_fetched_at"] = datetime.now(TR_TZ)
@@ -241,9 +266,12 @@ def render_otomatik_alim_satim(username: str):
     )
     if config.get("last_run_at"):
         summary = config.get("last_run_summary") or {}
+        liquid_size = summary.get("liquid_universe_size")
+        liquidity_note = f" (likidite filtresinden sonra {liquid_size})" if liquid_size is not None else ""
         st.caption(
-            f"Son otomatik koşu: {config['last_run_at']} — evren {summary.get('universe_size', '—')}, "
-            f"sinyal {summary.get('scan_signal_count', '—')}, aday {summary.get('candidate_count', '—')}, "
+            f"Son otomatik koşu: {config['last_run_at']} — evren {summary.get('universe_size', '—')}"
+            f"{liquidity_note}, sinyal {summary.get('scan_signal_count', '—')}, "
+            f"aday {summary.get('candidate_count', '—')}, "
             f"seçilen: {', '.join(summary.get('selected_symbols') or []) or 'yok'}."
         )
 
@@ -254,6 +282,8 @@ def render_otomatik_alim_satim(username: str):
             "cash_allocation": float(cash_allocation),
             "include_nasdaq": include_nasdaq,
             "include_nyse": include_nyse,
+            "include_russell": include_russell,
+            "min_avg_dollar_volume": float(min_avg_dollar_volume),
             "custom_groups": custom_groups,
             "algorithms": selected_algo_ids,
             "timeframes": selected_timeframes,

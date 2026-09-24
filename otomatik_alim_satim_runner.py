@@ -81,6 +81,7 @@ def run_once() -> None:
 
     log(
         f"Otomatik Alım/Satım tamamlandı: evren={summary['universe_size']}, "
+        f"likidite sonrası={summary['liquid_universe_size']}, "
         f"sinyal={summary['scan_signal_count']}, aday={summary['candidate_count']}, "
         f"seçilen={summary['selected_symbols']}."
     )

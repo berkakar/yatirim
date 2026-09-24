@@ -32,7 +32,39 @@ DEFAULT_NYSE = [
     "XLV", "MAGS", "XLF", "NOW", "TE", "BE", "PLTR", "SOFI", "LLY"
 ]
 
-MARKETS = ["NASDAQ 100", "NYSE", "BIST 100"]
+# DİKKAT: Aşağıdaki liste, resmi/canlı bir Russell 2000 endeks bileşen
+# beslemesi DEĞİLDİR (bu ortamda finans veri sitelerine - stockanalysis.com,
+# ishares.com, wikipedia vb. - erişim ağ proxy'si tarafından engellendiğinden
+# doğrulanamadı) - diğer DEFAULT_* listeleri gibi, elle kürasyon edilmiş,
+# sektörlere yayılmış, göreceli olarak likit küçük/orta ölçekli hisselerden
+# oluşan bir BAŞLANGIÇ seti. Russell endeksleri her yıl Haziran'da yeniden
+# dengelendiğinden, bu listeyi periyodik olarak (⚙️ Hisse Listelerini Yönet
+# sayfasından) gözden geçirip güncellemeniz önerilir. Asıl likidite güvencesi
+# bu liste değil, otomatik_alim_satim_core.filter_by_liquidity'nin çalışma
+# zamanında Alpaca'dan çektiği gerçek hacim verisidir.
+DEFAULT_RUSSELL_2000 = [
+    # Finans / Bölgesel Bankalar
+    "UMBF", "PPBI", "SSB", "CATY", "WTFC", "ONB", "HOMB", "CVBF", "BANR", "GBCI",
+    "COLB", "FHB", "PFS", "INDB", "WSFS", "TOWN", "NBTB", "FULT", "SFNC", "UBSI",
+    # Biyoteknoloji / Sağlık
+    "INSM", "HALO", "SUPN", "ACAD", "CORT", "PCVX", "ARWR", "FOLD", "ALKS", "RGNX",
+    "VCEL", "NVAX", "KROS", "AXSM", "NARI", "TMDX", "IRTC", "GKOS", "OMCL", "CDNA",
+    "NEOG", "MMSI",
+    # Sanayi
+    "FIX", "MOG.A", "FTAI", "FN", "AAON", "WTS", "ATKR", "CR", "GTES", "KAI",
+    "TREX", "BECN", "MLI", "RBC", "CSWI", "MATX",
+    # Teknoloji / Yazılım
+    "FROG", "CRDO", "DV", "PRGS", "SPSC", "BL", "FIVN", "QLYS", "TENB", "VRNT",
+    "EXLS", "TWST", "HUT",
+    # Tüketim / Perakende
+    "SFM", "BOOT",
+    # GYO (REIT)
+    "AAT", "CUZ", "STAG", "NHI", "IRT",
+    # Enerji
+    "CIVI", "MTDR", "SM", "CHRD", "VNOM",
+]
+
+MARKETS = ["NASDAQ 100", "NYSE", "BIST 100", "Russell 2000"]
 
 DEFAULT_BIST_100 = [
     "THYAO.IS", "GARAN.IS", "EREGL.IS", "ASELS.IS", "KCHOL.IS", "AKBNK.IS", "SISE.IS", 
@@ -60,7 +92,8 @@ def _defaults():
     return {
         "NASDAQ 100": list(dict.fromkeys(DEFAULT_NASDAQ_100)),
         "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
-        "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100))
+        "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100)),
+        "Russell 2000": list(dict.fromkeys(DEFAULT_RUSSELL_2000)),
     }
 
 
@@ -92,7 +125,8 @@ def load_ticker_lists(username):
     return {
         "NASDAQ 100": list(dict.fromkeys(data.get("NASDAQ 100", DEFAULT_NASDAQ_100))),
         "NYSE": list(dict.fromkeys(data.get("NYSE", DEFAULT_NYSE))),
-        "BIST 100": list(dict.fromkeys(data.get("BIST 100", DEFAULT_BIST_100)))
+        "BIST 100": list(dict.fromkeys(data.get("BIST 100", DEFAULT_BIST_100))),
+        "Russell 2000": list(dict.fromkeys(data.get("Russell 2000", DEFAULT_RUSSELL_2000))),
     }
 
 
