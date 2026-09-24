@@ -140,7 +140,8 @@ from alpaca_trailing_stop import (
     load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
-from relative_strength_core import get_cash_allocation_pct
+from orb_core import get_cash_allocation_pct as get_orb_cash_allocation_pct
+from relative_strength_core import get_cash_allocation_pct as get_rs_cash_allocation_pct
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
 from telegram_notify import TelegramError, send_telegram_message
 
@@ -725,14 +726,16 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     sinyal verirse" senaryosunda, portföyün gerçek nakdinin üstüne çıkmayı
     önler.
 
-    Relative Strength Rotasyonu modülü etkinleştirilmişse (relative_strength_core.
-    get_cash_allocation_pct), o modüle ayrılan yüzde bu hesaplamadan
-    DÜŞÜLÜR - aksi halde iki bağımsız sistem aynı gerçek nakti birbirinden
-    habersiz harcamaya çalışırdı; ikisi de TEK bir nakit havuzundan (bu
-    fonksiyonun okuduğu AYNI canlı bakiye) besleniyor. Modül hiç
-    açılmamışsa/devre dışıysa pay 0'dır, davranış eskisiyle tamamen aynı
-    kalır."""
-    cash = float(client.get_account()["cash"]) * (1 - get_cash_allocation_pct("berkakar") / 100)
+    Relative Strength Rotasyonu VE Açılış Aralığı Kırılımı (ORB) modülleri
+    etkinleştirilmişse (relative_strength_core.get_cash_allocation_pct /
+    orb_core.get_cash_allocation_pct), o modüllere ayrılan yüzdeler bu
+    hesaplamadan DÜŞÜLÜR - aksi halde bağımsız sistemler aynı gerçek nakti
+    birbirinden habersiz harcamaya çalışırdı; hepsi TEK bir nakit havuzundan
+    (bu fonksiyonun okuduğu AYNI canlı bakiye) besleniyor. Bir modül hiç
+    açılmamışsa/devre dışıysa payı 0'dır, davranış o modül hiç yokmuş gibi
+    aynı kalır (geriye dönük uyumlu)."""
+    reserved_pct = get_rs_cash_allocation_pct("berkakar") + get_orb_cash_allocation_pct("berkakar")
+    cash = float(client.get_account()["cash"]) * (1 - min(reserved_pct, 100.0) / 100)
     reserved = sum(
         float(o["qty"]) * float(o["limit_price"])
         for o in client.get_open_orders()

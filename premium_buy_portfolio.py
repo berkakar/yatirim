@@ -37,12 +37,14 @@ ALGORITHM_DESCRIPTIONS = {
     "bicak_kanali": "Kılavuz/bıçak/sıfır çizgisi yöntemiyle her bar için yeniden kurulan 'yeşil çizgi'nin "
                      "(alım çizgisi) güncel seviyesine geri çekilmeyi bekler - bekleyen bir limit emri "
                      "olarak işlenir.",
-    "orb": "Açılış Aralığı Kırılımı (ORB): günün ilk barının (15 dakikalık periyotla kullanılması önerilir) "
-           "high/low'u açılış aralığı sayılır; bu aralığın üstü, açılış barının hacminin en az 1.5 katıyla ve "
-           "seansın ilk birkaç barı içinde kırılırsa ANINDA market emriyle girilir. Aşağıdaki Stop-Loss "
-           "Algoritması olarak 'Açılış Aralığı (ORB) Stop' seçilmesi önerilir - stopu sabit yüzde yerine "
-           "açılış aralığının diğer ucuna kurar.",
 }
+# NOT: "orb" (Açılış Aralığı Kırılımı) burada KASITLI olarak yok - artık
+# buy_algorithms.ALGORITHMS'te değil, kendi bağımsız modülüne taşındı (📈
+# Açılış Aralığı Kırılımı (ORB), Algoritmik Ticaret altında) - bkz.
+# orb_core.py'nin modül üstü notu. Eski (bu değişiklikten önce) bir sembole
+# hisse bazlı "orb" algoritması atanmışsa, yukarıdaki active_algorithm
+# guard'ı (bkz. _render_buy_point_table) onu sessizce default_algorithm'a
+# düşürür - hiçbir yerde KeyError riski yok.
 
 
 @st.fragment(run_every=PRICE_REFRESH_SECONDS)
@@ -445,23 +447,23 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "korumasız kalmıyor)."
     )
     st.info(
-        "⚡ **Kırılım sinyallerinde (Kırılım + Hacim İvmesi, Açılış Aralığı Kırılımı - ORB) giriş/stop nasıl "
-        "çalışır?** Diğer algoritmalar (Talep Bölgesi, Trend İçi Düzeltme, Oynaklığa Duyarlı Destek, Bıçak "
-        "Kanalı) \"pullback\" tarzıdır - fiyatın bir destek seviyesine geri çekilmesini beklediğinden, sinyal "
-        "fiyatında bekleyen (resting) bir bracket limit emri anlamlıdır. **Kırılım** sinyalleri ise tam "
-        "tersini işaret eder: fiyatın O AN yukarı kırıldığını. Sinyal fiyatında bekleyen bir limit emri "
-        "koymak burada işe yaramaz - fiyat yükselmeye devam ederse emir hiç dolmaz, geri çekilip o seviyeye "
-        "dönerse de kırılımın zaten geçersiz kaldığı bir \"retest\" anında dolar. Bu yüzden kırılım "
-        "sinyallerinde sistem **anında market emriyle** alım yapar (İlave Alım [Top-up] ve Alım-Stop-Alım ek "
-        "yeteneğiyle aynı örüntü); stop-sell de sinyaldeki kapanış fiyatına değil emrin **gerçekten dolduğu "
-        "fiyata** göre, o hissede seçili olan **aynı Stop-Loss Algoritması** (yukarıdaki seçim - portföy "
-        "varsayılanı ya da hisseye özel) ile kurulur; tek bir bracket emrinde değil, market emri dolar "
-        "dolmaz kurulan ayrı bir stop emriyle. Market emri normalde saniyeler içinde dolduğundan bu, "
-        "günlerce açık kalabilecek bir resting limitten çok daha kısa, saniyeler süren bir korumasız "
-        "pencere yaratır. ORB için özel olarak eklenen **Açılış Aralığı (ORB) Stop** algoritması, ilk stopu "
-        "sabit bir yüzde yerine seansın açılış barının ters ucuna (long için low) kurar - Stop-Loss "
-        "Algoritması olarak bunu seçmek, ORB'un kendi yapısal risk mantığını (fiyat açılış aralığının içine "
-        "geri dönerse kırılım tezi geçersizdir) korur."
+        "⚡ **Kırılım (Kırılım + Hacim İvmesi) sinyalinde giriş/stop nasıl çalışır?** Diğer algoritmalar "
+        "(Talep Bölgesi, Trend İçi Düzeltme, Oynaklığa Duyarlı Destek, Bıçak Kanalı) \"pullback\" tarzıdır - "
+        "fiyatın bir destek seviyesine geri çekilmesini beklediğinden, sinyal fiyatında bekleyen (resting) "
+        "bir bracket limit emri anlamlıdır. **Kırılım** sinyali ise tam tersini işaret eder: fiyatın O AN "
+        "yukarı kırıldığını. Sinyal fiyatında bekleyen bir limit emri koymak burada işe yaramaz - fiyat "
+        "yükselmeye devam ederse emir hiç dolmaz, geri çekilip o seviyeye dönerse de kırılımın zaten "
+        "geçersiz kaldığı bir \"retest\" anında dolar. Bu yüzden kırılım sinyalinde sistem **anında market "
+        "emriyle** alım yapar (İlave Alım [Top-up] ve Alım-Stop-Alım ek yeteneğiyle aynı örüntü); stop-sell "
+        "de sinyaldeki kapanış fiyatına değil emrin **gerçekten dolduğu fiyata** göre, o hissede seçili olan "
+        "**aynı Stop-Loss Algoritması** (yukarıdaki seçim - portföy varsayılanı ya da hisseye özel) ile "
+        "kurulur; tek bir bracket emrinde değil, market emri dolar dolmaz kurulan ayrı bir stop emriyle. "
+        "Market emri normalde saniyeler içinde dolduğundan bu, günlerce açık kalabilecek bir resting "
+        "limitten çok daha kısa, saniyeler süren bir korumasız pencere yaratır.\n\n"
+        "📈 **Açılış Aralığı Kırılımı (ORB) arıyorsanız:** bu algoritma artık burada değil - Algoritmik "
+        "Ticaret altındaki kendi bağımsız modülüne taşındı (kendi nakit payı, Russell 2000 varsayılı "
+        "evren taraması, piyasa açılışında otomatik puanlama/alım). Bkz. **📈 Açılış Aralığı Kırılımı "
+        "(ORB)** sayfası."
     )
     top_up_stop_options = ["keep", "tighten_to_new_entry"]
     top_up_stop_labels = {

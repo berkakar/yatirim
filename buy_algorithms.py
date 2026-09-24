@@ -232,13 +232,22 @@ def orb_signal(bars: list[Bar], daily_closes: list[float] | None = None,
     )
 
 
+# NOT: orb_signal KASITLI olarak ALGORITHMS'te DEĞİL - Premium Buy Point'in
+# (hisse bazlı, sürekli izlenen) modelinden çıkarılıp kendi bağımsız
+# modülüne (orb_core.py + 📈 Açılış Aralığı Kırılımı (ORB) sayfası, günde
+# 1 kez piyasa açılışında evreni tarayıp en yüksek puanlı adayları otomatik
+# alan) taşındı - bkz. orb_core.py'nin modül üstü notu. Fonksiyon burada
+# (buy_algorithms.py'de) kalmaya devam ediyor çünkü hem orb_core.py hem de
+# backtest_engine.py (geçmiş BackTest çalıştırmalarının sonuçlarını
+# tutarlı şekilde göstermeye devam etmesi için) onu import ediyor - sadece
+# ALGORITHMS sözlüğünden (dolayısıyla Premium Buy Point/Otomatik Alım-Satım
+# seçim listelerinden) çıkarıldı.
 ALGORITHMS = {
     "demand_zone": ("Talep Bölgesi (Demand Zone)", demand_zone_signal),
     "trend_pullback": ("Trend İçi Dinamik Düzeltme", trend_pullback_signal),
     "volatility_support": ("Oynaklığa Duyarlı Dinamik Destek", volatility_support_signal),
     "breakout_volume": ("Kırılım + Hacim İvmesi", breakout_volume_signal),
     "bicak_kanali": ("Bıçak Kanalı", bicak_kanali_signal),
-    "orb": ("Açılış Aralığı Kırılımı (ORB)", orb_signal),
 }
 DEFAULT_ALGORITHM = "demand_zone"
 

@@ -35,6 +35,7 @@ from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, re
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
 from relative_strength import render_relative_strength
+from orb_scan import render_orb_scan
 from tefas_fonlari import render_turk_fonlari
 from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
@@ -60,7 +61,7 @@ MODULE_GROUPS = {
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": [
         "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
-        "📈 Relative Strength Rotasyonu", "🛡️ Stop Loss Ayarları",
+        "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🛡️ Stop Loss Ayarları",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
@@ -1451,6 +1452,20 @@ elif module == "📈 Relative Strength Rotasyonu":
         "ikisi de aynı toplam hesap nakdinden besleniyor, birbirinin payına dokunmaz."
     )
     render_relative_strength(username)
+
+# ==============================================================================
+# 8d. MODÜL: AÇILIŞ ARALIĞI KIRILIMI (ORB)
+# ==============================================================================
+elif module == "📈 Açılış Aralığı Kırılımı (ORB)":
+    st.header("📈 Açılış Aralığı Kırılımı (ORB)")
+    st.caption(
+        "Piyasa açılışından sonra evreni (varsayılan Russell 2000) otomatik tarar, her adaya hacim "
+        "ivmesi + kırılım yüzdesinden bir alım puanı verir; en yüksek puanlı N tanesi market emriyle "
+        "alınıp anında yapısal (Açılış Aralığı) stop-loss ile korunur. Premium Buy Point ve Relative "
+        "Strength Rotasyonu'ndan AYRI bir nakit payı ve pozisyon takibi kullanır - üçü de aynı toplam "
+        "hesap nakdinden besleniyor, birbirinin payına/pozisyonuna dokunmaz."
+    )
+    render_orb_scan(username)
 
 # ==============================================================================
 # 9. MODÜL: TÜRK FONLARI
