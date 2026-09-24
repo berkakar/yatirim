@@ -22,9 +22,9 @@ from github_config import read_json_from_github, write_json_to_github
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from relative_strength_core import (
     DEFAULT_CASH_ALLOCATION_PCT, DEFAULT_LOOKBACK_WEEKS, DEFAULT_MIN_SCORE_PCT, DEFAULT_TOP_N,
-    config_path, holdings_path, plan_rebalance,
+    ROTATION_DEFAULT_STOP_ALGORITHM, config_path, holdings_path, plan_rebalance,
 )
-from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
+from stop_algorithms import STOP_ALGORITHMS
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -139,9 +139,9 @@ def render_relative_strength(username: str):
     )
 
     stop_algorithm_ids = list(STOP_ALGORITHMS.keys())
-    current_stop_algorithm = config.get("stop_algorithm", DEFAULT_STOP_ALGORITHM)
+    current_stop_algorithm = config.get("stop_algorithm", ROTATION_DEFAULT_STOP_ALGORITHM)
     if current_stop_algorithm not in stop_algorithm_ids:
-        current_stop_algorithm = DEFAULT_STOP_ALGORITHM
+        current_stop_algorithm = ROTATION_DEFAULT_STOP_ALGORITHM
     stop_algorithm = st.selectbox(
         "Stop-Loss Algoritması (güvenlik ağı)",
         stop_algorithm_ids, index=stop_algorithm_ids.index(current_stop_algorithm),
@@ -150,6 +150,17 @@ def render_relative_strength(username: str):
              "yeniden dengeleme arasında fiyat çökerse diye bir güvenlik ağıdır. Trailing Stop "
              "GitHub Action'ı bu modülün elindeki pozisyonları da (Premium Buy Point'ten AYRI olarak) "
              "bu seçili algoritmayla yönetir.",
+    )
+    st.info(
+        "🎯 **Bu strateji için varsayılan neden \"Breakeven + Yapısal Trail\"?** \"Açılış Aralığı "
+        "(ORB) Stop\" bu modülde ANLAMSIZ kalır - o algoritma girişin yapıldığı seansın açılış barına "
+        "ihtiyaç duyar, ama bu modül haftanın herhangi bir günü/saatinde alım yapabildiğinden "
+        "\"açılış aralığı\" diye bir referans yok; seçilse bile sessizce sabit yüzdelik yedek stop'a "
+        "düşer, yapısal avantajını hiç kullanmaz. \"Beklemeli ve İz Süren Stop\" da teknik olarak "
+        "çalışır ama kâr eşiğine ulaşana kadar sıkılaştırmayı ERTELER - haftalık rebalans arasındaki "
+        "güvenlik ağı rolü için bu gecikme istenmez. **Breakeven + Yapısal Trail**, ATR-tamponlu "
+        "yapısal trail'i alımdan hemen sonra devreye soktuğundan, bu modülün varsayılanı olarak "
+        "seçildi - başka bir algoritma denemek isterseniz yukarıdan değiştirebilirsiniz."
     )
 
     st.subheader("🕐 Haftalık Otomatik Çalıştırma")
