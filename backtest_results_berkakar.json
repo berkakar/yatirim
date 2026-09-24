@@ -53394,5 +53394,42 @@
     ],
     "source": "Alpaca",
     "bicak_pencere": null
+  },
+  {
+    "run_id": "AMD-orb-15Min-opening_range-20260924T103912",
+    "run_at": "2026-09-24T10:39:10+00:00",
+    "symbol": "AMD",
+    "algorithm": "orb",
+    "timeframe": "15Min",
+    "stop_timeframe": "15Min",
+    "stop_algorithm": "opening_range",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 10000.0,
+    "pnl": 0.0,
+    "pnl_pct": 0.0,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-08-14T13:45:00Z",
+        "price": 497.71,
+        "qty": 20,
+        "reason": "Açılış aralığı (483.48-496.67) kırıldı, hacim açılış barının %182'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-14T15:30:00Z",
+        "price": 497.71,
+        "qty": 20,
+        "reason": "stop - breakeven"
+      }
+    ],
+    "source": "Alpaca",
+    "bicak_pencere": null
   }
 ]
