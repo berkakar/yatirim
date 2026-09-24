@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "cash_allocation_pct": 10.0,
+  "include_nasdaq": false,
+  "include_nyse": false,
+  "include_russell": true,
+  "custom_groups": [],
+  "min_avg_dollar_volume": 5000000.0,
+  "timeframe": "15Min",
+  "top_n": 5,
+  "volume_mult": 1.5,
+  "max_bars_after_open": 4,
+  "stop_algorithm": "opening_range"
+}
