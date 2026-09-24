@@ -140,6 +140,7 @@ from alpaca_trailing_stop import (
     load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
+from relative_strength_core import get_cash_allocation_pct
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
 from telegram_notify import TelegramError, send_telegram_message
 
@@ -722,8 +723,16 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     check_symbol çağrısının harcadığı tutarı düşerek sıradaki sembollere
     yansıtır - "tüm stoplar aynı anda kırılıp sonra hepsi aynı anda yeniden
     sinyal verirse" senaryosunda, portföyün gerçek nakdinin üstüne çıkmayı
-    önler."""
-    cash = float(client.get_account()["cash"])
+    önler.
+
+    Relative Strength Rotasyonu modülü etkinleştirilmişse (relative_strength_core.
+    get_cash_allocation_pct), o modüle ayrılan yüzde bu hesaplamadan
+    DÜŞÜLÜR - aksi halde iki bağımsız sistem aynı gerçek nakti birbirinden
+    habersiz harcamaya çalışırdı; ikisi de TEK bir nakit havuzundan (bu
+    fonksiyonun okuduğu AYNI canlı bakiye) besleniyor. Modül hiç
+    açılmamışsa/devre dışıysa pay 0'dır, davranış eskisiyle tamamen aynı
+    kalır."""
+    cash = float(client.get_account()["cash"]) * (1 - get_cash_allocation_pct("berkakar") / 100)
     reserved = sum(
         float(o["qty"]) * float(o["limit_price"])
         for o in client.get_open_orders()

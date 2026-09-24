@@ -151,6 +151,23 @@ class AlpacaClient:
             payload["client_order_id"] = client_order_id
         return self._post("/orders", payload)
 
+    def place_market_exit(self, symbol: str, qty: float, client_order_id: str | None = None) -> dict:
+        """Mevcut bir long pozisyonu kapatmak için düz bir market-sell emri -
+        place_market_entry'den kasıtlı olarak ayrı: bu sistem hiçbir yerde
+        short pozisyon açmıyor, "side" parametresi almadan sadece "sell"
+        gönderir - relative_strength_core.py'nin rank'tan düşen pozisyonları
+        kapatması için (bkz. o modülün rebalance() fonksiyonu)."""
+        payload = {
+            "symbol": symbol,
+            "qty": qty,
+            "side": "sell",
+            "type": "market",
+            "time_in_force": "day",
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
+
     def get_open_limit_buy_order(self, symbol: str) -> dict | None:
         r = self._get("/orders", params={"status": "open", "symbols": symbol})
         r.raise_for_status()

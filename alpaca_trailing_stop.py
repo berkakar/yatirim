@@ -204,6 +204,26 @@ def resolve_stop_algorithm(config: dict, symbol: str) -> str:
     return algo if algo in STOP_ALGORITHMS else DEFAULT_STOP_ALGORITHM
 
 
+def resolve_stop_algorithm_for_position(pbp_config: dict, rs_holdings: dict, rs_config: dict, symbol: str) -> str:
+    """Hesaptaki HER pozisyonu (run_once/run_extended_hours_guard, bkz.
+    get_all_positions) yönetirken hangi sembolün Relative Strength
+    Rotasyonu'na, hangisinin Premium Buy Point'e ait olduğunu ayırt eder -
+    aksi halde RS'nin elindeki bir pozisyon da PBP'nin portföy-geneli/hisse
+    bazlı stop_algorithm ayarıyla (muhtemelen kullanıcının RS için SEÇTİĞİ
+    algoritmadan farklı) yönetilmeye devam ederdi. rs_holdings'te olan bir
+    sembol RS'nindir (relative_strength_core.rebalance() PBP watchlist'iyle
+    çakışmayı zaten baştan engelliyor - bkz. o modülün docstring'i #2),
+    diğer her şey resolve_stop_algorithm ile PBP mantığına göre çözülür."""
+    if symbol in rs_holdings:
+        # Fonksiyon içi (modül seviyesinde değil) import bilerek: relative_strength_core
+        # -> otomatik_alim_satim_core -> alpaca_trailing_stop -> relative_strength_core
+        # döngüsünü kırmak için - üç modül de birbirini çağırma zamanında (import
+        # zamanında değil) güvenle görebiliyor.
+        from relative_strength_core import resolve_stop_algorithm as resolve_rs_stop_algorithm
+        return resolve_rs_stop_algorithm(rs_config)
+    return resolve_stop_algorithm(pbp_config, symbol)
+
+
 def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
@@ -715,12 +735,17 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
 
     bot_token, chat_id = load_telegram_settings()
     # run_once ile aynı - _extended_hours_trail'in her pozisyon için doğru
-    # (sembole özel override varsa onu, yoksa portföy-geneli varsayılanı)
-    # stop algoritmasıyla çalışmasını sağlar.
+    # (sembole özel override varsa onu, yoksa portföy-geneli varsayılanı -
+    # ya da pozisyon Relative Strength Rotasyonu'na aitse ONUN seçtiği
+    # algoritmayı, bkz. resolve_stop_algorithm_for_position) stop
+    # algoritmasıyla çalışmasını sağlar.
     config = load_portfolio_config()
     stop_settings = load_stop_loss_settings()
+    from relative_strength_core import load_config_local, load_holdings_local  # bkz. resolve_stop_algorithm_for_position'daki döngüsel import notu
+    rs_holdings = load_holdings_local("berkakar")
+    rs_config = load_config_local("berkakar")
     for pos in positions:
-        stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
+        stop_algorithm = resolve_stop_algorithm_for_position(config, rs_holdings, rs_config, pos["symbol"])
         guard_position(client, pos, bot_token, chat_id, stop_algorithm, stop_settings)
 
 
@@ -739,8 +764,11 @@ def run_once(client: AlpacaClient) -> None:
     config = load_portfolio_config()
     top_up_stop_mode = load_top_up_stop_mode(config)
     stop_settings = load_stop_loss_settings()
+    from relative_strength_core import load_config_local, load_holdings_local  # bkz. resolve_stop_algorithm_for_position'daki döngüsel import notu
+    rs_holdings = load_holdings_local("berkakar")
+    rs_config = load_config_local("berkakar")
     for pos in positions:
-        stop_algorithm = resolve_stop_algorithm(config, pos["symbol"])
+        stop_algorithm = resolve_stop_algorithm_for_position(config, rs_holdings, rs_config, pos["symbol"])
         manage_position(client, pos, top_up_stop_mode, stop_algorithm, stop_settings)
 
 
