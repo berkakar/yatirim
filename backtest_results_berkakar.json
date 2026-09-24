@@ -53152,5 +53152,140 @@
     ],
     "source": "Alpaca",
     "bicak_pencere": null
+  },
+  {
+    "run_id": "HON-orb-15Min-opening_range-20260924T101930",
+    "run_at": "2026-09-24T10:19:30+00:00",
+    "symbol": "HON",
+    "algorithm": "orb",
+    "timeframe": "15Min",
+    "stop_timeframe": "15Min",
+    "stop_algorithm": "opening_range",
+    "days_of_data": 60,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9737.9,
+    "pnl": -262.1,
+    "pnl_pct": -2.62,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-08-03T14:00:00Z",
+        "price": 249.15,
+        "qty": 40,
+        "reason": "Açılış aralığı (246.08-247.50) kırıldı, hacim açılış barının %320'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-03T15:45:00Z",
+        "price": 245.59,
+        "qty": 40,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-14T13:45:00Z",
+        "price": 234.15,
+        "qty": 42,
+        "reason": "Açılış aralığı (233.29-233.67) kırıldı, hacim açılış barının %689'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-14T14:30:00Z",
+        "price": 232.82,
+        "qty": 42,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-18T14:00:00Z",
+        "price": 229.5,
+        "qty": 42,
+        "reason": "Açılış aralığı (228.00-229.00) kırıldı, hacim açılış barının %211'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-18T19:45:00Z",
+        "price": 227.54,
+        "qty": 42,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-20T13:45:00Z",
+        "price": 221.66,
+        "qty": 43,
+        "reason": "Açılış aralığı (221.27-221.68) kırıldı, hacim açılış barının %227'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-20T15:45:00Z",
+        "price": 220.83,
+        "qty": 43,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-08-26T14:00:00Z",
+        "price": 219.88,
+        "qty": 44,
+        "reason": "Açılış aralığı (217.19-218.25) kırıldı, hacim açılış barının %317'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-08-28T14:00:00Z",
+        "price": 216.75,
+        "qty": 44,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-04T13:45:00Z",
+        "price": 207.53,
+        "qty": 45,
+        "reason": "Açılış aralığı (207.10-207.81) kırıldı, hacim açılış barının %290'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-09T13:45:00Z",
+        "price": 206.69,
+        "qty": 45,
+        "reason": "stop - ilk stop"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-16T13:45:00Z",
+        "price": 206.5,
+        "qty": 46,
+        "reason": "Açılış aralığı (204.39-206.67) kırıldı, hacim açılış barının %174'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-16T19:00:00Z",
+        "price": 206.46,
+        "qty": 46,
+        "reason": "stop - breakeven"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-22T13:45:00Z",
+        "price": 207.37,
+        "qty": 45,
+        "reason": "Açılış aralığı (206.91-207.62) kırıldı, hacim açılış barının %335'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-23T19:45:00Z",
+        "price": 212.515,
+        "qty": 45,
+        "reason": "test_end_close"
+      }
+    ],
+    "source": "Alpaca",
+    "bicak_pencere": null
   }
 ]
