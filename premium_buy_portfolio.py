@@ -418,6 +418,21 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "kuruluyor (alım başarısız olursa da stop eski haliyle geri kuruluyor - pozisyon hiçbir adımda "
         "korumasız kalmıyor)."
     )
+    st.info(
+        "⚡ **Kırılım (Breakout + Hacim İvmesi) sinyalinde giriş/stop nasıl çalışır?** Diğer algoritmalar "
+        "(Talep Bölgesi, Trend İçi Düzeltme, Oynaklığa Duyarlı Destek, Bıçak Kanalı) \"pullback\" tarzıdır - "
+        "fiyatın bir destek seviyesine geri çekilmesini beklediğinden, sinyal fiyatında bekleyen (resting) "
+        "bir bracket limit emri anlamlıdır. **Kırılım** sinyali ise tam tersini işaret eder: fiyatın O AN "
+        "yukarı kırıldığını. Sinyal fiyatında bekleyen bir limit emri koymak burada işe yaramaz - fiyat "
+        "yükselmeye devam ederse emir hiç dolmaz, geri çekilip o seviyeye dönerse de kırılımın zaten "
+        "geçersiz kaldığı bir \"retest\" anında dolar. Bu yüzden kırılım sinyalinde sistem **anında market "
+        "emriyle** alım yapar (İlave Alım [Top-up] ve Alım-Stop-Alım ek yeteneğiyle aynı örüntü); stop-sell "
+        "de sinyaldeki kapanış fiyatına değil emrin **gerçekten dolduğu fiyata** göre, o hissede seçili olan "
+        "**aynı Stop-Loss Algoritması** (yukarıdaki seçim - portföy varsayılanı ya da hisseye özel) ile "
+        "kurulur; tek bir bracket emrinde değil, market emri dolar dolmaz kurulan ayrı bir stop emriyle. "
+        "Market emri normalde saniyeler içinde dolduğundan bu, günlerce açık kalabilecek bir resting "
+        "limitten çok daha kısa, saniyeler süren bir korumasız pencere yaratır."
+    )
     top_up_stop_options = ["keep", "tighten_to_new_entry"]
     top_up_stop_labels = {
         "keep": "Mevcut haliyle bırak - sadece adet genişler, stop seviyesi değişmez",

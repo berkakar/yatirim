@@ -19,6 +19,17 @@ order in sync with the current signal, it doesn't need to catch the fill
 itself (unlike a market-order-on-poll approach, which can only react at
 whatever moment it happens to check).
 
+Exception: buy_algorithms.breakout_volume_signal's BuySignal.style is
+"breakout", not "pullback" - a resting limit at the breakout bar's close
+would either never fill (price keeps running) or only fill on a retest
+that arguably invalidates the breakout thesis. check_symbol detects
+style=="breakout" and places a market order instead (fills within this
+pass, no resting order), arming its protective stop - from the actual
+fill price, via the symbol's selected stop algorithm's initial_stop(),
+same as every other entry - right after, the same "market order then arm
+stop" pattern the top-up branch and buy_stop_rebuy.py's rebuy already use.
+See the comment at that branch and check_symbol's own docstring.
+
 A symbol removed from the watchlist (via premium_buy_portfolio.py's symbol
 picker) stops being scanned by check_symbol entirely, which used to leave
 any still-resting buy-limit order for it orphaned - nothing would ever
@@ -190,7 +201,18 @@ def check_symbol(
     stop_settings: dict | None = None,
 ) -> float:
     """Pozisyon yoksa: sinyale göre yeni bir giriş (bracket buy-limit) açar
-    veya bekleyen girişi günceller - aşağıdaki asıl akış budur.
+    veya bekleyen girişi günceller - aşağıdaki asıl akış budur. TEK istisna:
+    sinyal.style == "breakout" (buy_algorithms.breakout_volume_signal) ise
+    resting limit yerine anında market emriyle girilir, çünkü kırılım sinyali
+    "fiyat şu anda yukarı kırıyor" demektir - günlerce sinyal fiyatında
+    bekleyen bir limit emri fiyatı ya hiç yakalayamaz ya da ancak fiyat geri
+    çekilip o seviyeye dönerse (kırılımın büyük ölçüde geçersiz kaldığı bir
+    "retest" durumunda) dolar. Market emri dolduktan hemen sonra, sinyaldeki
+    değil GERÇEK dolma fiyatına göre - ama diğer tüm girişlerle AYNI seçili
+    stop_algorithm/initial_stop() ile - ayrı bir stop-sell emri kurulur
+    (bracket değil - market emirlere bu kod tabanında henüz bracket
+    eklenmiyor; aynı "market + sonradan stop kur" örüntüsü ilave alım
+    (top-up) ve buy_stop_rebuy.py'nin rebuy dalıyla aynı).
 
     Pozisyon zaten açıksa: hedef bütçe (budget * weight_pct), o sembole
     şu ana kadar yatırılmış tutarı (adet * ortalama giriş) aştığında ve
@@ -352,6 +374,57 @@ def check_symbol(
             target_qty = affordable_qty
     if target_qty <= 0:
         return 0.0
+
+    if signal.style == "breakout":
+        # Diğer algoritmalar "pullback" tarzı olduğundan resting bir bracket
+        # limit emri sinyal fiyatında beklemek sorun değil - fiyatın geri
+        # çekilip o seviyeye gelmesi zaten beklenen senaryo. Kırılım ise tam
+        # tersi: sinyal, fiyatın YUKARI kırıldığı anı işaret ediyor - resting
+        # bir limit emir koyup günlerce sinyal fiyatında (kırılım barının
+        # kapanışında) beklemek, fiyat yükselmeye devam ederse emri hiç
+        # doldurmaz, geri çekilip o seviyeye dönerse de aslında kırılımın
+        # geçersiz kaldığı bir "retest" anında doldurur - ikisi de kırılımı
+        # kovalamak yerine tam tersini yapar. Bu yüzden kırılım sinyalinde
+        # resting limit yerine, ilave alım (top-up) ve Alım-Stop-Alım
+        # (buy_stop_rebuy._process_pending) dallarıyla AYNI örüntüyle
+        # ("market emri ver -> dol -> gerçek dolma fiyatından seçili stop
+        # algoritmasıyla stop kur"), anında market emri kullanılır.
+        if existing_order is not None:
+            # Bu style'a geçmeden önce ya da bir önceki pass'te bırakılmış
+            # olabilecek bekleyen bir limit emri - artık geçersiz, iptal.
+            client.cancel_order(existing_order["id"])
+            log(f"{symbol}: kırılım sinyali market emriyle karşılanacak, bekleyen limit emri iptal edildi.")
+        try:
+            buy_order = client.place_market_entry(symbol, target_qty, "long", client_order_id=client_order_id)
+            filled = client.wait_for_fill(buy_order["id"], timeout=30)
+        except Exception as e:
+            # Market emri normalde saniyeler içinde dolar - zaman aşımı/hata
+            # (ör. trading halt) sıra dışı bir durum. Burada YENİ bir pozisyon
+            # açılıyor (top-up'taki gibi geri kurulacak eski bir stop yok), o
+            # yüzden yapacak bir şey kalmıyor: emir gerçekten hiç dolmadıysa
+            # zaten açılmış bir pozisyon yok; olağandışı şekilde gecikip
+            # sonradan dolarsa, alpaca_trailing_stop.py'nin "stop'u olmayan
+            # pozisyon" fallback'i bir sonraki geçişinde koruma kurar.
+            log(f"{symbol}: kırılım market emri başarısız/zaman aşımı ({e}), bu pass'te vazgeçildi.")
+            return 0.0
+
+        fill_price = float(filled["filled_avg_price"])
+        filled_qty = float(filled["filled_qty"])
+        # Stop, sinyaldeki (kırılım barının kapanış) fiyatına değil GERÇEK
+        # dolma fiyatına göre, o hisse için seçili olan (portföydeki diğer
+        # girişlerle AYNI) stop-loss algoritmasıyla kuruluyor.
+        stop_loss_price = round(stop_algo.initial_stop(
+            fill_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+        ), 2)
+        stop_msg_suffix = f", stop ${stop_loss_price:.2f} kuruldu."
+        try:
+            client.place_stop_order(symbol, filled_qty, "long", stop_loss_price)
+        except Exception as e:
+            stop_msg_suffix = f" ama koruma stopu KURULAMADI, pozisyon KORUMASIZ: {e}"
+            log(f"{symbol}: kırılım sonrası stop kurulamadı: {e}")
+        log(f"{symbol}: kırılım sinyali ({signal.reason}) market emriyle @ {fill_price:.2f} dolduruldu "
+            f"(order {buy_order['id']}), {filled_qty:g} adet (${filled_qty * fill_price:.2f}){stop_msg_suffix}")
+        return filled_qty * fill_price
 
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
     # alpaca_client.place_limit_entry and the module docstring.
