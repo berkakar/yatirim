@@ -1,6 +1,9 @@
 {
   "budget": 81198.11,
   "weights": {
+    "ACAD": 0.0,
+    "AAON": 0.0,
+    "AAT": 0.0,
     "MSFT": 23.14,
     "AMZN": 6.62,
     "NVDA": 5.0,
@@ -16,9 +19,18 @@
     "SKHY": 1.36,
     "UROY": 2.05
   },
-  "algorithm": "demand_zone",
+  "algorithm": "orb",
   "stop_algorithm": "breakeven_atr_structure",
   "symbol_settings": {
+    "ACAD": {
+      "stop_algorithm": "breakeven_atr_structure"
+    },
+    "AAON": {
+      "stop_algorithm": "breakeven_atr_structure"
+    },
+    "AAT": {
+      "stop_algorithm": "breakeven_atr_structure"
+    },
     "MSFT": {
       "algorithm": "demand_zone",
       "timeframe": "1Day",
@@ -89,6 +101,6 @@
   "stop_loss_enabled": true,
   "max_loss_pct": 2.5,
   "top_up_stop_mode": "keep",
-  "buy_stop_rebuy_enabled": true,
+  "buy_stop_rebuy_enabled": false,
   "buy_stop_rebuy_window_hours": 2.0
 }
