@@ -56,13 +56,26 @@ from datetime import datetime, timedelta, timezone
 
 from alpaca_client import AlpacaClient
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
-from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
+from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
 
 DEFAULT_TOP_N = 10
 DEFAULT_LOOKBACK_WEEKS = 8
 DEFAULT_MIN_SCORE_PCT = 0.0  # mutlak momentum filtresi (yüzde) - bu eşiğin altındaki skor asla seçilmez
 DEFAULT_CASH_ALLOCATION_PCT = 0.0  # opt-in: kullanıcı elle bir pay ayırana kadar 0 - PBP tüm nakti kullanmaya devam eder
 ORDER_TAG_PREFIX = "rs"
+
+# Bu modülün KENDİ varsayılanı - stop_algorithms.DEFAULT_STOP_ALGORITHM'dan
+# BİLEREK ayrı bir sabit: o sabit ileride (PBP/BackTest tarafında) değişirse
+# bu strateji sessizce farklı bir algoritmaya kaymasın diye. "Açılış Aralığı
+# (ORB) Stop" bu strateji için ANLAMSIZ - rebalance() giriş fiyatını
+# initial_stop()'a `bars` OLMADAN geçirir (RS haftanın herhangi bir günü/
+# saatinde alım yapabildiğinden "seansın açılış barı" kavramı yok), o yüzden
+# seçilse bile sessizce sabit yüzdelik yedek stop'a düşer - yapısal avantajı
+# hiç kullanılmaz. "Beklemeli ve İz Süren Stop" de teknik olarak çalışır ama
+# kâr eşiğine kadar trail'i geciktirdiğinden, haftalık rebalans arasındaki
+# güvenlik ağı rolü için "Breakeven + Yapısal Trail" (ATR-tamponlu trail
+# hemen devrede) daha uygun - bu yüzden varsayılan bu.
+ROTATION_DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"
 
 
 def config_path(username: str) -> str:
@@ -113,8 +126,10 @@ def get_cash_allocation_pct(username: str) -> float:
 
 
 def resolve_stop_algorithm(cfg: dict) -> str:
-    algo = cfg.get("stop_algorithm") or DEFAULT_STOP_ALGORITHM
-    return algo if algo in STOP_ALGORITHMS else DEFAULT_STOP_ALGORITHM
+    """Kaydedilmiş bir seçim yoksa ya da geçersizse ROTATION_DEFAULT_STOP_ALGORITHM'a
+    (breakeven_atr_structure) düşer - bkz. o sabitin üstündeki not."""
+    algo = cfg.get("stop_algorithm") or ROTATION_DEFAULT_STOP_ALGORITHM
+    return algo if algo in STOP_ALGORITHMS else ROTATION_DEFAULT_STOP_ALGORITHM
 
 
 def compute_relative_strength_scores(
