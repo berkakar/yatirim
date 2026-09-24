@@ -1,12 +1,12 @@
 {
   "budget": 81198.11,
   "weights": {
-    "ACAD": 0.0,
-    "AAON": 0.0,
-    "AAT": 0.0,
+    "ACAD": 5.0,
+    "AAON": 5.0,
+    "AAT": 5.0,
     "MSFT": 23.14,
     "AMZN": 6.62,
-    "NVDA": 5.0,
+    "NVDA": 0.0,
     "INTC": 5.0,
     "AMAT": 5.0,
     "MU": 5.0,
@@ -14,7 +14,7 @@
     "NXPI": 5.0,
     "NOW": 0.0,
     "MDB": 10.0,
-    "TTWO": 20.0,
+    "TTWO": 10.0,
     "VEEV": 1.5,
     "SKHY": 1.36,
     "UROY": 2.05
