@@ -26,7 +26,7 @@ alan hiç değiştirilmemiş) ilgili fonksiyonun kod-varsayılanı geçerli olur
 yeni bir algoritma/parametre eklendiğinde resolve_kwargs'ta HİÇBİR değişiklik
 gerekmez.
 
-İki algoritma var:
+Üç algoritma var:
   - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
     breakeven floor + günlük EMA trend filtresiyle gate'lenen ATR-buffered
     break-of-structure trail.
@@ -35,6 +35,19 @@ gerekmez.
     ulaşana kadar (yapısal trail olmadan) beklenir; eşik bir kez aşıldığında
     (kalıcı olarak) stop bir kâr kilidine çekilir ve yukarıdakiyle AYNI
     yapısal trail (_structure_trail_candidate) devreye girer.
+  - "opening_range" ("Açılış Aralığı (ORB) Stop"): sabit-% yerine, pozisyonun
+    açıldığı seansın İLK barının (buy_algorithms.orb_signal'ın "açılış
+    aralığı" saydığı bar) ters ucuna (long için low) küçük bir tamponla
+    kurulan yapısal ilk stop - buy_algorithms.orb_signal ile birlikte
+    kullanılmak üzere tasarlandı. Trail, breakeven_atr_structure_trail ile
+    BİREBİR AYNI (ayrı bir trail fonksiyonu yok - ilk stop yerleştirildikten
+    sonra "yapısal trail" kavramı zaten algoritmadan bağımsız). `bars`
+    verilmezse (ör. bazı fallback/top-up çağrı yolları henüz bunu
+    geçirmiyor - bkz. alpaca_trailing_stop.manage_position'ın "stopsuz
+    pozisyon" fallback'i) ya da hesaplanan seviye entry_price'ın yanlış
+    tarafında kalırsa (ör. bu stop, ORB dışı bir algoritmanın sinyaliyle
+    seçildiğinde), breakeven_atr_structure_initial_stop ile aynı sabit-%
+    düşüşe güvenli şekilde geri düşer.
 """
 
 import inspect
@@ -343,6 +356,46 @@ def wait_then_trail_trail(
     return StopDecision(price=best_price, reason=reason)
 
 
+# ---- Üçüncü algoritma: "Açılış Aralığı (ORB) Stop". buy_algorithms.orb_signal
+# ile eşleşmek üzere tasarlandı - ilk stop, sabit bir yüzde yerine pozisyonun
+# açıldığı seansın açılış barının ters ucundan (long için low) küçük bir
+# tamponla kurulur: fiyat kırılımdan sonra tekrar açılış aralığının İÇİNE
+# dönerse kırılım tezi zaten geçersiz kalmıştır. Trail aşamasında ayrı bir
+# mantık yok - breakeven_atr_structure_trail'i olduğu gibi kullanır.
+
+ORB_STOP_BUFFER_PCT = 0.002
+
+
+def opening_range_initial_stop(
+    entry_price: float, side: str, bars: list[Bar] | None = None,
+    buffer_pct: float = ORB_STOP_BUFFER_PCT, fallback_pct: float = INITIAL_STOP_PCT,
+) -> float:
+    """`bars`'ın SON barının ait olduğu seansı bulur, o seansın İLK barının
+    (açılış aralığı) ters ucuna (long için low, short için high) buffer_pct
+    kadar tampon payı ekler. `bars` verilmemişse, o seansın barı hiç
+    bulunamazsa, ya da hesaplanan seviye entry_price'ın yanlış tarafında
+    kalırsa (stop, girişin ötesine/gerisine düşer - bu, ORB dışı bir
+    algoritmanın sinyaliyle bu stop seçildiğinde, ör. fiyat zaten aralığın
+    içindeyken bir pullback girişinde olabilir), fallback_pct ile
+    breakeven_atr_structure_initial_stop'la AYNI sabit-% düşüşe güvenli
+    şekilde geri düşülür - pozisyon hiçbir durumda stopsuz kalmaz."""
+    naive_stop = entry_price * (1 - fallback_pct) if side == "long" else entry_price * (1 + fallback_pct)
+    if not bars:
+        return naive_stop
+
+    session_date = bars[-1].t[:10]
+    session_bars = [b for b in bars if b.t[:10] == session_date]
+    if not session_bars:
+        return naive_stop
+    opening_bar = session_bars[0]
+
+    if side == "long":
+        structural_stop = opening_bar.l * (1 - buffer_pct)
+        return structural_stop if structural_stop < entry_price else naive_stop
+    structural_stop = opening_bar.h * (1 + buffer_pct)
+    return structural_stop if structural_stop > entry_price else naive_stop
+
+
 STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
     "breakeven_atr_structure": StopAlgorithm(
         label="Breakeven + Yapısal Trail (ATR tamponlu)",
@@ -353,6 +406,11 @@ STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
         label="Beklemeli ve İz Süren Stop",
         initial_stop=wait_then_trail_initial_stop,
         trail=wait_then_trail_trail,
+    ),
+    "opening_range": StopAlgorithm(
+        label="Açılış Aralığı (ORB) Stop",
+        initial_stop=opening_range_initial_stop,
+        trail=breakeven_atr_structure_trail,
     ),
 }
 DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"

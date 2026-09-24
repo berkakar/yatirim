@@ -352,7 +352,8 @@ def check_symbol(
         if top_up_stop_mode == "tighten_to_new_entry":
             new_entry = float(new_position["avg_entry_price"])
             new_naive_stop = stop_algo.initial_stop(
-                new_entry, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                new_entry, "long", bars=bars,
+                **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             )
             new_stop_price = max(old_stop_price, round(new_naive_stop, 2))
         else:
@@ -412,9 +413,13 @@ def check_symbol(
         filled_qty = float(filled["filled_qty"])
         # Stop, sinyaldeki (kırılım barının kapanış) fiyatına değil GERÇEK
         # dolma fiyatına göre, o hisse için seçili olan (portföydeki diğer
-        # girişlerle AYNI) stop-loss algoritmasıyla kuruluyor.
+        # girişlerle AYNI) stop-loss algoritmasıyla kuruluyor. `bars=bars`,
+        # "opening_range" (ORB) stop algoritmasının seansın açılış barını
+        # bulabilmesi için geçiriliyor - diğer algoritmalar bu kwarg'ı
+        # yoksayar (bkz. stop_algorithms.py).
         stop_loss_price = round(stop_algo.initial_stop(
-            fill_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+            fill_price, "long", bars=bars,
+            **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
         ), 2)
         stop_msg_suffix = f", stop ${stop_loss_price:.2f} kuruldu."
         try:
@@ -427,9 +432,11 @@ def check_symbol(
         return filled_qty * fill_price
 
     # Bracket stop-loss leg, relative to the limit (expected fill) price - see
-    # alpaca_client.place_limit_entry and the module docstring.
+    # alpaca_client.place_limit_entry and the module docstring. bars=bars: bkz.
+    # kırılım dalındaki aynı not - "opening_range" (ORB) stop algoritması için.
     stop_loss_price = round(stop_algo.initial_stop(
-        target_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+        target_price, "long", bars=bars,
+        **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
     ), 2)
 
     if existing_order is None:

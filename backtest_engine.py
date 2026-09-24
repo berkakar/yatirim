@@ -19,8 +19,15 @@ up to and including it, for the "1Day" timeframe itself, since a daily
 bar's own close is exactly the information available at its close).
 
 Order simulation mirrors the live system:
-  - No position, no resting order, a valid signal appears -> a resting
-    limit buy is "placed" (not filled the same bar).
+  - signal.style == "breakout" (breakout_volume, orb): fills IMMEDIATELY at
+    the signal bar's own close (signal.price) - no resting order - mirroring
+    alpaca_buy_points.check_symbol()'s market-order branch for these styles.
+    A resting limit here would misrepresent them: it only fills on a LATER
+    bar whose low retraces back down to the breakout price, i.e. only on a
+    retest that arguably invalidates the breakout thesis, understating (or
+    badly mistiming) how often/where a live market order would actually fill.
+  - Other (pullback) signals: no position, no resting order, a valid signal
+    appears -> a resting limit buy is "placed" (not filled the same bar).
   - No position, a resting order exists -> filled if the bar's low
     touches its price; otherwise re-priced or canceled the same way
     alpaca_buy_points.check_symbol() would (signal moved / went invalid).
@@ -293,13 +300,43 @@ def run_backtest(
         if signal is not None:
             signal = reject_if_marketable(signal, bar.c)
 
+        if signal is not None and signal.style == "breakout":
+            # Kırılım sinyali - canlı sistemdeki (alpaca_buy_points.check_symbol)
+            # market emri davranışını simüle eder: resting bir emir olarak bir
+            # sonraki bara ERTELENMEZ, bu barın kapanışında (signal.price zaten
+            # last.c) HEMEN doluyor - aksi halde backtest, fiyat kırılımdan
+            # sonra geri çekilip tekrar o seviyeye DÖNMEDİKÇE hiç girmeyen,
+            # gerçek davranışın tam tersi bir model kurardı.
+            resting = None
+            qty = math.floor(cash / signal.price) if signal.price > 0 else 0
+            if qty > 0:
+                cash -= qty * signal.price
+                initial_stop = stop_algo.initial_stop(
+                    signal.price, "long", bars=sig_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
+                )
+                position = {"entry_price": signal.price, "qty": qty,
+                            "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop"}
+                result.trades.append(Trade("buy", bar.t, signal.price, qty, signal.reason))
+                cash, position, last_ts = _manage_position(
+                    position, stop_bars_eff, _parse(bar.t), daily_pairs, is_daily_tf_stop,
+                    stop_algo, algo_settings, shared_settings, max_loss_pct, result, cash, starting_budget,
+                )
+                if position is None:
+                    i = _first_index_after(bars, last_ts, start=i + 1)
+                    continue
+                break
+            i += 1
+            continue
+
         if resting is not None:
             if signal is None:
                 resting = None
             elif abs(signal.price - resting["price"]) >= 0.01:
                 qty = math.floor(cash / signal.price) if signal.price > 0 else 0
                 initial_stop = stop_algo.initial_stop(
-                    signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
+                    signal.price, "long", bars=sig_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = ({"price": round(signal.price, 2), "qty": qty,
                             "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
@@ -308,7 +345,8 @@ def run_backtest(
             qty = math.floor(cash / signal.price) if signal.price > 0 else 0
             if qty > 0:
                 initial_stop = stop_algo.initial_stop(
-                    signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
+                    signal.price, "long", bars=sig_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = {"price": round(signal.price, 2), "qty": qty,
                            "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
