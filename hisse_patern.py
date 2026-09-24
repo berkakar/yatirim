@@ -125,7 +125,10 @@ def render_hisse_patern(target_list):
         selected_cells = table_event.selection.cells if table_event and table_event.selection else []
         if selected_cells:
             row_idx, col_name = selected_cells[0]
-            if col_name in _SIM_COLUMNS:
+            # Streamlit, "hisse_patern_table" seçim durumunu (row_idx) rerun'lar
+            # arasında session_state'te tutar - min_sim eşiği yükseltilip df_filtered
+            # küçülürse, eski seçim artık geçersiz bir index'e işaret edebilir.
+            if col_name in _SIM_COLUMNS and row_idx < len(df_filtered):
                 clicked_ticker = df_filtered.iloc[row_idx]["Hisse"]
                 clicked_period_key = next(
                     k for k, cfg in PERIOD_CONFIGS.items() if f"{cfg['label']} Benzerlik %" == col_name

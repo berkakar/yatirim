@@ -66,6 +66,90 @@ def _daily_closes_upto(daily_pairs: list[tuple], bar_date, inclusive: bool) -> l
     return [c for d, c in daily_pairs if d < bar_date]
 
 
+def _last_index_at_or_before(bars: list[Bar], ts: datetime) -> int:
+    """bars (artan zaman sırasında) içinde zaman damgası ts'ye eşit ya da
+    ondan önceki SON bar'ın index'i - hiçbiri yoksa (tüm barlar ts'den sonra) 0."""
+    idx = 0
+    for i, b in enumerate(bars):
+        if _parse(b.t) <= ts:
+            idx = i
+        else:
+            break
+    return idx
+
+
+def _first_index_after(bars: list[Bar], ts: datetime, start: int = 0) -> int:
+    """bars içinde zaman damgası ts'den KESİN SONRA olan ilk bar'ın index'i
+    (start'tan itibaren taranır) - bir pozisyon stop_bars üzerinde kapandıktan
+    sonra, alım tarafının (coarse) döngüsü hangi bar'dan devam edecek onu
+    bulur, böylece pozisyon açıkken geçen zaman aralığı tekrar bir alım
+    sinyaline bakılmaz (look-ahead'e yol açmaz)."""
+    idx = start
+    while idx < len(bars) and _parse(bars[idx].t) <= ts:
+        idx += 1
+    return idx
+
+
+def _manage_position(
+    position: dict, stop_bars: list[Bar], entry_ts: datetime, daily_pairs: list[tuple], is_daily_tf_stop: bool,
+    stop_algo, algo_settings: dict, shared_settings: dict, max_loss_pct: float | None,
+    result: "BacktestResult", cash: float, starting_budget: float,
+) -> tuple[float, dict | None, datetime]:
+    """Bir pozisyon açıldığı andan (entry_ts) itibaren, alım sinyalinin
+    üretildiği (coarse) mum periyodundan BAĞIMSIZ olarak stop_bars üzerinde -
+    genelde daha küçük bir periyotta - ilerler: stop tetiklenene ya da
+    stop_bars tükenene kadar. run_backtest'in tek-periyotlu (stop_bars is
+    bars) haldeki eski inline mantığıyla birebir aynı davranışı üretir -
+    farkı sadece "hangi bar listesi üzerinde ilerlediği" ve pozisyonun
+    "entry_idx"ının o listedeki (coarse index yerine) karşılığı olması.
+
+    Döner: (güncel cash, pozisyon (stop ile kapandıysa None, yoksa hâlâ açık
+    hâliyle position dict'i), son işlenen stop_bars zaman damgası - çağıran
+    coarse döngü, YENİ sinyal aramasını bu zamandan KESİN SONRAKİ ilk coarse
+    mumdan devam ettirir)."""
+    entry_idx = _last_index_at_or_before(stop_bars, entry_ts)
+    position = {**position, "entry_idx": entry_idx}
+    last_ts = entry_ts
+
+    # Kontrol, entry_idx+1'den değil entry_ts'den KESİN SONRAKİ ilk bar'dan
+    # başlar: stop_bars, entry_ts'den önce/eşit hiçbir bar içermiyorsa (ör.
+    # daha küçük periyotlu veri entry anından sonra başlıyorsa) entry_idx
+    # geriye düşerek (0'a) ilk bar'ı atlamasın diye ikisi ayrı hesaplanır -
+    # tek periyotlu modda (stop_bars is bars) ikisi zaten aynı index'e denk gelir.
+    check_start_idx = _first_index_after(stop_bars, entry_ts)
+    for j in range(check_start_idx, len(stop_bars)):
+        bar = stop_bars[j]
+        last_ts = _parse(bar.t)
+
+        if bar.l <= position["stop_price"]:
+            fill = bar.o if bar.o < position["stop_price"] else position["stop_price"]
+            cash += position["qty"] * fill
+            result.trades.append(
+                Trade("sell", bar.t, round(fill, 4), position["qty"], f"stop - {position['stop_reason']}")
+            )
+            if max_loss_pct and not result.stop_loss_triggered and starting_budget:
+                loss_pct = (starting_budget - cash) / starting_budget * 100
+                if loss_pct >= max_loss_pct:
+                    result.stop_loss_triggered = True
+                    result.stop_loss_triggered_at = bar.t
+                    result.trades[-1].reason += f" · zarar kes tetiklendi (toplam zarar %{loss_pct:.2f})"
+            return cash, None, last_ts
+
+        bar_date = last_ts.date()
+        struct_bars = _window(stop_bars, j, TRAIL_LOOKBACK_DAYS, floor_idx=entry_idx)
+        daily_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf_stop)
+        ctx = StopContext(
+            side="long", entry_price=position["entry_price"], current_stop_price=position["stop_price"],
+            bars=struct_bars, daily_closes=daily_closes,
+        )
+        decision = stop_algo.trail(ctx, **resolve_kwargs(stop_algo.trail, algo_settings, shared_settings))
+        if decision is not None and decision.price > position["stop_price"]:
+            position["stop_price"] = decision.price
+            position["stop_reason"] = decision.reason
+
+    return cash, position, last_ts
+
+
 @dataclass
 class Trade:
     side: str  # "buy" | "sell"
@@ -101,7 +185,8 @@ class BacktestResult:
 def run_backtest(
     symbol: str, algorithm: str, timeframe: str, bars: list[Bar], daily_pairs: list[tuple],
     days_of_data: int, days_before_trading: int, starting_budget: float, max_loss_pct: float | None = None,
-    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None, bicak_pencere: int = 30,
+    stop_bars: list[Bar] | None = None, stop_timeframe: str | None = None,
 ) -> BacktestResult:
     """daily_pairs: [(date, close), ...] sorted ascending, spanning at least
     from (bars[0] - ~400 days) to bars[-1] so SMA200-style daily gates have
@@ -120,7 +205,24 @@ def run_backtest(
     stop_settings: Stop Loss Ayarları sayfasında kullanıcının kaydettiği
     {"shared": {...}, "<algo_id>": {...}} - verilmezse (ya da bir alan hiç
     kaydedilmemişse) stop_algorithms.py'deki ilgili fonksiyonun kod-varsayılanı
-    kullanılır (bkz. stop_algorithms.resolve_kwargs)."""
+    kullanılır (bkz. stop_algorithms.resolve_kwargs).
+
+    bicak_pencere: algorithm="bicak_kanali" olduğunda buy_algorithms.
+    bicak_kanali_signal'e geçirilen "pencere" (düşüş bacağı taramasının en
+    güncel kaç bar ile sınırlanacağı) - Bıçak Kanalı Test modülündeki
+    (bicak_kanali_test.py) aynı ayar, BackTest arayüzünden ayarlanabilir.
+    Diğer algoritmalar için görmezden gelinir.
+
+    stop_bars / stop_timeframe: verilirse, stop-loss tetiklenmesi (bir mumun
+    low'u stop fiyatına değdi mi) ve trail hesaplaması alım sinyalinin
+    üretildiği `bars`/`timeframe` yerine BU ayrı - genelde daha küçük
+    periyotlu - bar listesi ve periyodu üzerinden yapılır. Bu, canlı sistemde
+    alımın (alpaca_buy_points.py, sembole özel periyot) ve stop/trail'in
+    (alpaca_trailing_stop.py, ayrı TRADE_TIMEFRAME) zaten farklı periyotlarda
+    çalışmasıyla aynı ayrımı backtest'e taşır - alım sinyali hâlâ `bars` ile
+    üretilir, sadece bir pozisyon açıldıktan sonra onun stop'u `stop_bars`
+    ile izlenir. Verilmezse (None/boş), `bars`/`timeframe` her ikisi için de
+    kullanılır - eski (tek periyotlu) davranış birebir korunur."""
     result = BacktestResult(symbol, algorithm, timeframe, days_of_data, days_before_trading, starting_budget,
                              stop_algorithm=stop_algorithm)
     result.final_value = starting_budget
@@ -134,46 +236,30 @@ def run_backtest(
     algo_settings = stop_settings.get(stop_algorithm) or {}
     is_daily_tf = timeframe == "1Day"
 
+    stop_bars_eff = stop_bars if stop_bars else bars
+    is_daily_tf_stop = (stop_timeframe or timeframe) == "1Day"
+
     trading_start = _parse(bars[0].t) + timedelta(days=days_before_trading)
     start_idx = 0
     while start_idx < len(bars) and _parse(bars[start_idx].t) < trading_start:
         start_idx += 1
 
     cash = starting_budget
-    position = None  # {"entry_price", "qty", "stop_price", "entry_idx"}
-    resting = None   # {"price", "qty", "stop_price", "reason"}
+    # stop_reason: seçili stop algoritmasının hangi aşaması şu anki stop_price'ı
+    # kurdu (bkz. StopDecision.reason) - "ilk stop" (pozisyon yeni açıldı),
+    # "breakeven", "kâr kilidi (+%X)", "structure@<fiyat>" gibi. Stop tetiklendiğinde
+    # işlem tablosunda bu, sadece "stop" değil, HANGİ aşamanın sattırdığını gösterir.
+    position = None  # {"entry_price", "qty", "stop_price", "stop_reason", "entry_idx"} - entry_idx, stop_bars_eff içinde
+    resting = None   # {"price", "qty", "stop_price", "stop_reason", "reason"}
 
-    for i in range(start_idx, len(bars)):
+    i = start_idx
+    while i < len(bars):
         bar = bars[i]
         bar_date = _parse(bar.t).date()
 
-        if position is not None:
-            if bar.l <= position["stop_price"]:
-                fill = bar.o if bar.o < position["stop_price"] else position["stop_price"]
-                cash += position["qty"] * fill
-                result.trades.append(Trade("sell", bar.t, round(fill, 4), position["qty"], "stop"))
-                position = None
-                if max_loss_pct and not result.stop_loss_triggered and starting_budget:
-                    loss_pct = (starting_budget - cash) / starting_budget * 100
-                    if loss_pct >= max_loss_pct:
-                        result.stop_loss_triggered = True
-                        result.stop_loss_triggered_at = bar.t
-                        result.trades[-1].reason += f" · zarar kes tetiklendi (toplam zarar %{loss_pct:.2f})"
-                continue
-
-            struct_bars = _window(bars, i, TRAIL_LOOKBACK_DAYS, floor_idx=position["entry_idx"])
-            daily_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf)
-            ctx = StopContext(
-                side="long", entry_price=position["entry_price"], current_stop_price=position["stop_price"],
-                bars=struct_bars, daily_closes=daily_closes,
-            )
-            decision = stop_algo.trail(ctx, **resolve_kwargs(stop_algo.trail, algo_settings, shared_settings))
-            if decision is not None and decision.price > position["stop_price"]:
-                position["stop_price"] = decision.price
-            continue
-
         if result.stop_loss_triggered:
             resting = None
+            i += 1
             continue
 
         # No open position - check the resting entry order (if any) for a fill first,
@@ -182,14 +268,28 @@ def run_backtest(
             qty = resting["qty"]
             cash -= qty * resting["price"]
             position = {"entry_price": resting["price"], "qty": qty,
-                        "stop_price": resting["stop_price"], "entry_idx": i}
+                        "stop_price": resting["stop_price"], "stop_reason": resting["stop_reason"]}
             result.trades.append(Trade("buy", bar.t, resting["price"], qty, resting["reason"]))
             resting = None
-            continue
+
+            # Pozisyonun TÜM ömrü boyunca (stop tetiklenene ya da veri
+            # tükenene kadar) stop_bars_eff üzerinde ilerler - alım tarafının
+            # (bars/timeframe) coarse döngüsü bu süre boyunca devre dışı.
+            cash, position, last_ts = _manage_position(
+                position, stop_bars_eff, _parse(bar.t), daily_pairs, is_daily_tf_stop,
+                stop_algo, algo_settings, shared_settings, max_loss_pct, result, cash, starting_budget,
+            )
+            if position is None:
+                i = _first_index_after(bars, last_ts, start=i + 1)
+                continue
+            break  # stop_bars_eff tükendi, pozisyon hâlâ açık - test sonu kapanışı en altta yapılır
 
         sig_bars = _window(bars, i, SIGNAL_LOOKBACK_DAYS)
         daily_closes = _daily_closes_upto(daily_pairs, bar_date, inclusive=is_daily_tf) if algorithm == "trend_pullback" else None
-        signal = algo_fn(sig_bars, daily_closes)
+        if algorithm == "bicak_kanali":
+            signal = algo_fn(sig_bars, daily_closes, pencere=bicak_pencere)
+        else:
+            signal = algo_fn(sig_bars, daily_closes)
         if signal is not None:
             signal = reject_if_marketable(signal, bar.c)
 
@@ -202,7 +302,7 @@ def run_backtest(
                     signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = ({"price": round(signal.price, 2), "qty": qty,
-                            "stop_price": round(initial_stop, 2), "reason": signal.reason}
+                            "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
                            if qty > 0 else None)
         elif signal is not None:
             qty = math.floor(cash / signal.price) if signal.price > 0 else 0
@@ -211,10 +311,12 @@ def run_backtest(
                     signal.price, "long", **resolve_kwargs(stop_algo.initial_stop, algo_settings, shared_settings),
                 )
                 resting = {"price": round(signal.price, 2), "qty": qty,
-                           "stop_price": round(initial_stop, 2), "reason": signal.reason}
+                           "stop_price": round(initial_stop, 2), "stop_reason": "ilk stop", "reason": signal.reason}
+
+        i += 1
 
     if position is not None:
-        last_bar = bars[-1]
+        last_bar = stop_bars_eff[-1]
         cash += position["qty"] * last_bar.c
         result.trades.append(Trade("sell", last_bar.t, round(last_bar.c, 4), position["qty"], "test_end_close"))
 
