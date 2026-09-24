@@ -34,6 +34,7 @@ from alpaca_client import AlpacaClient
 from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
+from relative_strength import render_relative_strength
 from tefas_fonlari import render_turk_fonlari
 from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
@@ -59,7 +60,7 @@ MODULE_GROUPS = {
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": [
         "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
-        "🛡️ Stop Loss Ayarları",
+        "📈 Relative Strength Rotasyonu", "🛡️ Stop Loss Ayarları",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
@@ -1437,6 +1438,19 @@ elif module == "🤖 Otomatik Alım/Satım":
         "Point Portföyü'ne aktarır - günde 1 kez tamamen otomatik de çalışabilir."
     )
     render_otomatik_alim_satim(username)
+
+# ==============================================================================
+# 8c. MODÜL: RELATIVE STRENGTH ROTASYONU
+# ==============================================================================
+elif module == "📈 Relative Strength Rotasyonu":
+    st.header("📈 Relative Strength Rotasyonu")
+    st.caption(
+        "Evrendeki (NASDAQ 100/NYSE/Russell 2000) hisseleri göreceli güce göre sıralar, en güçlü "
+        "N tanesini eşit ağırlıkla tutar; haftalık yeniden dengelemede sıralamadan düşenler satılır, "
+        "yeni girenler alınır. Premium Buy Point'ten AYRI bir nakit payı ve watchlist kullanır - "
+        "ikisi de aynı toplam hesap nakdinden besleniyor, birbirinin payına dokunmaz."
+    )
+    render_relative_strength(username)
 
 # ==============================================================================
 # 9. MODÜL: TÜRK FONLARI

@@ -1,0 +1,53 @@
+name: Relative Strength Rotasyonu
+
+# Relative Strength Rotasyonu modülünde (Streamlit) kullanıcı "otomatik
+# çalıştır" kutusunu işaretlediğinde relative_strength_config_berkakar.json'a
+# yazılan ayarlarla, bu workflow haftada 1 kez (Otomatik Alım/Satım'ın günlük
+# 07:00 UTC koşusundan 15 dakika sonra, güncel Premium Buy Point watchlist'i
+# görülsün diye - bkz. relative_strength_core.rebalance'ın PBP çakışma
+# koruması) evreni sırala → en güçlü top_n'i seç → sıralamadan düşenleri sat →
+# yeni girenleri al pipeline'ını (relative_strength_runner.py) çalıştırır.
+#
+# Cron saati UTC'dir; her Pazartesi (haftalık yeniden dengeleme).
+
+on:
+  schedule:
+    - cron: "15 7 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python relative_strength_runner.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+
+      - name: Commit and push updated config/holdings state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in relative_strength_config_berkakar.json relative_strength_holdings_berkakar.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update Relative Strength Rotasyonu state"
+            git push
+          fi

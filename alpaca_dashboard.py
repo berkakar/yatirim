@@ -52,6 +52,9 @@ def _order_price(order: dict) -> float | None:
 REBUY_NOTE = "🔁 Alım-Stop-Alım: stop sonrası otomatik yeniden alım"
 
 
+RELATIVE_STRENGTH_LABEL = "📈 Relative Strength Rotasyonu"
+
+
 def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
     """alpaca_buy_points.py tags buy-limit entries with client_order_id
     "algo-<algorithm_id>-<timeframe>-<symbol>-<epoch>" so historical orders
@@ -60,12 +63,18 @@ def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
     placed before the timeframe was added to this tag have the older
     4-part "algo-<algorithm_id>-<symbol>-<epoch>" form (mum periyodu
     unknown). buy_stop_rebuy.py tags its yeniden alım (rebuy) market emirlerini
-    aynı şekilde ama "rebuy-" öneki ile - bkz. o modülün docstring'i. Orders
-    that aren't a tagged buy-limit/rebuy entry show "—" for both.
+    aynı şekilde ama "rebuy-" öneki ile - bkz. o modülün docstring'i.
+    relative_strength_core.py kendi emirlerini "rs-buy-<symbol>-<epoch>" /
+    "rs-exit-<symbol>-<epoch>" ile etiketler - buy_algorithms.ALGORITHMS'a
+    hiç bağlı olmadığından (kesitsel bir strateji, tek bir "algoritma id"si
+    yok) sabit bir etiketle gösterilir. Orders that aren't a tagged
+    buy-limit/rebuy/rs entry show "—" for both.
     Returns (algoritma_etiketi, mum_periyodu_etiketi, alım_stop_alım_mı)."""
     parts = (order.get("client_order_id") or "").split("-")
-    if not parts or parts[0] not in ("algo", "rebuy"):
+    if not parts or parts[0] not in ("algo", "rebuy", "rs"):
         return "—", "—", False
+    if parts[0] == "rs":
+        return RELATIVE_STRENGTH_LABEL, "—", False
     is_rebuy = parts[0] == "rebuy"
     if len(parts) == 5:
         algo_id, timeframe = parts[1], parts[2]
