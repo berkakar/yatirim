@@ -18,14 +18,16 @@ import edilir.
      (gerçek emir veren tek fonksiyon) SADECE relative_strength_runner.py
      tarafından çağrılır. Streamlit sayfası sadece plan_rebalance() ile
      salt-okunur bir ÖNİZLEME gösterir.
-  2. Premium Buy Point'in kendi watchlist'indeki semboller bu modülün
-     evreninden HARİÇ TUTULUR (bkz. rebalance()) - aksi halde aynı sembolde
-     iki bağımsız sistemin (biri fiyat-stop'una göre, diğeri sıralamaya göre
-     satmaya çalıştığı) birbirinden habersiz pozisyon yönetimi çakışması
-     olurdu. Kullanıcı RS Rotasyonu'nun elinde tuttuğu bir sembolü sonradan
-     elle Premium Buy Point watchlist'ine eklerse bu koruma o an için işe
-     yaramaz - bilinen bir sınır, RS'nin elindeki sembolleri PBP'ye elle
-     eklememeniz önerilir.
+  2. Premium Buy Point'in kendi watchlist'indeki VE Açılış Aralığı Kırılımı
+     (ORB) modülünün elindeki semboller bu modülün evreninden HARİÇ TUTULUR
+     (bkz. rebalance()) - aksi halde aynı sembolde bağımsız sistemlerin
+     (biri fiyat-stop'una, biri sıralamaya, biri kırılım/stop'a göre satmaya
+     çalıştığı) birbirinden habersiz pozisyon yönetimi çakışması olurdu.
+     ORB da kendi tarafında (orb_core.scan_and_buy) bu modülün elindeki
+     sembolleri hariç tutuyor - karşılıklı koruma. Kullanıcı bu modülün
+     elinde tuttuğu bir sembolü sonradan elle Premium Buy Point
+     watchlist'ine eklerse bu koruma o an için işe yaramaz - bilinen bir
+     sınır, elle eklememeniz önerilir.
   3. "Toplam nakit" tek bir referans: Alpaca hesabının GERÇEK canlı nakti
      (client.get_account()["cash"]) - alpaca_buy_points.
      compute_available_cash_for_buying'in KULLANDIĞI AYNI değer. Bu modülün
@@ -262,7 +264,12 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
         pbp_symbols = {a["symbol"] for a in pbp_watchlist["assets"]} if pbp_watchlist else set()
     except Exception:
         pbp_symbols = set()
-    universe = [t for t in universe if t not in pbp_symbols]  # bkz. modül üstü not #2
+    # Fonksiyon içi import: orb_core -> otomatik_alim_satim_core ->
+    # alpaca_trailing_stop -> relative_strength_core/orb_core döngüsünü
+    # kırmak için (bkz. alpaca_trailing_stop.py'deki aynı notlar).
+    from orb_core import load_holdings_local as load_orb_holdings
+    orb_symbols = set(load_orb_holdings(username).keys())
+    universe = [t for t in universe if t not in pbp_symbols and t not in orb_symbols]  # bkz. modül üstü not #2
     universe = filter_by_liquidity(client, universe, cfg.get("min_avg_dollar_volume", DEFAULT_MIN_AVG_DOLLAR_VOLUME))
 
     plan = plan_rebalance(client, username, universe, top_n, lookback_weeks, min_score_pct)

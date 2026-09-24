@@ -1,0 +1,66 @@
+name: Açılış Aralığı Kırılımı (ORB)
+
+# Açılış Aralığı Kırılımı (ORB) modülünde (Streamlit) kullanıcı "otomatik
+# çalıştır" kutusunu işaretlediğinde orb_scan_config_berkakar.json'a yazılan
+# ayarlarla, bu workflow her gün piyasa açılışından ~1 saat sonra (varsayılan
+# 15Min mum + max_bars_after_open=4 açılış aralığı penceresinin tam
+# kapanması için - bkz. orb_core.py'nin modül üstü notu #5 ve
+# compute_orb_score) evreni tara → alım puanına göre sırala → en yüksek
+# top_n'i seç → market emriyle al + anında yapısal (Açılış Aralığı) stop kur
+# pipeline'ını (orb_scan_runner.py) çalıştırır.
+#
+# Cron saati UTC'dir. ABD piyasası yerel saatle her zaman 09:30'da açılır
+# ama UTC karşılığı yaz saatinde (EDT, ~Mart-Kasım) 13:30, kış saatinde
+# (EST, ~Kasım-Mart) 14:30'dur - DST geçişleri GitHub Actions cron'unda
+# otomatik telafi edilmez. Bunu tek bir sabit saatle çözmek yerine, hem
+# EDT hem EST'te "açılıştan ~60/75 dakika sonra"ya denk gelen İKİ ayrı
+# pencerede (14:30/14:45 VE 15:30/15:45 UTC) tetikleniyor: yanlış sezonda
+# denk gelen tetiklemeler piyasa henüz/artık kapalı olduğu için
+# orb_scan_runner.py'nin is_open kontrolüyle zararsızca atlanır, doğru
+# sezondakiler ise aynı script'in "bugün zaten çalıştı mı" (last_run_at)
+# kontrolüyle günde sadece 1 kez gerçek tarama+alım yapılmasını garanti eder
+# - ikinci tetikleme sadece ilkinin geçici bir hatayla başarısız olması
+# ihtimaline karşı bir yedek.
+
+on:
+  schedule:
+    - cron: "30,45 14 * * 1-5"
+    - cron: "30,45 15 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python orb_scan_runner.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+
+      - name: Commit and push updated config/holdings state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in orb_scan_config_berkakar.json orb_scan_holdings_berkakar.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update Açılış Aralığı Kırılımı (ORB) state"
+            git push
+          fi
