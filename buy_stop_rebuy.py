@@ -225,7 +225,8 @@ def _process_pending(
     fill_price = float(filled["filled_avg_price"])
     filled_qty = float(filled["filled_qty"])
     stop_price = round(stop_algo.initial_stop(
-        fill_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+        fill_price, "long", bars=bars,
+        **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
     ), 2)
 
     stop_msg_suffix = f", stop {stop_price:.2f} seviyesinden kuruldu."

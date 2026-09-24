@@ -188,12 +188,57 @@ def bicak_kanali_signal(bars: list[Bar], daily_closes: list[float] | None = None
     )
 
 
+def orb_signal(bars: list[Bar], daily_closes: list[float] | None = None,
+               volume_mult: float = 1.5, max_bars_after_open: int = 4) -> BuySignal | None:
+    """Açılış Aralığı Kırılımı (Opening Range Breakout - ORB): günün İLK
+    barının (mum periyodu neyse - bu algoritma 15 dakikalık periyotla
+    kullanılmak üzere tasarlandı, bkz. premium_buy_portfolio.py) high/low'u
+    "açılış aralığı" sayılır. Güncel bar bu aralığın üst sınırını, açılış
+    barının hacminin en az volume_mult katı hacimle kırarsa alım sinyali
+    üretir - breakout_volume_signal'daki hacim ölçütüyle aynı mantık, ama
+    karşılaştırma son 20 bar yerine SADECE o seansın açılış barına göre
+    yapılır (seans henüz yeni başladığından çok barlık bir ortalama için
+    veri yok).
+
+    Kırılım iki şartı birden karşılamalı: açılış barının KENDİSİNDE
+    olmamalı (kendi kendini kıramaz) VE seansın ilk max_bars_after_open
+    barı İÇİNDE gerçekleşmeli - aksi halde bu artık "açılış" kırılımı
+    değil, günün herhangi bir saatinde eski bir seviyenin kırılmasıdır
+    (ki bu zaten breakout_volume_signal'ın işi). stop_algorithms.
+    opening_range_initial_stop ile birlikte kullanılması önerilir - o da
+    aynı şekilde `bars`'ın son barının ait olduğu seansın açılış barını
+    bulup stop'u aralığın diğer ucuna (long için low) kurar."""
+    if len(bars) < 2:
+        return None
+    last = bars[-1]
+    last_date = _bar_date(last)
+    session_bars = [b for b in bars if _bar_date(b) == last_date]
+    if len(session_bars) < 2 or len(session_bars) > max_bars_after_open + 1:
+        return None
+
+    opening_bar = session_bars[0]
+    range_high = opening_bar.h
+
+    if last.h <= range_high:
+        return None
+    if opening_bar.v <= 0 or last.v < volume_mult * opening_bar.v:
+        return None
+
+    return BuySignal(
+        algorithm="orb", price=round(last.c, 2),
+        reason=f"Açılış aralığı ({opening_bar.l:.2f}-{range_high:.2f}) kırıldı, "
+               f"hacim açılış barının %{last.v / opening_bar.v * 100:.0f}'i",
+        style="breakout",
+    )
+
+
 ALGORITHMS = {
     "demand_zone": ("Talep Bölgesi (Demand Zone)", demand_zone_signal),
     "trend_pullback": ("Trend İçi Dinamik Düzeltme", trend_pullback_signal),
     "volatility_support": ("Oynaklığa Duyarlı Dinamik Destek", volatility_support_signal),
     "breakout_volume": ("Kırılım + Hacim İvmesi", breakout_volume_signal),
     "bicak_kanali": ("Bıçak Kanalı", bicak_kanali_signal),
+    "orb": ("Açılış Aralığı Kırılımı (ORB)", orb_signal),
 }
 DEFAULT_ALGORITHM = "demand_zone"
 

@@ -1,4 +1,4 @@
-"""Stop Loss Ayarları modülü - iki stop-loss algoritmasının (stop_algorithms.py)
+"""Stop Loss Ayarları modülü - üç stop-loss algoritmasının (stop_algorithms.py)
 parametrelerini kullanıcı bazında ayarlamayı ve GitHub'a kalıcı olarak
 kaydetmeyi sağlar (bkz. github_config.py - premium_buy_portfolio.py'nin
 portföy config'i için kullandığı aynı okuma/yazma deseni,
@@ -18,7 +18,7 @@ import streamlit as st
 from github_config import read_json_from_github, write_json_to_github
 from stop_algorithms import (
     ATR_MULTIPLIER, ATR_PERIOD, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
-    STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
+    ORB_STOP_BUFFER_PCT, STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
     WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT, WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
     WAIT_THEN_TRAIL_PROFIT_LOCK_PCT, WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT,
 )
@@ -53,7 +53,7 @@ def save_stop_loss_settings(username: str, settings: dict) -> None:
 def render_stop_loss_settings(username: str):
     st.caption(
         "Trailing Stop modülünün, Premium Buy Point'in bracket girişlerinin ve BackTest'in kullandığı "
-        "iki stop-loss algoritmasının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
+        "üç stop-loss algoritmasının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
         "içindeki varsayılan değerlerle dolu geliyor - hiç değiştirmeden kaydetseniz bile mevcut davranış "
         "aynen korunur. Bir kutuyu boşaltıp tekrar kod-varsayılanına dönmek isterseniz, değeri elle "
         "yukarıdaki varsayılana geri yazmanız yeterli."
@@ -67,6 +67,7 @@ def render_stop_loss_settings(username: str):
     shared = existing.get("shared") or {}
     algo1 = existing.get("breakeven_atr_structure") or {}
     algo2 = existing.get("wait_then_trail") or {}
+    algo3 = existing.get("opening_range") or {}
 
     st.subheader(f"🎯 {STOP_ALGORITHMS['breakeven_atr_structure'].label}")
     st.caption(
@@ -168,6 +169,33 @@ def render_stop_loss_settings(username: str):
     )
 
     st.divider()
+    st.subheader(f"🔓 {STOP_ALGORITHMS['opening_range'].label}")
+    st.caption(
+        "buy_algorithms.orb_signal (Açılış Aralığı Kırılımı) ile birlikte kullanılmak üzere tasarlandı - "
+        "ilk stop, sabit bir yüzde yerine pozisyonun açıldığı seansın açılış barının ters ucuna (long için "
+        "low) küçük bir tamponla kurulur. Bu bölümün kendi ayrı bir trail ayarı yoktur - eşik aşıldıktan "
+        "sonra yukarıdaki Breakeven + Yapısal Trail bölümündeki (paylaşılan ATR/trend/swing) aynı yapısal "
+        "trail devreye girer. Açılış barı bulunamazsa (ör. ORB dışı bir algoritmanın sinyaliyle bu stop "
+        "seçildiyse) aşağıdaki Yedek Stop % kullanılır."
+    )
+    a3c1, a3c2 = st.columns(2)
+    algo3_buffer_pct = a3c1.number_input(
+        "Açılış Aralığı Tamponu %", min_value=0.0, max_value=10.0,
+        value=float(algo3.get("buffer_pct", ORB_STOP_BUFFER_PCT * 100)), step=0.05, format="%.3f",
+        key="sls_algo3_buffer_pct",
+        help="Stop, açılış barının low'unun (long için) bu yüzde kadar altına kurulur - tam seviyede "
+             "kalmak yerine küçük bir nefes payı bırakır.",
+    )
+    algo3_fallback_pct = a3c2.number_input(
+        "Yedek Stop % (açılış barı bulunamazsa)", min_value=0.1, max_value=50.0,
+        value=float(algo3.get("fallback_pct", INITIAL_STOP_PCT * 100)), step=0.1, format="%.2f",
+        key="sls_algo3_fallback_pct",
+        help="`bars` verilmediği bazı çağrı yollarında (ör. bazı fallback/top-up senaryoları) ya da "
+             "hesaplanan seviye girişin yanlış tarafında kaldığında, bu sabit yüzdeye güvenli şekilde "
+             "geri düşülür.",
+    )
+
+    st.divider()
     if st.button("💾 Kaydet", type="primary", key="sls_save_btn"):
         new_settings = {
             "shared": {
@@ -187,6 +215,10 @@ def render_stop_loss_settings(username: str):
                 "breakeven_trigger_pct": float(algo2_breakeven_trigger_pct),
                 "profit_lock_trigger_pct": float(algo2_profit_lock_trigger_pct),
                 "profit_lock_pct": float(algo2_profit_lock_pct),
+            },
+            "opening_range": {
+                "buffer_pct": float(algo3_buffer_pct),
+                "fallback_pct": float(algo3_fallback_pct),
             },
         }
         try:
