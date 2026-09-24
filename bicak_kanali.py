@@ -20,9 +20,12 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     noktadan geçen direkt doğru -> kılavuz çizgisi (diğer tepe noktaları
     arasında bir ortalama fit değil) - klasik direnç trend çizgisi
     çekme yöntemine benzer şekilde, tüm düşüş trendini uçtan uca kapsar.
-  - Aynı bacaktaki dip pivotlarından en düşüğü ("en dip nokta") bulunur;
-    kılavuz ile aynı eğimde, bu noktadan geçen paralel doğru -> bıçak
-    çizgisi.
+  - Aynı bacaktaki dip pivotlarından MUTLAK en düşüğü hariç tutulup,
+    kalanlar arasında en düşük olanı ("en dip nokta") bulunur - amaç,
+    tek bir aşırı/sivri dibin (outlier) çizgiyi gereğinden fazla aşağı
+    çekmesini engellemek. En az 2 farklı dip pivotu gerekir (biri hariç
+    tutulacağı için). Kılavuz ile aynı eğimde, bu noktadan geçen paralel
+    doğru -> bıçak çizgisi.
   - dip çizgisinin (en dip noktasından geçen, kılavuz ile aynı
     eğimdeki paralel doğru - bıçak çizgisiyle AYNI hat) fiyatla, en
     dip noktasından ÖNCEKİ (soldaki) taraftaki İLK kesiştiği YEŞİL
@@ -64,7 +67,7 @@ class Kilavuz:
     tepe_pivots: list[Pivot]                 # trend boyunca bulunan tüm tepe adayları
     kilavuz_noktalari: tuple[Pivot, Pivot]    # kılavuz çizgisini belirleyen 2 nokta (en tepe, son tepe)
     kilavuz: tuple[float, float]              # (slope, intercept) - bu 2 noktadan geçen doğru
-    en_dip: Pivot                             # trend boyunca en düşük dip pivotu
+    en_dip: Pivot                             # trend boyunca MUTLAK en düşük dip hariç, kalanlar arasında en düşük olan dip pivotu
     bicak: tuple[float, float]                # (slope, intercept) - kılavuz ile aynı eğim, en_dip'ten geçer
     sifir_nokta: Pivot                         # dip kesişim mumundan önceki (varsayılan: serinin tamamındaki) en yüksek lokal minimum
     sifir_cizgisi: tuple[float, float]         # (slope, intercept) - kılavuz ile aynı eğim, sifir_nokta'dan geçer
@@ -161,8 +164,10 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     """Bar serisinde en büyük genlikli düşüş trendini bulur; bu trendin
     tepe pivotlarından en yükseği ("en tepe") ve kronolojik olarak en
     son oluşanı ("son tepe") seçilip bu iki noktadan geçen direkt doğru
-    kılavuz çizgisi olarak kurulur. Aynı trendin en düşük dip pivotundan
-    ("en dip nokta"), kılavuz ile aynı eğimde geçen paralel doğru bıçak
+    kılavuz çizgisi olarak kurulur. Aynı trendin dip pivotlarından MUTLAK
+    en düşüğü hariç tutulup kalanlar arasında en düşük olanından ("en dip
+    nokta" - tek bir aşırı/sivri dibin çizgiyi fazla aşağı çekmesini
+    önlemek için), kılavuz ile aynı eğimde geçen paralel doğru bıçak
     çizgisi olarak kurulur. Dip çizgisinin (bıçak ile aynı hat) en dip
     noktasından önce ilk kestiği yeşil bardan ("dip kesişim mumu"),
     geçmişe dönük en yüksek lokal minimumdan ("sıfır nokta" - bkz.
@@ -194,7 +199,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     in_range = [p for p in pivots if leg_tepe.index <= p.index <= leg_dip.index]
     tepe_pivots = [p for p in in_range if p.kind == "high"]
     dip_pivots = [p for p in in_range if p.kind == "low"]
-    if len(tepe_pivots) < 2 or not dip_pivots:
+    if len(tepe_pivots) < 2 or len(dip_pivots) < 2:
         return None
 
     # p.price bir "high"/"low" pivotu için zaten o günün en yüksek/en
@@ -208,7 +213,12 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
         return None
     kilavuz_slope, _ = kilavuz
 
-    en_dip = min(dip_pivots, key=lambda p: p.price)
+    # Bıçak çizgisi, bacaktaki MUTLAK en düşük dipten değil - o dip hariç
+    # tutulduktan sonra kalan lokal diplerin en düşüğünden geçer (yani
+    # "ikinci en düşük" dip). Amaç: tek bir aşırı/sivri dibin (outlier)
+    # çizgiyi gereğinden fazla aşağı çekmesini engellemek.
+    en_dusuk_dip = min(dip_pivots, key=lambda p: p.price)
+    en_dip = min((p for p in dip_pivots if p is not en_dusuk_dip), key=lambda p: p.price)
     bicak_intercept = en_dip.price - kilavuz_slope * en_dip.index
     bicak = (kilavuz_slope, bicak_intercept)
 

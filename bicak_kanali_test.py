@@ -65,8 +65,10 @@ def render_bicak_kanali_test(target_list):
 2. **Kılavuz çizgisi**: Bu bacak içindeki tepe pivotlarından fiyatça **en yüksek**
    olanı ("en tepe") ile kronolojik olarak **en son** oluşanı ("son tepe") seçilip
    bu iki noktadan geçen doğru çizilir - klasik direnç trend çizgisi mantığı.
-3. **Bıçak çizgisi**: Aynı bacaktaki en düşük dip pivotundan ("en dip nokta"),
-   kılavuz ile aynı eğimde geçen paralel doğru.
+3. **Bıçak çizgisi**: Aynı bacaktaki dip pivotlarından MUTLAK en düşüğü hariç
+   tutulup, kalanlar arasında en düşük olanından ("en dip nokta" - tek bir
+   aşırı/sivri dibin çizgiyi fazla aşağı çekmesini önlemek için), kılavuz ile
+   aynı eğimde geçen paralel doğru.
 4. **Dip kesişim mumu**: Bıçak çizgisinin, en dip'ten ÖNCEKİ barlarda soldan sağa
    ilk kestiği YEŞİL mum.
 5. **Sıfır nokta**: Dip kesişim mumundan geriye dönük - varsayılan olarak zaten
