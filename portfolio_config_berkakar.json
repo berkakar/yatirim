@@ -23,13 +23,13 @@
   "stop_algorithm": "breakeven_atr_structure",
   "symbol_settings": {
     "ACAD": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "opening_range"
     },
     "AAON": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "opening_range"
     },
     "AAT": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "opening_range"
     },
     "MSFT": {
       "algorithm": "demand_zone",
