@@ -28,9 +28,9 @@ Bıçak Kanalı - adım adım inşa ediliyor. Şu ana kadar tamamlanan adımlar:
     doğru -> bıçak çizgisi.
   - dip çizgisinin (en dip noktasından geçen, kılavuz ile aynı
     eğimdeki paralel doğru - bıçak çizgisiyle AYNI hat) fiyatla, en
-    dip noktasından ÖNCEKİ (soldaki) taraftaki İLK kesiştiği YEŞİL
-    (kapanışı açılışından yüksek) bar bulunur ("dip kesişim mumu" -
-    bkz. _dip_cizgisi_ilk_yesil_kesisim).
+    dip noktasından ÖNCEKİ (soldaki) taraftaki İLK kesiştiği KIRMIZI
+    (kapanışı açılışından düşük) bar bulunur ("dip kesişim mumu" -
+    bkz. _dip_cizgisi_ilk_kirmizi_kesisim).
   - dip kesişim mumundan geçmişe dönük - varsayılan olarak (sabit bir
     bar sayısı değil) serinin en başına kadar, yani zaten "kaç gün
     geriye gidilecek" ile sınırlanmış olan bar serisinin tamamında;
@@ -75,7 +75,7 @@ class Kilavuz:
     alt_oran: float                            # bıçak-sıfır çizgisi arası pay
     turetilmis_oran: float                     # ust_oran * alt_oran
     yesil_cizgi: tuple[float, float]           # (slope, intercept) - kılavuzun türetilmiş_oran kadar üstü (alım çizgisi)
-    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği yeşil bar - sifir_nokta bu bardan geriye (varsayılan: serinin tamamında) aranır
+    dip_kesisim_mumu: Pivot | None             # dip çizgisinin (en dip'ten geçen paralel doğru) en dip'ten ÖNCE İLK kesiştiği kırmızı bar - sifir_nokta bu bardan geriye (varsayılan: serinin tamamında) aranır
 
 
 def _select_decline_leg(pivots: list[Pivot], min_index: int = 0) -> tuple[Pivot, Pivot] | None:
@@ -120,11 +120,11 @@ def _linear_fit(points: list[tuple[int, float]]) -> tuple[float, float] | None:
     return slope, intercept
 
 
-def _dip_cizgisi_ilk_yesil_kesisim(bars: list[Bar], en_dip: Pivot, dip_cizgisi: tuple[float, float]) -> Pivot | None:
+def _dip_cizgisi_ilk_kirmizi_kesisim(bars: list[Bar], en_dip: Pivot, dip_cizgisi: tuple[float, float]) -> Pivot | None:
     """Dip çizgisinin (en dip noktasından geçen, kılavuz ile aynı
     eğimdeki paralel doğru) fiyatla, en dip noktasından ÖNCEKİ
-    barlarda soldan sağa doğru İLK kesiştiği YEŞİL (kapanışı
-    açılışından yüksek) barı bulur ("dip kesişim mumu"); hiç böyle bir
+    barlarda soldan sağa doğru İLK kesiştiği KIRMIZI (kapanışı
+    açılışından düşük) barı bulur ("dip kesişim mumu"); hiç böyle bir
     kesişim yoksa None. Arama en dip noktasından ÖNCEKİ barlarla
     sınırlıdır - çizgi kendi tanımı gereği tam olarak en dip'in
     fiyatından geçtiği için, en dip'in kendisi (veya sonrası) sahte
@@ -133,7 +133,7 @@ def _dip_cizgisi_ilk_yesil_kesisim(bars: list[Bar], en_dip: Pivot, dip_cizgisi: 
     for i in range(0, en_dip.index):
         b = bars[i]
         level = slope * i + intercept
-        if b.l <= level <= b.h and b.c > b.o:
+        if b.l <= level <= b.h and b.c < b.o:
             return Pivot(index=i, kind="low", price=level, t=b.t)
     return None
 
@@ -169,7 +169,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     nokta" - tek bir aşırı/sivri dibin çizgiyi fazla aşağı çekmesini
     önlemek için), kılavuz ile aynı eğimde geçen paralel doğru bıçak
     çizgisi olarak kurulur. Dip çizgisinin (bıçak ile aynı hat) en dip
-    noktasından önce ilk kestiği yeşil bardan ("dip kesişim mumu"),
+    noktasından önce ilk kestiği kırmızı bardan ("dip kesişim mumu"),
     geçmişe dönük en yüksek lokal minimumdan ("sıfır nokta" - bkz.
     _find_sifir_nokta), yine kılavuz ile aynı eğimde geçen paralel doğru
     sıfır çizgisi olarak kurulur; bu üç hat üzerinden üst_oran/alt_oran
@@ -222,7 +222,7 @@ def find_kilavuz(bars: list[Bar], order: int = 2, pencere: int | None = 30,
     bicak_intercept = en_dip.price - kilavuz_slope * en_dip.index
     bicak = (kilavuz_slope, bicak_intercept)
 
-    dip_kesisim_mumu = _dip_cizgisi_ilk_yesil_kesisim(bars, en_dip, bicak)
+    dip_kesisim_mumu = _dip_cizgisi_ilk_kirmizi_kesisim(bars, en_dip, bicak)
     if dip_kesisim_mumu is None:
         return None
     sifir_nokta = _find_sifir_nokta(bars, pivots, dip_kesisim_mumu, sifir_pencere)
