@@ -19,6 +19,31 @@ BUY_LOOKBACK_DAYS = 60
 DAILY_LOOKBACK_DAYS = 400  # SMA(200) icin yeterli gunluk bar (hafta sonu/tatil payi ile)
 PRICE_REFRESH_SECONDS = 30
 
+# "Varsayılan Algoritma" seçim kutusunun altında, ALGORITHMS'teki isme ek
+# olarak gösterilen kısa açıklama - buy_algorithms.py'deki her sinyal
+# fonksiyonunun kendi docstring'inin özeti. Yeni bir algoritma eklendiğinde
+# burada da bir satır eklenmezse, o algoritma için sadece boş bir satır
+# görünür (ALGORITHM_DESCRIPTIONS.get(..., '') - sayfa çökmez).
+ALGORITHM_DESCRIPTIONS = {
+    "demand_zone": "Son güçlü yükseliş hareketinden önceki mumun oluşturduğu talep bölgesinin üst "
+                   "sınırına geri çekilmeyi (pullback) bekler - bekleyen bir limit emri olarak işlenir.",
+    "trend_pullback": "Günlük trend yükselişteyken (kapanış günlük SMA200 üzerinde), 30 dakikalık grafikte "
+                       "EMA20 veya o günün VWAP'ına değip yeşil kapanan geri çekilmeyi arar.",
+    "volatility_support": "Son 7 günlük 30 dakikalık barlarla SMA20-1.5×ATR14 seviyesinin altına inme veya "
+                           "Bollinger (SMA20±2σ) alt bandına değme - oynaklığa duyarlı bir destek arayışı.",
+    "breakout_volume": "Son 20 barın direncini (Donchian üst bandı), ortalama hacmin en az %150'siyle kıran "
+                        "barı yakalar - kırılım sinyali olduğundan bekleyen limit yerine ANINDA market "
+                        "emriyle girilir.",
+    "bicak_kanali": "Kılavuz/bıçak/sıfır çizgisi yöntemiyle her bar için yeniden kurulan 'yeşil çizgi'nin "
+                     "(alım çizgisi) güncel seviyesine geri çekilmeyi bekler - bekleyen bir limit emri "
+                     "olarak işlenir.",
+    "orb": "Açılış Aralığı Kırılımı (ORB): günün ilk barının (15 dakikalık periyotla kullanılması önerilir) "
+           "high/low'u açılış aralığı sayılır; bu aralığın üstü, açılış barının hacminin en az 1.5 katıyla ve "
+           "seansın ilk birkaç barı içinde kırılırsa ANINDA market emriyle girilir. Aşağıdaki Stop-Loss "
+           "Algoritması olarak 'Açılış Aralığı (ORB) Stop' seçilmesi önerilir - stopu sabit yüzde yerine "
+           "açılış aralığının diğer ucuna kurar.",
+}
+
 
 @st.fragment(run_every=PRICE_REFRESH_SECONDS)
 def _render_buy_point_table(
@@ -377,6 +402,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         index=algorithm_ids.index(current_algorithm),
         format_func=lambda k: ALGORITHMS[k][0],
     )
+    st.caption(f"ℹ️ {ALGORITHM_DESCRIPTIONS.get(selected_algorithm, '')}")
 
     st.subheader("🛑 Risk Yönetimi")
     selected_stop_algorithm = st.selectbox(
