@@ -52990,5 +52990,42 @@
     ],
     "source": "Alpaca",
     "bicak_pencere": 30
+  },
+  {
+    "run_id": "AMAT-bicak_kanali-1Day-wait_then_trail-20260924T001113",
+    "run_at": "2026-09-24T00:11:13+00:00",
+    "symbol": "AMAT",
+    "algorithm": "bicak_kanali",
+    "timeframe": "1Day",
+    "stop_timeframe": "30Min",
+    "stop_algorithm": "wait_then_trail",
+    "days_of_data": 180,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 9619.37,
+    "pnl": -380.63,
+    "pnl_pct": -3.81,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-07-24T04:00:00Z",
+        "price": 559.67,
+        "qty": 17,
+        "reason": "Bıçak Kanalı yeşil çizgisi (alım çizgisi) seviyesi"
+      },
+      {
+        "side": "sell",
+        "time": "2026-07-24T14:30:00Z",
+        "price": 537.28,
+        "qty": 17,
+        "reason": "stop - ilk stop"
+      }
+    ],
+    "source": "Alpaca",
+    "bicak_pencere": 180
   }
 ]
