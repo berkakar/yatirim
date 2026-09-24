@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
+from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, DEFAULT_RUSSELL_2000, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style, freshness_caption
 from theme import inject_css, render_mode_switcher, get_plotly_template
@@ -401,11 +401,12 @@ if module == NAV_HOME:
 
     st.divider()
     st.subheader("📋 Hisse Listeleri")
-    lc1, lc2, lc3, lc4 = st.columns(4)
+    lc1, lc2, lc3, lc4, lc5 = st.columns(5)
     lc1.metric("NASDAQ 100 Listesi", len(st.session_state.ticker_lists["NASDAQ 100"]))
     lc2.metric("NYSE Listesi", len(st.session_state.ticker_lists["NYSE"]))
     lc3.metric("BIST 100 Listesi", len(st.session_state.ticker_lists["BIST 100"]))
-    lc4.metric("Hisse Grupları", len(st.session_state.stock_groups))
+    lc4.metric("Russell 2000 Listesi", len(st.session_state.ticker_lists["Russell 2000"]))
+    lc5.metric("Hisse Grupları", len(st.session_state.stock_groups))
 
     st.divider()
     st.subheader("🎯 Bu Oturumdaki Son Tarama Sonuçları")
@@ -982,7 +983,7 @@ elif module == "📊 Bağımsız Hisse Grafiği":
 elif module == "⚙️ Hisse Listelerini Yönet":
     st.header("⚙️ Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
 
-    selected_m = st.selectbox("Düzenlenecek Piyasayı Seçin:", ["NASDAQ 100", "BIST 100", "NYSE"])
+    selected_m = st.selectbox("Düzenlenecek Piyasayı Seçin:", MARKETS)
     current_market_list = st.session_state.ticker_lists[selected_m]
 
     col_add, col_del = st.columns(2)
@@ -1046,7 +1047,8 @@ elif module == "⚙️ Hisse Listelerini Yönet":
         st.session_state.ticker_lists = {
             "NASDAQ 100": list(dict.fromkeys(DEFAULT_NASDAQ_100)),
             "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
-            "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100))
+            "BIST 100": list(dict.fromkeys(DEFAULT_BIST_100)),
+            "Russell 2000": list(dict.fromkeys(DEFAULT_RUSSELL_2000)),
         }
         save_ticker_lists(st.session_state.ticker_lists, username)
         st.success("Tüm listeler varsayılan ayarlara sıfırlandı!")

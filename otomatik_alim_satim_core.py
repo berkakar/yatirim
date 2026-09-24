@@ -30,6 +30,8 @@ DEFAULT_MIN_BACKTEST_PROFIT_PCT = 10.0
 DEFAULT_MAX_CANDIDATES = 10
 DEFAULT_MOMENTUM_LOOKBACK_DAYS = 30
 DEFAULT_ALGORITHM_ID = next(iter(ALGORITHMS))
+DEFAULT_MIN_AVG_DOLLAR_VOLUME = 5_000_000.0  # ORB/kırılım tarzı market emirleri için makul bir likidite tabanı
+LIQUIDITY_LOOKBACK_DAYS = 20  # ~1 aylık işlem günü
 
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
@@ -50,10 +52,20 @@ def _daily_pairs(client: AlpacaClient, symbol: str, days_of_data: int) -> list[t
     return pairs
 
 
-def build_universe(username: str, include_nasdaq: bool, include_nyse: bool, custom_groups: list[str]) -> list[str]:
-    """NASDAQ 100 ∪ NYSE ∪ (bu piyasalara bağlı, kullanıcı tarafından seçilen)
-    özel hisse grupları - BIST hariç, bu modül tamamen Alpaca verisiyle çalışır
-    ve Alpaca'da BIST hisseleri işlem görmez."""
+def build_universe(
+    username: str, include_nasdaq: bool, include_nyse: bool, custom_groups: list[str],
+    include_russell: bool = False,
+) -> list[str]:
+    """NASDAQ 100 ∪ NYSE ∪ Russell 2000 (seçiliyse) ∪ (bu piyasalara bağlı,
+    kullanıcı tarafından seçilen) özel hisse grupları - BIST hariç, bu modül
+    tamamen Alpaca verisiyle çalışır ve Alpaca'da BIST hisseleri işlem görmez.
+
+    Russell 2000 listesi (config.DEFAULT_RUSSELL_2000) diğerlerinden farklı
+    olarak likidite açısından çok daha değişken bir evren - bu evreni
+    kullanan bir tarama, sonrasında filter_by_liquidity ile daraltılmalı
+    (bkz. run_pipeline), aksi halde kırılım/ORB tarzı sinyallerin market
+    emriyle girdiği düşük hacimli isimlerde ciddi kayma (slippage) riski
+    oluşur."""
     ticker_lists = load_ticker_lists(username)
     stock_groups = load_stock_groups(username)
     group_markets = load_group_markets(username)
@@ -63,10 +75,44 @@ def build_universe(username: str, include_nasdaq: bool, include_nyse: bool, cust
         tickers += ticker_lists.get("NASDAQ 100", [])
     if include_nyse:
         tickers += ticker_lists.get("NYSE", [])
+    if include_russell:
+        tickers += ticker_lists.get("Russell 2000", [])
     for group in custom_groups:
-        if group_markets.get(group) in ("NASDAQ 100", "NYSE"):
+        if group_markets.get(group) in ("NASDAQ 100", "NYSE", "Russell 2000"):
             tickers += stock_groups.get(group, [])
     return list(dict.fromkeys(tickers))
+
+
+def filter_by_liquidity(
+    client: AlpacaClient, tickers: list[str],
+    min_avg_dollar_volume: float = DEFAULT_MIN_AVG_DOLLAR_VOLUME, lookback_days: int = LIQUIDITY_LOOKBACK_DAYS,
+) -> list[str]:
+    """Son `lookback_days` işlem gününün ortalama dolar cirosu (kapanış ×
+    hacim) `min_avg_dollar_volume`'un altında kalan sembolleri eler. Özellikle
+    Russell 2000 gibi likidite açısından çok değişken bir evrende önemli:
+    breakout_volume/orb sinyalleri market emriyle giriyor (bkz.
+    alpaca_buy_points.check_symbol), düşük hacimli bir hissede bu ciddi kayma
+    (slippage) riski taşır - NASDAQ 100/NYSE listeleri zaten büyük/likit
+    isimlerden oluştuğundan bu filtre onlarda pratikte neredeyse hiç sembol
+    elemez, ama Russell 2000'in likidite kuyruğunu temizlemek için gerekli.
+
+    Veri çekilemeyen ya da hiç günlük barı olmayan semboller güvenli tarafta
+    kalınarak (dahil edilmeyerek) elenir - bu sistemin diğer yerlerindeki
+    "hata olursa güvenli tarafa düş" örüntüsüyle aynı."""
+    start = datetime.now(timezone.utc) - timedelta(days=lookback_days * 2)  # hafta sonu/tatil payı
+    kept: list[str] = []
+    for ticker in tickers:
+        try:
+            raw = client.get_raw_bars(ticker, "1Day", start.isoformat())
+        except Exception:
+            continue
+        recent = raw[-lookback_days:]
+        if not recent:
+            continue
+        avg_dollar_volume = sum(b["c"] * b["v"] for b in recent) / len(recent)
+        if avg_dollar_volume >= min_avg_dollar_volume:
+            kept.append(ticker)
+    return kept
 
 
 def scan_universe(
@@ -253,9 +299,21 @@ def run_pipeline(username: str, client: AlpacaClient, cfg: dict) -> dict:
     """Günlük otomatik koşunun tam akışı: tara → momentum ile daralt →
     backtest → %10 üzeri kârlılığı filtrele → portföye birleştir. Özet bir
     dict döner (günlük script bunu config'e `last_run_summary` olarak yazar)."""
+    include_russell = cfg.get("include_russell", False)
     universe = build_universe(
         username, cfg.get("include_nasdaq", True), cfg.get("include_nyse", True), cfg.get("custom_groups") or [],
+        include_russell,
     )
+    universe_before_liquidity = len(universe)
+    if include_russell:
+        # NASDAQ 100/NYSE listeleri zaten büyük/likit isimlerden oluşan küçük,
+        # elle kürasyon edilmiş listeler - bu filtre onlarda pratikte neredeyse
+        # hiç sembol elemez, o yüzden sadece Russell 2000 dahilken (gerçek
+        # likidite riski taşıdığında) çalıştırılıp gereksiz API çağrısından
+        # kaçınılır (bkz. filter_by_liquidity docstring'i).
+        universe = filter_by_liquidity(
+            client, universe, cfg.get("min_avg_dollar_volume", DEFAULT_MIN_AVG_DOLLAR_VOLUME),
+        )
     signal_rows = scan_universe(
         client, universe, cfg.get("algorithms") or [DEFAULT_ALGORITHM_ID], cfg.get("timeframes") or ["1Day"],
     )
@@ -273,7 +331,8 @@ def run_pipeline(username: str, client: AlpacaClient, cfg: dict) -> dict:
 
     return {
         "run_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "universe_size": len(universe),
+        "universe_size": universe_before_liquidity,
+        "liquid_universe_size": len(universe),
         "scan_signal_count": len(signal_rows),
         "candidate_count": len(candidates),
         "backtest_results": backtest_results,
