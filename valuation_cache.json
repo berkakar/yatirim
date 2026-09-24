@@ -2704,10 +2704,10 @@
       "Hisse": "PEP",
       "Alt Sektör (İş Modeli)": "Beverages - Non-Alcoholic",
       "Ana Sektör": "Consumer Defensive",
-      "F/K": 17.11,
-      "PD/DD": 8.07,
-      "FD/FAVÖK": 11.63,
-      "PEG": 1.33,
+      "F/K": 16.87,
+      "PD/DD": 7.96,
+      "FD/FAVÖK": 11.67,
+      "PEG": 1.34,
       "EPS Büyümesi %": 137.0,
       "Gelir Büyümesi %": 6.4,
       "Öz Sermaye Getirisi (ROE) %": 51.51,
@@ -2722,17 +2722,17 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-06-13"
     },
-    "cached_at": "2026-09-22"
+    "cached_at": "2026-09-24"
   },
   "COST": {
     "raw": {
       "Hisse": "COST",
       "Alt Sektör (İş Modeli)": "Discount Stores",
       "Ana Sektör": "Consumer Defensive",
-      "F/K": 45.37,
-      "PD/DD": 11.92,
-      "FD/FAVÖK": 28.04,
-      "PEG": 4.39,
+      "F/K": 45.14,
+      "PD/DD": 11.89,
+      "FD/FAVÖK": 28.24,
+      "PEG": 4.41,
       "EPS Büyümesi %": 15.2,
       "Gelir Büyümesi %": 11.6,
       "Öz Sermaye Getirisi (ROE) %": 29.15,
@@ -2747,7 +2747,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-10"
     },
-    "cached_at": "2026-09-22"
+    "cached_at": "2026-09-24"
   },
   "ADBE": {
     "raw": {
@@ -3304,10 +3304,10 @@
       "Hisse": "MU",
       "Alt Sektör (İş Modeli)": "Semiconductors",
       "Ana Sektör": "Technology",
-      "F/K": 24.25,
-      "PD/DD": 12.03,
-      "FD/FAVÖK": 16.99,
-      "PEG": 0.15,
+      "F/K": 24.26,
+      "PD/DD": 12.04,
+      "FD/FAVÖK": 17.46,
+      "PEG": 0.16,
       "EPS Büyümesi %": 1368.5,
       "Gelir Büyümesi %": 345.7,
       "Öz Sermaye Getirisi (ROE) %": 66.64,
@@ -3322,7 +3322,7 @@
       "Varlık Devir Hızı": null,
       "_most_recent_quarter": "2026-05-28"
     },
-    "cached_at": "2026-09-22"
+    "cached_at": "2026-09-24"
   },
   "SNPS": {
     "raw": {
@@ -3529,25 +3529,25 @@
       "Hisse": "CTAS",
       "Alt Sektör (İş Modeli)": "Specialty Business Services",
       "Ana Sektör": "Industrials",
-      "F/K": 40.19,
-      "PD/DD": 15.33,
-      "FD/FAVÖK": 27.11,
-      "PEG": 3.14,
-      "EPS Büyümesi %": 15.6,
-      "Gelir Büyümesi %": 8.9,
-      "Öz Sermaye Getirisi (ROE) %": 40.71,
-      "Net Kar Marjı %": 17.75,
-      "Brüt Kar Marjı %": 50.67,
+      "F/K": 39.09,
+      "PD/DD": 15.43,
+      "FD/FAVÖK": 25.5,
+      "PEG": 3.15,
+      "EPS Büyümesi %": 13.3,
+      "Gelir Büyümesi %": 10.9,
+      "Öz Sermaye Getirisi (ROE) %": 41.38,
+      "Net Kar Marjı %": 17.82,
+      "Brüt Kar Marjı %": 50.99,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 16.1,
-      "Borç / Özsermaye": 0.53,
+      "Varlık Getirisi (ROA) %": 16.66,
+      "Borç / Özsermaye": 0.52,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.43,
-      "Likidite Oranı": 0.69,
+      "Cari Oran": 1.45,
+      "Likidite Oranı": 0.68,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-05-31"
+      "_most_recent_quarter": "2026-08-31"
     },
-    "cached_at": "2026-09-22"
+    "cached_at": "2026-09-24"
   },
   "LRCX": {
     "raw": {
@@ -3604,25 +3604,25 @@
       "Hisse": "PAYX",
       "Alt Sektör (İş Modeli)": "Software - Application",
       "Ana Sektör": "Technology",
-      "F/K": 23.28,
-      "PD/DD": 10.84,
-      "FD/FAVÖK": 14.72,
-      "PEG": 2.04,
-      "EPS Büyümesi %": 43.4,
-      "Gelir Büyümesi %": 12.5,
-      "Öz Sermaye Getirisi (ROE) %": 44.77,
-      "Net Kar Marjı %": 27.03,
-      "Brüt Kar Marjı %": 74.29,
+      "F/K": 20.27,
+      "PD/DD": 9.73,
+      "FD/FAVÖK": 13.28,
+      "PEG": 2.02,
+      "EPS Büyümesi %": 13.9,
+      "Gelir Büyümesi %": 5.9,
+      "Öz Sermaye Getirisi (ROE) %": 47.05,
+      "Net Kar Marjı %": 27.35,
+      "Brüt Kar Marjı %": 74.39,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": 9.82,
-      "Borç / Özsermaye": 1.24,
+      "Varlık Getirisi (ROA) %": 10.19,
+      "Borç / Özsermaye": 1.25,
       "Borç / Varlık %": null,
-      "Cari Oran": 1.26,
-      "Likidite Oranı": 0.49,
+      "Cari Oran": 1.28,
+      "Likidite Oranı": 0.52,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": "2026-05-31"
+      "_most_recent_quarter": "2026-08-31"
     },
-    "cached_at": "2026-09-22"
+    "cached_at": "2026-09-24"
   },
   "MCHP": {
     "raw": {
