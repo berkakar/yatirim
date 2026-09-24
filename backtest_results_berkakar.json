@@ -53101,5 +53101,56 @@
     ],
     "source": "Alpaca",
     "bicak_pencere": 180
+  },
+  {
+    "run_id": "QCOM-orb-15Min-opening_range-20260924T101815",
+    "run_at": "2026-09-24T10:18:14+00:00",
+    "symbol": "QCOM",
+    "algorithm": "orb",
+    "timeframe": "15Min",
+    "stop_timeframe": "15Min",
+    "stop_algorithm": "opening_range",
+    "days_of_data": 60,
+    "days_before_trading": 0,
+    "starting_budget": 10000.0,
+    "final_value": 12156.71,
+    "pnl": 2156.71,
+    "pnl_pct": 21.57,
+    "stop_loss_enabled": false,
+    "max_loss_pct": null,
+    "stop_loss_triggered": false,
+    "stop_loss_triggered_at": null,
+    "trades": [
+      {
+        "side": "buy",
+        "time": "2026-08-03T14:15:00Z",
+        "price": 147.58,
+        "qty": 67,
+        "reason": "Açılış aralığı (144.39-147.39) kırıldı, hacim açılış barının %185'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-11T19:00:00Z",
+        "price": 183.1458,
+        "qty": 67,
+        "reason": "stop - structure@183.31"
+      },
+      {
+        "side": "buy",
+        "time": "2026-09-16T13:45:00Z",
+        "price": 190.2,
+        "qty": 65,
+        "reason": "Açılış aralığı (187.09-189.97) kırıldı, hacim açılış barının %181'i"
+      },
+      {
+        "side": "sell",
+        "time": "2026-09-16T17:45:00Z",
+        "price": 186.72,
+        "qty": 65,
+        "reason": "stop - ilk stop"
+      }
+    ],
+    "source": "Alpaca",
+    "bicak_pencere": null
   }
 ]
