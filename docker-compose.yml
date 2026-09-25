@@ -1,0 +1,73 @@
+services:
+  streamlit:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    volumes:
+      # Gelistirme: kod ve JSON cache/state dosyalari host ile senkron kalir.
+      # Prod imajinda bu satiri kaldirip .streamlit/secrets.toml'u ayrica saglamak yeterli.
+      - .:/app
+    depends_on:
+      - redis
+
+  api:
+    build:
+      context: ./services/api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build:
+      context: ./services/api
+    command: celery -A celery_app.celery_app worker --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
+  beat:
+    build:
+      context: ./services/api
+    command: celery -A celery_app.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    depends_on:
+      - redis
+
+  ingestor:
+    build:
+      context: ./services/ingestor
+    env_file:
+      - .env
+    depends_on:
+      - redis
+    restart: always
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yatirim}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yatirim}
+      POSTGRES_DB: ${POSTGRES_DB:-yatirim}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
