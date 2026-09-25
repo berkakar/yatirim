@@ -100,6 +100,8 @@ def parse_equity_tickers(payload: dict) -> list[str]:
         parsed = deref(0, node_data)
         if isinstance(parsed, dict) and isinstance(parsed.get("holdings"), list):
             holdings = parsed["holdings"]
+            other_fields = {k: v for k, v in parsed.items() if k != "holdings"}
+            log(f"'holdings' node bulundu: {len(holdings)} satır. Diğer alanlar: {other_fields!r}")
             break
 
     if holdings is None:
