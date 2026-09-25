@@ -235,6 +235,55 @@ def resolve_stop_algorithm_for_position(
     return resolve_stop_algorithm(pbp_config, symbol)
 
 
+def _load_cross_module_holdings_pruned(live_symbols: set[str]):
+    """rs_holdings/orb_holdings/ha_holdings state'lerini yükler VE stopu
+    tetiklenmiş (artık gerçek pozisyonu olmayan) sembolleri düşürüp diske geri
+    yazar - aksi halde (bkz. TREX vakası, 2026-09-25: stop 15:12'de tetiklendi
+    ama orb_scan_holdings_berkakar.json ORB'un bir sonraki taramasına -
+    ertesi güne - kadar hâlâ "elimde var" gösterdi) ilgili modülün KENDİ bir
+    sonraki taramasına kadar (ORB için ertesi güne, RS Rotasyonu için bir
+    sonraki Pazartesi'ye kadar) hem önizleme/UI'da yanlış gösterilir hem de
+    evrenden gereksiz yere hariç tutulurdu. run_once/run_extended_hours_guard
+    zaten her çalıştığında positions'ı (dolayısıyla live_symbols'ı) çekiyor,
+    o yüzden temizliği en hızlı - ve tüm modüller için TEK yerden - burada
+    yapmak mantıklı."""
+    from relative_strength_core import (
+        load_config_local, load_holdings_local, save_holdings_local as save_rs_holdings_local,
+    )
+    from orb_core import (
+        load_config_local as load_orb_config_local, load_holdings_local as load_orb_holdings_local,
+        save_holdings_local as save_orb_holdings_local,
+    )
+    from heikin_ashi_intraday_core import (
+        load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local,
+        save_holdings_local as save_ha_holdings_local,
+    )
+
+    rs_holdings = load_holdings_local("berkakar")
+    pruned_rs = {s: info for s, info in rs_holdings.items() if s in live_symbols}
+    if pruned_rs != rs_holdings:
+        save_rs_holdings_local("berkakar", pruned_rs)
+        rs_holdings = pruned_rs
+
+    orb_holdings = load_orb_holdings_local("berkakar")
+    pruned_orb = {s: info for s, info in orb_holdings.items() if s in live_symbols}
+    if pruned_orb != orb_holdings:
+        save_orb_holdings_local("berkakar", pruned_orb)
+        orb_holdings = pruned_orb
+
+    ha_holdings = load_ha_holdings_local("berkakar")
+    pruned_ha = {s: info for s, info in ha_holdings.items() if s in live_symbols}
+    if pruned_ha != ha_holdings:
+        save_ha_holdings_local("berkakar", pruned_ha)
+        ha_holdings = pruned_ha
+
+    return (
+        rs_holdings, load_config_local("berkakar"),
+        orb_holdings, load_orb_config_local("berkakar"),
+        ha_holdings, load_ha_config_local("berkakar"),
+    )
+
+
 def _parse_iso(ts: str) -> datetime:
     return datetime.fromisoformat(ts.replace("Z", "+00:00"))
 
@@ -752,15 +801,10 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
     # algoritmasıyla çalışmasını sağlar.
     config = load_portfolio_config()
     stop_settings = load_stop_loss_settings()
-    from relative_strength_core import load_config_local, load_holdings_local  # bkz. resolve_stop_algorithm_for_position'daki döngüsel import notu
-    from orb_core import load_config_local as load_orb_config_local, load_holdings_local as load_orb_holdings_local
-    rs_holdings = load_holdings_local("berkakar")
-    rs_config = load_config_local("berkakar")
-    orb_holdings = load_orb_holdings_local("berkakar")
-    orb_config = load_orb_config_local("berkakar")
-    from heikin_ashi_intraday_core import load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local
-    ha_holdings = load_ha_holdings_local("berkakar")
-    ha_config = load_ha_config_local("berkakar")
+    live_symbols = {p["symbol"] for p in positions}
+    rs_holdings, rs_config, orb_holdings, orb_config, ha_holdings, ha_config = (
+        _load_cross_module_holdings_pruned(live_symbols)
+    )
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm_for_position(
             config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"], ha_holdings, ha_config,
@@ -783,15 +827,10 @@ def run_once(client: AlpacaClient) -> None:
     config = load_portfolio_config()
     top_up_stop_mode = load_top_up_stop_mode(config)
     stop_settings = load_stop_loss_settings()
-    from relative_strength_core import load_config_local, load_holdings_local  # bkz. resolve_stop_algorithm_for_position'daki döngüsel import notu
-    from orb_core import load_config_local as load_orb_config_local, load_holdings_local as load_orb_holdings_local
-    rs_holdings = load_holdings_local("berkakar")
-    rs_config = load_config_local("berkakar")
-    orb_holdings = load_orb_holdings_local("berkakar")
-    orb_config = load_orb_config_local("berkakar")
-    from heikin_ashi_intraday_core import load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local
-    ha_holdings = load_ha_holdings_local("berkakar")
-    ha_config = load_ha_config_local("berkakar")
+    live_symbols = {p["symbol"] for p in positions}
+    rs_holdings, rs_config, orb_holdings, orb_config, ha_holdings, ha_config = (
+        _load_cross_module_holdings_pruned(live_symbols)
+    )
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm_for_position(
             config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"], ha_holdings, ha_config,

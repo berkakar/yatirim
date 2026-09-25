@@ -67,7 +67,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          for f in alpaca_realized_pnl_cache_berkakar.json alpaca_daily_bars_cache_berkakar.json alpaca_intraday_bars_cache_berkakar.json alpaca_position_management_cache_berkakar.json buy_stop_rebuy_state_berkakar.json; do
+          for f in alpaca_realized_pnl_cache_berkakar.json alpaca_daily_bars_cache_berkakar.json alpaca_intraday_bars_cache_berkakar.json alpaca_position_management_cache_berkakar.json buy_stop_rebuy_state_berkakar.json orb_scan_holdings_berkakar.json relative_strength_holdings_berkakar.json ha_intraday_holdings_berkakar.json; do
             [ -f "$f" ] && git add "$f"
           done
           if git diff --cached --quiet; then
