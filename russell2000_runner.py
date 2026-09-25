@@ -137,57 +137,60 @@ def fetch_holdings_json() -> dict:
             browser.close()
 
 
-def _find_holdings_list(obj) -> list | None:
+def _find_holdings_table(obj) -> dict[str, list] | None:
     """iShares'in JSON şemasını tam bilmediğimiz için (dokümante değil, sayfa
     JS'inin kendi iç veri modeli) belirli bir path yerine İÇERİĞE göre
-    arıyoruz: önce her elemanı 'ticker'/'symbol' benzeri bir alan taşıyan
-    dict olan en UZUN listeyi tercih ederiz; hiçbiri yoksa (ör. iShares farklı
-    bir alan adı kullanıyorsa - bkz. parse_equity_tickers'daki değer-tabanlı
-    tahmin) en az 10 elemanlı, tüm elemanları dict olan en UZUN listeye
-    düşeriz - get-product-data yanıtı zaten sadece holdings'e (component=
-    holdings.all) odaklı olduğu için bu neredeyse kesin asıl tablodur."""
-    best_with_ticker_key: list | None = None
-    best_any: list | None = None
+    arıyoruz - VE şeklin SATIR-bazlı (dict listesi, [{"ticker": "A", ...},
+    {"ticker": "B", ...}]) mı yoksa SÜTUN-bazlı (her alan kendi değer
+    listesi, {"ticker": ["A", "B", ...], "weight": [...]}) mı olduğunu da
+    bilmiyoruz - ikisini de {sütun_adı: [değerler]} biçimine normalize edip
+    en çok satırlı olanı döner (get-product-data yanıtı zaten sadece
+    holdings'e - component=holdings.all - odaklı olduğu için bu neredeyse
+    kesin asıl tablodur)."""
+    best: dict[str, list] | None = None
+    best_len = 0
+
+    def consider(table: dict[str, list], length: int):
+        nonlocal best, best_len
+        if length >= 10 and length > best_len:
+            best, best_len = table, length
 
     def walk(o):
-        nonlocal best_with_ticker_key, best_any
         if isinstance(o, list):
             if o and all(isinstance(e, dict) for e in o):
-                if len(o) >= 10 and (best_any is None or len(o) > len(best_any)):
-                    best_any = o
-                sample_keys = {k.lower() for e in o[:5] for k in e.keys()}
-                if any(k in sample_keys for k in _TICKER_KEYS) and (
-                    best_with_ticker_key is None or len(o) > len(best_with_ticker_key)
-                ):
-                    best_with_ticker_key = o
+                keys = {k for e in o for k in e.keys()}
+                consider({k: [e.get(k) for e in o] for k in keys}, len(o))
             for e in o:
                 walk(e)
         elif isinstance(o, dict):
+            list_cols = {k: v for k, v in o.items() if isinstance(v, list)}
+            lengths = {len(v) for v in list_cols.values()}
+            if len(list_cols) >= 2 and len(lengths) == 1:
+                consider(list_cols, lengths.pop())
             for v in o.values():
                 walk(v)
 
     walk(obj)
-    return best_with_ticker_key or best_any
+    return best
 
 
 _TICKER_VALUE_RE = re.compile(r"^[A-Z0-9]{1,5}([.\-][A-Z0-9]{1,3})?$")
 
 
-def _guess_ticker_field(rows: list[dict]) -> str | None:
-    """Alan adı bilinmediği (ör. holdings listesi bulundu ama 'ticker'/
+def _guess_ticker_column(table: dict[str, list]) -> str | None:
+    """Sütun adı bilinmediği (ör. holdings tablosu bulundu ama 'ticker'/
     'symbol' gibi tanıdık bir anahtarı yoksa) durumda DEĞERE göre tahmin
-    eder: her alan için örneklem değerlerinin ne kadarının "ticker gibi
+    eder: her sütun için örneklem değerlerinin ne kadarının "ticker gibi
     göründüğüne" (1-5 harf/rakam, büyük harf) VE ne kadar BENZERSİZ
-    olduğuna bakar - ör. 'sector' gibi tekrarlayan bir alanın yanlışlıkla
+    olduğuna bakar - ör. 'sector' gibi tekrarlayan bir sütunun yanlışlıkla
     seçilmesini böyle eleriz."""
-    sample = rows[:200]
     best_key = None
     best_score = 0.0
-    all_keys = {k for r in sample for k in r.keys()}
-    for key in all_keys:
-        values = [str(r[key]).strip().upper() for r in sample if r.get(key) not in (None, "")]
+    for key, col in table.items():
+        sample = col[:200]
+        values = [str(v).strip().upper() for v in sample if v not in (None, "")]
         if len(values) < len(sample) * 0.5:
-            continue  # çoğu satırda boşsa muhtemelen ticker alanı değil
+            continue  # çoğu satırda boşsa muhtemelen ticker sütunu değil
         match_ratio = sum(1 for v in values if _TICKER_VALUE_RE.match(v)) / len(values)
         uniqueness = len(set(values)) / len(values)
         if match_ratio > 0.8 and uniqueness > 0.8 and match_ratio * uniqueness > best_score:
@@ -196,32 +199,50 @@ def _guess_ticker_field(rows: list[dict]) -> str | None:
     return best_key
 
 
-def parse_equity_tickers(payload: dict) -> list[str]:
-    holdings = _find_holdings_list(payload)
-    if holdings is None:
-        raise RuntimeError(
-            "Yanıtta en az 10 elemanlı bir dict listesi bulunamadı - "
-            "iShares'in get-product-data JSON şeması değişmiş olabilir."
-        )
-    log(f"Aday holdings listesi bulundu: {len(holdings)} satır, örnek anahtarlar: {sorted(holdings[0].keys())!r}")
+def _summarize_structure(obj, depth: int = 0, max_depth: int = 3) -> str:
+    """Hiçbir tablo/ticker sütunu bulunamadığında teşhis için yanıtın genel
+    şeklini (dict anahtarları, liste uzunlukları) özetler - bir sonraki
+    adımda tahmine değil veriye dayanılabilsin diye."""
+    indent = "  " * depth
+    if depth >= max_depth:
+        return f"{indent}..."
+    if isinstance(obj, dict):
+        lines = [f"{indent}dict({len(obj)} anahtar): {sorted(obj.keys())[:15]!r}"]
+        for k, v in list(obj.items())[:8]:
+            lines.append(f"{indent}  .{k} -> {_summarize_structure(v, depth + 1, max_depth)}")
+        return "\n".join(lines)
+    if isinstance(obj, list):
+        sample_type = type(obj[0]).__name__ if obj else "?"
+        return f"list(len={len(obj)}, örnek eleman tipi={sample_type})"
+    return repr(obj)[:80]
 
-    ticker_field = None
-    for key in holdings[0]:
+
+def parse_equity_tickers(payload: dict) -> list[str]:
+    table = _find_holdings_table(payload)
+    if table is None:
+        raise RuntimeError(
+            "Yanıtta ne satır-bazlı ne sütun-bazlı, en az 10 satırlı bir holdings tablosu "
+            f"bulunamadı. Yanıt yapısı:\n{_summarize_structure(payload)}"
+        )
+    row_count = len(next(iter(table.values())))
+    log(f"Aday holdings tablosu bulundu: {row_count} satır, sütunlar: {sorted(table.keys())!r}")
+
+    ticker_col = None
+    for key in table:
         if key.lower() in _TICKER_KEYS:
-            ticker_field = key
+            ticker_col = key
             break
-    if ticker_field is None:
-        # Tanıdık bir anahtar adı yoksa (bkz. bu dosyanın git geçmişi - iShares
+    if ticker_col is None:
+        # Tanıdık bir sütun adı yoksa (bkz. bu dosyanın git geçmişi - iShares
         # "ticker"/"symbol" kullanmıyor) DEĞERE göre tahmin ediyoruz.
-        ticker_field = _guess_ticker_field(holdings)
-        if ticker_field is None:
-            sample_row = {k: holdings[0].get(k) for k in list(holdings[0].keys())[:20]}
-            raise RuntimeError(f"Ticker gibi görünen bir alan bulunamadı. Örnek satır: {sample_row!r}")
-        log(f"Tanıdık bir anahtar adı yok, değer-tabanlı tahminle '{ticker_field}' seçildi.")
+        ticker_col = _guess_ticker_column(table)
+        if ticker_col is None:
+            sample = {k: v[:5] for k, v in list(table.items())[:20]}
+            raise RuntimeError(f"Ticker gibi görünen bir sütun bulunamadı. Örnek değerler: {sample!r}")
+        log(f"Tanıdık bir sütun adı yok, değer-tabanlı tahminle '{ticker_col}' seçildi.")
 
     tickers = set()
-    for row in holdings:
-        raw = row.get(ticker_field)
+    for raw in table[ticker_col]:
         if not raw:
             continue
         raw = str(raw).strip().lstrip("$").upper()
