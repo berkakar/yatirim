@@ -11,6 +11,7 @@ from datetime import date, timedelta
 
 from bicak_kanali import find_kilavuz
 from demand_zones import find_buy_point
+from heikin_ashi import long_entry as heikin_ashi_long_entry
 from indicators import atr, ema
 from structure import Bar
 
@@ -232,6 +233,28 @@ def orb_signal(bars: list[Bar], daily_closes: list[float] | None = None,
     )
 
 
+def heikin_ashi_stoch_signal(bars: list[Bar], daily_closes: list[float] | None = None,
+                             sma_period: int = 50, k_period: int = 14, d_period: int = 3,
+                             oversold: float = 30.0, max_lower_wick_ratio: float = 0.05) -> BuySignal | None:
+    """Heikin Ashi + SMA50 + Stokastik: kapanış SMA(50) üzerindeyken (trend),
+    Stokastik(14, 3, 3) %K 30'un altında ve %D'yi yukarı kesmiş durumdayken
+    (aşırı satımdan dönüş), kırmızı bir HA mumundan sonra gelen alt fitilsiz
+    (fitil HA mum boyunun en fazla %5'i) yeşil HA mumu - bkz. heikin_ashi.py.
+    Sinyal barın kapanışında onaylandığından bekleyen limit yerine ANINDA
+    alınır ("breakout" stili). Çıkış tarafı için stop_algorithms'teki
+    "heikin_ashi_exit" ile birlikte kullanılması önerilir."""
+    entry = heikin_ashi_long_entry(bars, sma_period, k_period, d_period, oversold, max_lower_wick_ratio)
+    if entry is None:
+        return None
+    sma, k, d = entry
+    return BuySignal(
+        algorithm="heikin_ashi_stoch", price=round(bars[-1].c, 2),
+        reason=f"SMA{sma_period} ({sma:.2f}) üzeri, Stokastik %K {k:.0f} > %D {d:.0f} (aşırı satım), "
+               f"kırmızıdan sonra alt fitilsiz yeşil HA mumu",
+        style="breakout",
+    )
+
+
 # NOT: orb_signal KASITLI olarak ALGORITHMS'te DEĞİL - Premium Buy Point'in
 # (hisse bazlı, sürekli izlenen) modelinden çıkarılıp kendi bağımsız
 # modülüne (orb_core.py + 📈 Açılış Aralığı Kırılımı (ORB) sayfası, günde
@@ -248,6 +271,7 @@ ALGORITHMS = {
     "volatility_support": ("Oynaklığa Duyarlı Dinamik Destek", volatility_support_signal),
     "breakout_volume": ("Kırılım + Hacim İvmesi", breakout_volume_signal),
     "bicak_kanali": ("Bıçak Kanalı", bicak_kanali_signal),
+    "heikin_ashi_stoch": ("Heikin Ashi + SMA50 + Stokastik", heikin_ashi_stoch_signal),
 }
 DEFAULT_ALGORITHM = "demand_zone"
 

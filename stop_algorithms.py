@@ -26,7 +26,7 @@ alan hiç değiştirilmemiş) ilgili fonksiyonun kod-varsayılanı geçerli olur
 yeni bir algoritma/parametre eklendiğinde resolve_kwargs'ta HİÇBİR değişiklik
 gerekmez.
 
-Üç algoritma var:
+Dört algoritma var:
   - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
     breakeven floor + günlük EMA trend filtresiyle gate'lenen ATR-buffered
     break-of-structure trail.
@@ -48,12 +48,18 @@ gerekmez.
     tarafında kalırsa (ör. bu stop, ORB dışı bir algoritmanın sinyaliyle
     seçildiğinde), breakeven_atr_structure_initial_stop ile aynı sabit-%
     düşüşe güvenli şekilde geri düşer.
+  - "heikin_ashi_exit" ("Heikin Ashi Çıkışı"): buy_algorithms.
+    heikin_ashi_stoch_signal ile eşleşir - sinyal barının low'una yapısal
+    ilk stop; ilk kırmızı HA mumu / Stokastik aşırı alım kesişiminde stop
+    son kapanışın hemen altına çekilir (bkz. aşağıdaki bölüm notu).
 """
 
 import inspect
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable
 
+from heikin_ashi import long_exit_reason as heikin_ashi_long_exit_reason
 from indicators import atr, ema
 from structure import Bar, validated_trailing_level
 
@@ -85,7 +91,7 @@ class StopAlgorithm:
 
 
 _CTX_PARAM_NAMES = frozenset({"ctx", "entry_price", "side", "bars"})
-_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order"})
+_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order", "stoch_k_period", "stoch_d_period"})
 
 
 def resolve_kwargs(fn: Callable, settings_for_algo: dict, shared_settings: dict) -> dict:
@@ -396,6 +402,96 @@ def opening_range_initial_stop(
     return structural_stop if structural_stop > entry_price else naive_stop
 
 
+# ---- Dördüncü algoritma: "Heikin Ashi Çıkışı" - buy_algorithms.
+# heikin_ashi_stoch_signal ile eşleşmek üzere tasarlandı. İlk stop, sinyal
+# barının low'unun küçük bir tamponla altına kurulur (sinyal mumu alt
+# fitilsiz olduğundan bu low, dönüşün başladığı seviyedir). Trail tarafında
+# stratejinin çıkış kuralı (ilk kırmızı HA mumu ya da Stokastik %K > 80 iken
+# %D'nin altına kesişim) tetiklendiğinde stop, o barın kapanışının hemen
+# altına çekilir - bir sonraki barda fiyat geri çekildiği anda pozisyon
+# kapanır. Doğrudan market satış yerine böyle modellendi çünkü hem canlı
+# sistem (alpaca_trailing_stop.py) hem backtest (backtest_engine.py) çıkışı
+# yalnızca resting stop üzerinden yönetiyor. Çıkış sinyali yokken
+# breakeven_atr_structure_trail'in adayları da geçerli (hangisi daha sıkıysa).
+#
+# NOT: trail()'e verilen `bars` pozisyonun yönetim başlangıcından (≈ giriş)
+# itibaren başlıyor. HA_Open özyinelemeli olduğu için ilk birkaç barda HA
+# renkleri yaklaşık, Stokastik ise stoch_k_period + stoch_d_period - 1 bar
+# dolana kadar hesaplanamaz (bu sürede sadece kırmızı HA çıkışı çalışır).
+
+HEIKIN_ASHI_STOP_BUFFER_PCT = 0.002
+HEIKIN_ASHI_EXIT_BUFFER_PCT = 0.001
+
+
+def heikin_ashi_initial_stop(
+    entry_price: float, side: str, bars: list[Bar] | None = None,
+    buffer_pct: float = HEIKIN_ASHI_STOP_BUFFER_PCT, fallback_pct: float = INITIAL_STOP_PCT,
+) -> float:
+    """Sinyal barının (bars[-1]) low'unun buffer_pct altı (short için high'ın
+    üstü). `bars` yoksa ya da seviye girişin yanlış tarafında kalırsa
+    fallback_pct'lik sabit-% stopa düşülür."""
+    naive_stop = entry_price * (1 - fallback_pct) if side == "long" else entry_price * (1 + fallback_pct)
+    if not bars:
+        return naive_stop
+    if side == "long":
+        structural_stop = bars[-1].l * (1 - buffer_pct)
+        return structural_stop if structural_stop < entry_price else naive_stop
+    structural_stop = bars[-1].h * (1 + buffer_pct)
+    return structural_stop if structural_stop > entry_price else naive_stop
+
+
+def _closed_bars(bars: list[Bar]) -> list[Bar]:
+    """Canlı trailing stop botu (alpaca_trailing_stop.manage_position) henüz
+    oluşmakta olan son barı da geçiriyor - HA çıkış kuralı bar KAPANIŞINDA
+    tanımlı olduğundan o bar atılır. Periyot, ardışık barlar arasındaki en
+    kısa aralıktan çıkarılır; backtest'teki geçmiş barlar hiçbir zaman atılmaz."""
+    if len(bars) < 3:
+        return bars
+    stamps = [datetime.fromisoformat(b.t.replace("Z", "+00:00")) for b in bars[-6:]]
+    duration = min(b - a for a, b in zip(stamps, stamps[1:]))
+    if stamps[-1] + duration > datetime.now(timezone.utc):
+        return bars[:-1]
+    return bars
+
+
+def heikin_ashi_trail(
+    ctx: StopContext,
+    exit_buffer_pct: float = HEIKIN_ASHI_EXIT_BUFFER_PCT,
+    stoch_k_period: int = 14,
+    stoch_d_period: int = 3,
+    stoch_overbought: float = 80.0,
+    initial_stop_pct: float = INITIAL_STOP_PCT,
+    atr_period: int = ATR_PERIOD,
+    atr_multiplier: float = ATR_MULTIPLIER,
+    breakeven_trigger_pct: float = BREAKEVEN_TRIGGER_PCT,
+    stale_reference_days: float = STALE_REFERENCE_DAYS,
+    trend_ema_period: int = TREND_EMA_PERIOD,
+    swing_order: int = SWING_ORDER,
+    fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+) -> StopDecision | None:
+    """HA/Stokastik çıkış sinyali varsa stopu son kapanışın exit_buffer_pct
+    altına çeker; yoksa (ya da o aday daha gevşekse) breakeven_atr_structure_
+    trail'in kararını kullanır. Strateji sadece long tanımlı olduğundan
+    short pozisyonlarda yalnızca yapısal trail çalışır."""
+    base = breakeven_atr_structure_trail(
+        ctx, initial_stop_pct, atr_period, atr_multiplier, breakeven_trigger_pct,
+        stale_reference_days, trend_ema_period, swing_order, fallback_buffer_pct,
+    )
+    if ctx.side != "long" or not ctx.bars:
+        return base
+    closed = _closed_bars(ctx.bars)
+    reason = heikin_ashi_long_exit_reason(closed, stoch_k_period, stoch_d_period, stoch_overbought)
+    if reason is None:
+        return base
+    # Güncel fiyat (oluşmakta olan bar) kapanışın da altına indiyse stop onun
+    # altına kurulur - piyasa fiyatının üstünde bir satış stop'u reddedilir.
+    exit_price = round(min(closed[-1].c, ctx.bars[-1].c) * (1 - exit_buffer_pct), 2)
+    best_so_far = base.price if base is not None else ctx.current_stop_price
+    if exit_price <= best_so_far:
+        return base
+    return StopDecision(price=exit_price, reason=f"HA çıkış sinyali - {reason}")
+
+
 STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
     "breakeven_atr_structure": StopAlgorithm(
         label="Breakeven + Yapısal Trail (ATR tamponlu)",
@@ -411,6 +507,11 @@ STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
         label="Açılış Aralığı (ORB) Stop",
         initial_stop=opening_range_initial_stop,
         trail=breakeven_atr_structure_trail,
+    ),
+    "heikin_ashi_exit": StopAlgorithm(
+        label="Heikin Ashi Çıkışı",
+        initial_stop=heikin_ashi_initial_stop,
+        trail=heikin_ashi_trail,
     ),
 }
 DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"

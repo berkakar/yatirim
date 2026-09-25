@@ -1,4 +1,4 @@
-"""Stop Loss Ayarları modülü - üç stop-loss algoritmasının (stop_algorithms.py)
+"""Stop Loss Ayarları modülü - dört stop-loss algoritmasının (stop_algorithms.py)
 parametrelerini kullanıcı bazında ayarlamayı ve GitHub'a kalıcı olarak
 kaydetmeyi sağlar (bkz. github_config.py - premium_buy_portfolio.py'nin
 portföy config'i için kullandığı aynı okuma/yazma deseni,
@@ -18,7 +18,7 @@ import streamlit as st
 from github_config import read_json_from_github, write_json_to_github
 from stop_algorithms import (
     ATR_MULTIPLIER, ATR_PERIOD, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
-    ORB_STOP_BUFFER_PCT, STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
+    HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
     WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT, WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
     WAIT_THEN_TRAIL_PROFIT_LOCK_PCT, WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT,
 )
@@ -53,7 +53,7 @@ def save_stop_loss_settings(username: str, settings: dict) -> None:
 def render_stop_loss_settings(username: str):
     st.caption(
         "Trailing Stop modülünün, Premium Buy Point'in bracket girişlerinin ve BackTest'in kullandığı "
-        "üç stop-loss algoritmasının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
+        "dört stop-loss algoritmasının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
         "içindeki varsayılan değerlerle dolu geliyor - hiç değiştirmeden kaydetseniz bile mevcut davranış "
         "aynen korunur. Bir kutuyu boşaltıp tekrar kod-varsayılanına dönmek isterseniz, değeri elle "
         "yukarıdaki varsayılana geri yazmanız yeterli."
@@ -68,6 +68,7 @@ def render_stop_loss_settings(username: str):
     algo1 = existing.get("breakeven_atr_structure") or {}
     algo2 = existing.get("wait_then_trail") or {}
     algo3 = existing.get("opening_range") or {}
+    algo4 = existing.get("heikin_ashi_exit") or {}
 
     st.subheader(f"🎯 {STOP_ALGORITHMS['breakeven_atr_structure'].label}")
     st.caption(
@@ -195,6 +196,30 @@ def render_stop_loss_settings(username: str):
              "geri düşülür.",
     )
 
+    st.subheader(f"🕯️ {STOP_ALGORITHMS['heikin_ashi_exit'].label}")
+    st.caption(
+        "Heikin Ashi + SMA50 + Stokastik alım algoritmasıyla birlikte kullanılmak üzere tasarlandı - ilk stop "
+        "sinyal barının low'unun altına kurulur. İlk kırmızı HA mumunda ya da Stokastik %K 80 üzerindeyken "
+        "%D'nin altına kestiğinde stop son kapanışın hemen altına çekilir. Çıkış sinyali yokken yukarıdaki "
+        "Breakeven + Yapısal Trail (paylaşılan ATR/trend/swing ayarları) geçerlidir."
+    )
+    a4c1, a4c2, a4c3 = st.columns(3)
+    algo4_buffer_pct = a4c1.number_input(
+        "Sinyal Barı Low Tamponu %", min_value=0.0, max_value=10.0,
+        value=float(algo4.get("buffer_pct", HEIKIN_ASHI_STOP_BUFFER_PCT * 100)), step=0.05, format="%.3f",
+        key="sls_algo4_buffer_pct",
+    )
+    algo4_exit_buffer_pct = a4c2.number_input(
+        "Çıkış Tamponu % (kapanışın altı)", min_value=0.0, max_value=10.0,
+        value=float(algo4.get("exit_buffer_pct", HEIKIN_ASHI_EXIT_BUFFER_PCT * 100)), step=0.05, format="%.3f",
+        key="sls_algo4_exit_buffer_pct",
+    )
+    algo4_fallback_pct = a4c3.number_input(
+        "Yedek Stop % (sinyal barı yoksa)", min_value=0.1, max_value=50.0,
+        value=float(algo4.get("fallback_pct", INITIAL_STOP_PCT * 100)), step=0.1, format="%.2f",
+        key="sls_algo4_fallback_pct",
+    )
+
     st.divider()
     if st.button("💾 Kaydet", type="primary", key="sls_save_btn"):
         new_settings = {
@@ -219,6 +244,11 @@ def render_stop_loss_settings(username: str):
             "opening_range": {
                 "buffer_pct": float(algo3_buffer_pct),
                 "fallback_pct": float(algo3_fallback_pct),
+            },
+            "heikin_ashi_exit": {
+                "buffer_pct": float(algo4_buffer_pct),
+                "exit_buffer_pct": float(algo4_exit_buffer_pct),
+                "fallback_pct": float(algo4_fallback_pct),
             },
         }
         try:

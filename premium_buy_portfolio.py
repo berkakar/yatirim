@@ -37,6 +37,9 @@ ALGORITHM_DESCRIPTIONS = {
     "bicak_kanali": "Kılavuz/bıçak/sıfır çizgisi yöntemiyle her bar için yeniden kurulan 'yeşil çizgi'nin "
                      "(alım çizgisi) güncel seviyesine geri çekilmeyi bekler - bekleyen bir limit emri "
                      "olarak işlenir.",
+    "heikin_ashi_stoch": "Kapanış SMA50 üzerindeyken, Stokastik(14,3,3) %K 30'un altında %D'yi yukarı "
+                          "kesmişken, kırmızıdan sonra gelen alt fitilsiz yeşil Heikin Ashi mumunu yakalar - "
+                          "ANINDA market emriyle girilir. Çıkış için 'Heikin Ashi Çıkışı' stopuyla kullanın.",
 }
 # NOT: "orb" (Açılış Aralığı Kırılımı) burada KASITLI olarak yok - artık
 # buy_algorithms.ALGORITHMS'te değil, kendi bağımsız modülüne taşındı (📈

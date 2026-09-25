@@ -140,6 +140,7 @@ from alpaca_trailing_stop import (
     load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
+from heikin_ashi_intraday_core import get_cash_allocation_pct as get_ha_cash_allocation_pct
 from orb_core import get_cash_allocation_pct as get_orb_cash_allocation_pct
 from relative_strength_core import get_cash_allocation_pct as get_rs_cash_allocation_pct
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
@@ -726,7 +727,7 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     sinyal verirse" senaryosunda, portföyün gerçek nakdinin üstüne çıkmayı
     önler.
 
-    Relative Strength Rotasyonu VE Açılış Aralığı Kırılımı (ORB) modülleri
+    Relative Strength Rotasyonu, Açılış Aralığı Kırılımı (ORB) VE Heikin Ashi Gün İçi modülleri
     etkinleştirilmişse (relative_strength_core.get_cash_allocation_pct /
     orb_core.get_cash_allocation_pct), o modüllere ayrılan yüzdeler bu
     hesaplamadan DÜŞÜLÜR - aksi halde bağımsız sistemler aynı gerçek nakti
@@ -734,7 +735,8 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     (bu fonksiyonun okuduğu AYNI canlı bakiye) besleniyor. Bir modül hiç
     açılmamışsa/devre dışıysa payı 0'dır, davranış o modül hiç yokmuş gibi
     aynı kalır (geriye dönük uyumlu)."""
-    reserved_pct = get_rs_cash_allocation_pct("berkakar") + get_orb_cash_allocation_pct("berkakar")
+    reserved_pct = (get_rs_cash_allocation_pct("berkakar") + get_orb_cash_allocation_pct("berkakar")
+                    + get_ha_cash_allocation_pct("berkakar"))
     cash = float(client.get_account()["cash"]) * (1 - min(reserved_pct, 100.0) / 100)
     reserved = sum(
         float(o["qty"]) * float(o["limit_price"])

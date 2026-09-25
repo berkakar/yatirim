@@ -206,6 +206,7 @@ def resolve_stop_algorithm(config: dict, symbol: str) -> str:
 
 def resolve_stop_algorithm_for_position(
     pbp_config: dict, rs_holdings: dict, rs_config: dict, orb_holdings: dict, orb_config: dict, symbol: str,
+    ha_holdings: dict | None = None, ha_config: dict | None = None,
 ) -> str:
     """Hesaptaki HER pozisyonu (run_once/run_extended_hours_guard, bkz.
     get_all_positions) yönetirken sembolün Relative Strength Rotasyonu'na,
@@ -228,6 +229,9 @@ def resolve_stop_algorithm_for_position(
     if symbol in orb_holdings:
         from orb_core import resolve_stop_algorithm as resolve_orb_stop_algorithm
         return resolve_orb_stop_algorithm(orb_config)
+    if ha_holdings and symbol in ha_holdings:
+        from heikin_ashi_intraday_core import resolve_stop_algorithm as resolve_ha_stop_algorithm
+        return resolve_ha_stop_algorithm(ha_config or {})
     return resolve_stop_algorithm(pbp_config, symbol)
 
 
@@ -754,9 +758,12 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
     rs_config = load_config_local("berkakar")
     orb_holdings = load_orb_holdings_local("berkakar")
     orb_config = load_orb_config_local("berkakar")
+    from heikin_ashi_intraday_core import load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local
+    ha_holdings = load_ha_holdings_local("berkakar")
+    ha_config = load_ha_config_local("berkakar")
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm_for_position(
-            config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"],
+            config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"], ha_holdings, ha_config,
         )
         guard_position(client, pos, bot_token, chat_id, stop_algorithm, stop_settings)
 
@@ -782,9 +789,12 @@ def run_once(client: AlpacaClient) -> None:
     rs_config = load_config_local("berkakar")
     orb_holdings = load_orb_holdings_local("berkakar")
     orb_config = load_orb_config_local("berkakar")
+    from heikin_ashi_intraday_core import load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local
+    ha_holdings = load_ha_holdings_local("berkakar")
+    ha_config = load_ha_config_local("berkakar")
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm_for_position(
-            config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"],
+            config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"], ha_holdings, ha_config,
         )
         manage_position(client, pos, top_up_stop_mode, stop_algorithm, stop_settings)
 

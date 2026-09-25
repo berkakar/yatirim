@@ -218,6 +218,8 @@ def render_orb_scan(username: str):
                 pbp_symbols = set()
             from relative_strength_core import load_holdings_local as load_rs_holdings
             rs_symbols = set(load_rs_holdings(username).keys())
+            from heikin_ashi_intraday_core import load_holdings_local as load_ha_holdings
+            rs_symbols |= set(load_ha_holdings(username).keys())
             own_holdings = _load_holdings(GITHUB_REPO, github_token, username)
             universe = [
                 t for t in universe
