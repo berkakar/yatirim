@@ -34,6 +34,7 @@ update_russell2000.yml'nin kendi pip install adımları."""
 
 import re
 import sys
+from collections import Counter
 from datetime import datetime
 
 from playwright.sync_api import sync_playwright
@@ -164,14 +165,32 @@ def _find_holdings_table(obj) -> dict[str, list] | None:
                 walk(e)
         elif isinstance(o, dict):
             list_cols = {k: v for k, v in o.items() if isinstance(v, list)}
-            lengths = {len(v) for v in list_cols.values()}
-            if len(list_cols) >= 2 and len(lengths) == 1:
-                consider(list_cols, lengths.pop())
+            if len(list_cols) >= 2:
+                # TÜM sütunların TAM AYNI uzunlukta olmasını şart koşmuyoruz -
+                # iShares'te bazı yardımcı/opsiyonel alanlar farklı uzunlukta
+                # olabiliyor (ör. tek bir metadata listesi), bu tek bir farklı
+                # uzunluk tüm tabloyu elememeli. Çoğunluk uzunluğa (en az 2
+                # sütun paylaşıyorsa) sahip sütunları tabloya alıyoruz.
+                length_counts = Counter(len(v) for v in list_cols.values())
+                modal_length, modal_count = length_counts.most_common(1)[0]
+                if modal_count >= 2 and modal_length >= 10:
+                    consider({k: v for k, v in list_cols.items() if len(v) == modal_length}, modal_length)
             for v in o.values():
                 walk(v)
 
     walk(obj)
     return best
+
+
+def _unwrap_cell(v):
+    """iShares bazı sütun değerlerini ham skaler yerine {"value": ...,
+    "formattedValue": ...} şeklinde bir "hücre" nesnesiyle sarmalıyor (bkz.
+    bu dosyanın git geçmişi - gerçek koşuda tam olarak bu şekilde bir sütun
+    bulundu) - ticker eşleştirmesinden önce bunu ham değere indirger."""
+    if isinstance(v, dict) and ("value" in v or "formattedValue" in v):
+        raw = v.get("value")
+        return raw if raw not in (None, "") else v.get("formattedValue")
+    return v
 
 
 _TICKER_VALUE_RE = re.compile(r"^[A-Z0-9]{1,5}([.\-][A-Z0-9]{1,3})?$")
@@ -187,7 +206,7 @@ def _guess_ticker_column(table: dict[str, list]) -> str | None:
     best_key = None
     best_score = 0.0
     for key, col in table.items():
-        sample = col[:200]
+        sample = [_unwrap_cell(v) for v in col[:200]]
         values = [str(v).strip().upper() for v in sample if v not in (None, "")]
         if len(values) < len(sample) * 0.5:
             continue  # çoğu satırda boşsa muhtemelen ticker sütunu değil
@@ -237,12 +256,13 @@ def parse_equity_tickers(payload: dict) -> list[str]:
         # "ticker"/"symbol" kullanmıyor) DEĞERE göre tahmin ediyoruz.
         ticker_col = _guess_ticker_column(table)
         if ticker_col is None:
-            sample = {k: v[:5] for k, v in list(table.items())[:20]}
+            sample = {k: [_unwrap_cell(v) for v in vals[:5]] for k, vals in list(table.items())[:20]}
             raise RuntimeError(f"Ticker gibi görünen bir sütun bulunamadı. Örnek değerler: {sample!r}")
         log(f"Tanıdık bir sütun adı yok, değer-tabanlı tahminle '{ticker_col}' seçildi.")
 
     tickers = set()
     for raw in table[ticker_col]:
+        raw = _unwrap_cell(raw)
         if not raw:
             continue
         raw = str(raw).strip().lstrip("$").upper()
