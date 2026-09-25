@@ -140,18 +140,26 @@ def fetch_holdings_json() -> dict:
 def _find_holdings_list(obj) -> list | None:
     """iShares'in JSON şemasını tam bilmediğimiz için (dokümante değil, sayfa
     JS'inin kendi iç veri modeli) belirli bir path yerine İÇERİĞE göre
-    arıyoruz: her elemanı 'ticker'/'symbol' benzeri bir alan taşıyan dict
-    olan, en UZUN listeyi buluyoruz - bu neredeyse kesin asıl holdings
-    tablosudur (diğer küçük listeler filtre/konfigürasyon meta verisidir)."""
-    best: list | None = None
+    arıyoruz: önce her elemanı 'ticker'/'symbol' benzeri bir alan taşıyan
+    dict olan en UZUN listeyi tercih ederiz; hiçbiri yoksa (ör. iShares farklı
+    bir alan adı kullanıyorsa - bkz. parse_equity_tickers'daki değer-tabanlı
+    tahmin) en az 10 elemanlı, tüm elemanları dict olan en UZUN listeye
+    düşeriz - get-product-data yanıtı zaten sadece holdings'e (component=
+    holdings.all) odaklı olduğu için bu neredeyse kesin asıl tablodur."""
+    best_with_ticker_key: list | None = None
+    best_any: list | None = None
 
     def walk(o):
-        nonlocal best
+        nonlocal best_with_ticker_key, best_any
         if isinstance(o, list):
             if o and all(isinstance(e, dict) for e in o):
+                if len(o) >= 10 and (best_any is None or len(o) > len(best_any)):
+                    best_any = o
                 sample_keys = {k.lower() for e in o[:5] for k in e.keys()}
-                if any(k in sample_keys for k in _TICKER_KEYS) and (best is None or len(o) > len(best)):
-                    best = o
+                if any(k in sample_keys for k in _TICKER_KEYS) and (
+                    best_with_ticker_key is None or len(o) > len(best_with_ticker_key)
+                ):
+                    best_with_ticker_key = o
             for e in o:
                 walk(e)
         elif isinstance(o, dict):
@@ -159,28 +167,64 @@ def _find_holdings_list(obj) -> list | None:
                 walk(v)
 
     walk(obj)
-    return best
+    return best_with_ticker_key or best_any
+
+
+_TICKER_VALUE_RE = re.compile(r"^[A-Z0-9]{1,5}([.\-][A-Z0-9]{1,3})?$")
+
+
+def _guess_ticker_field(rows: list[dict]) -> str | None:
+    """Alan adı bilinmediği (ör. holdings listesi bulundu ama 'ticker'/
+    'symbol' gibi tanıdık bir anahtarı yoksa) durumda DEĞERE göre tahmin
+    eder: her alan için örneklem değerlerinin ne kadarının "ticker gibi
+    göründüğüne" (1-5 harf/rakam, büyük harf) VE ne kadar BENZERSİZ
+    olduğuna bakar - ör. 'sector' gibi tekrarlayan bir alanın yanlışlıkla
+    seçilmesini böyle eleriz."""
+    sample = rows[:200]
+    best_key = None
+    best_score = 0.0
+    all_keys = {k for r in sample for k in r.keys()}
+    for key in all_keys:
+        values = [str(r[key]).strip().upper() for r in sample if r.get(key) not in (None, "")]
+        if len(values) < len(sample) * 0.5:
+            continue  # çoğu satırda boşsa muhtemelen ticker alanı değil
+        match_ratio = sum(1 for v in values if _TICKER_VALUE_RE.match(v)) / len(values)
+        uniqueness = len(set(values)) / len(values)
+        if match_ratio > 0.8 and uniqueness > 0.8 and match_ratio * uniqueness > best_score:
+            best_score = match_ratio * uniqueness
+            best_key = key
+    return best_key
 
 
 def parse_equity_tickers(payload: dict) -> list[str]:
     holdings = _find_holdings_list(payload)
     if holdings is None:
         raise RuntimeError(
-            "Yanıtta ticker/symbol alanı taşıyan bir liste bulunamadı - "
+            "Yanıtta en az 10 elemanlı bir dict listesi bulunamadı - "
             "iShares'in get-product-data JSON şeması değişmiş olabilir."
         )
-    log(f"Ticker alanlı en uzun liste bulundu: {len(holdings)} satır, örnek anahtarlar: {sorted(holdings[0].keys())!r}")
+    log(f"Aday holdings listesi bulundu: {len(holdings)} satır, örnek anahtarlar: {sorted(holdings[0].keys())!r}")
+
+    ticker_field = None
+    for key in holdings[0]:
+        if key.lower() in _TICKER_KEYS:
+            ticker_field = key
+            break
+    if ticker_field is None:
+        # Tanıdık bir anahtar adı yoksa (bkz. bu dosyanın git geçmişi - iShares
+        # "ticker"/"symbol" kullanmıyor) DEĞERE göre tahmin ediyoruz.
+        ticker_field = _guess_ticker_field(holdings)
+        if ticker_field is None:
+            sample_row = {k: holdings[0].get(k) for k in list(holdings[0].keys())[:20]}
+            raise RuntimeError(f"Ticker gibi görünen bir alan bulunamadı. Örnek satır: {sample_row!r}")
+        log(f"Tanıdık bir anahtar adı yok, değer-tabanlı tahminle '{ticker_field}' seçildi.")
 
     tickers = set()
     for row in holdings:
-        raw = None
-        for key in row:
-            if key.lower() in _TICKER_KEYS and row[key]:
-                raw = str(row[key]).strip()
-                break
+        raw = row.get(ticker_field)
         if not raw:
             continue
-        raw = raw.lstrip("$").upper()
+        raw = str(raw).strip().lstrip("$").upper()
         if not raw or raw == "-" or " " in raw or len(raw) > 6:
             continue  # boş/nakit satırı vb.
         tickers.add(raw)
