@@ -1,0 +1,11 @@
+{
+  "enabled": false,
+  "cash_allocation_pct": 10.0,
+  "max_positions": 5,
+  "include_nasdaq": true,
+  "include_nyse": true,
+  "include_russell": true,
+  "custom_groups": [],
+  "min_avg_dollar_volume": 5000000.0,
+  "stop_algorithm": "heikin_ashi_exit"
+}
