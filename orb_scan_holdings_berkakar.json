@@ -1,0 +1,32 @@
+{
+  "CUZ": {
+    "qty": 66.0,
+    "entry_price": 28.56,
+    "entered_at": "2026-09-25T15:01:48+00:00",
+    "score": null
+  },
+  "OMCL": {
+    "qty": 58.0,
+    "entry_price": 32.9,
+    "entered_at": "2026-09-25T15:01:48+00:00",
+    "score": null
+  },
+  "TREX": {
+    "qty": 44.0,
+    "entry_price": 43.21,
+    "entered_at": "2026-09-25T15:01:48+00:00",
+    "score": null
+  },
+  "NHI": {
+    "qty": 28.0,
+    "entry_price": 66.99,
+    "entered_at": "2026-09-25T15:01:49+00:00",
+    "score": null
+  },
+  "GBCI": {
+    "qty": 42.0,
+    "entry_price": 44.64,
+    "entered_at": "2026-09-25T15:01:49+00:00",
+    "score": null
+  }
+}
