@@ -9,6 +9,20 @@ from github_config import read_json_from_github, write_json_to_github
 
 GITHUB_REPO = "berkakar/yatirim"
 
+
+def _get_github_token():
+    """st.secrets.get(...) tek başına GÜVENLİ değil - hiç secrets.toml
+    dosyası yoksa (GitHub Actions runner'larının hepsinde durum bu)
+    Streamlit doğrudan StreamlitSecretNotFoundError fırlatıyor, .get()
+    kullanmak bunu ÖNLEMİYOR. Bu fonksiyonu kullanmayan çağrılar (bkz. bu
+    dosyanın git geçmişi) otomatik alım/satım modüllerinin (ORB, Relative
+    Strength Rotasyonu, Otomatik Alım/Satım) evren oluştururken - yani
+    GitHub Actions'ta, HER ÇALIŞTIRMADA - sessizce çökmesine yol açıyordu."""
+    try:
+        return st.secrets.get("GITHUB_TOKEN")
+    except Exception:
+        return None
+
 # ------------------------------------------------------------------------------
 # VARSAYILAN LİSTELER (DEFAULT)
 # ------------------------------------------------------------------------------
@@ -105,7 +119,7 @@ def load_ticker_lists(username):
     diske yazmak kalıcı olmuyor - bu yüzden asıl kaynak GitHub'daki dosya."""
     custom_file = _custom_file(username)
     data = None
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             data = read_json_from_github(GITHUB_REPO, token, custom_file, {})
@@ -134,7 +148,7 @@ def save_ticker_lists(ticker_dict, username):
     """Kullanıcıya özel listeleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
     ayrıca yerel dosyaya da yazar."""
     custom_file = _custom_file(username)
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             write_json_to_github(GITHUB_REPO, token, custom_file, ticker_dict, f"Update custom ticker lists ({username})")
@@ -155,7 +169,7 @@ def load_stock_groups(username):
     yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
     group_file = _group_file(username)
     data = None
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             data = read_json_from_github(GITHUB_REPO, token, group_file, {})
@@ -179,7 +193,7 @@ def save_stock_groups(groups_dict, username):
     """Kullanıcının hisse gruplarını kalıcı olması için GitHub'a commit'ler (mümkün
     olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
     group_file = _group_file(username)
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             write_json_to_github(GITHUB_REPO, token, group_file, groups_dict, f"Update stock groups ({username})")
@@ -202,7 +216,7 @@ def load_group_markets(username):
     GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
     market_file = _group_market_file(username)
     data = None
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             data = read_json_from_github(GITHUB_REPO, token, market_file, {})
@@ -224,7 +238,7 @@ def save_group_markets(group_markets, username):
     (mümkün olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_stock_groups
     için aynı gerekçe."""
     market_file = _group_market_file(username)
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             write_json_to_github(GITHUB_REPO, token, market_file, group_markets, f"Update stock group markets ({username})")
@@ -246,7 +260,7 @@ def load_initial_capital(username):
     None döner."""
     capital_file = _capital_file(username)
     data = None
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             data = read_json_from_github(GITHUB_REPO, token, capital_file, None)
@@ -270,7 +284,7 @@ def save_initial_capital(amount, username):
     ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
     capital_file = _capital_file(username)
     payload = {"initial_capital": amount}
-    token = st.secrets.get("GITHUB_TOKEN")
+    token = _get_github_token()
     if token:
         try:
             write_json_to_github(GITHUB_REPO, token, capital_file, payload, f"Update initial capital ({username})")
