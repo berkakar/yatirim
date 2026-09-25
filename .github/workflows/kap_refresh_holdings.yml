@@ -30,5 +30,11 @@ jobs:
             echo "No cache changes to commit."
           else
             git commit -m "Refresh KAP portföy dağılım önbelleği (manuel)"
-            git push
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
           fi

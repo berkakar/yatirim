@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_trailing_stop import log
-from orb_core import config_path, scan_and_buy
+from orb_core import config_path, holdings_path, load_holdings_local, save_holdings_local, scan_and_buy
 
 USERNAME = "berkakar"
 CONFIG_PATH = config_path(USERNAME)
@@ -114,10 +114,44 @@ def run_once() -> None:
         log(f"Alım hataları: {summary['buy_errors']}")
 
 
+def reconcile_symbols(symbols: list[str]) -> None:
+    """scan_and_buy() bir sembolü GERÇEKTEN Alpaca'da satın aldı ama (ör.
+    eşzamanlı bir git push çakışması yüzünden - bkz. bu dosyanın git
+    geçmişi) orb_scan_holdings_berkakar.json hiç commit edilemediyse
+    kullanılır. HİÇBİR alım/satım YAPMAZ - sadece Alpaca'daki GERÇEK
+    pozisyonu okuyup yerel holdings state'ine ekler ki bir sonraki tarama bu
+    sembolü tekrar almaya çalışmasın (bkz. orb_core.py'nin modül üstü
+    notu #4 - zaten pozisyonu olan bir sembol aday listesinden hariç
+    tutulur)."""
+    client = build_client()
+    holdings = load_holdings_local(USERNAME)
+    for symbol in symbols:
+        position = client.get_position(symbol)
+        if position is None:
+            log(f"{symbol}: Alpaca'da canlı pozisyon bulunamadı, atlanıyor.")
+            continue
+        holdings[symbol] = {
+            "qty": float(position["qty"]),
+            "entry_price": float(position["avg_entry_price"]),
+            "entered_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "score": None,
+        }
+        log(f"{symbol}: yerel holdings state'ine eklendi (qty={position['qty']}, entry={position['avg_entry_price']}).")
+    save_holdings_local(USERNAME, holdings)
+    log(f"{holdings_path(USERNAME)} güncellendi.")
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--once", action="store_true", help="Run a single pass and exit (used by GitHub Actions).")
+    parser.add_argument(
+        "--reconcile-symbols", default="",
+        help="Virgülle ayrılmış sembol listesi - hiçbir alım/satım yapmadan, Alpaca'daki gerçek "
+             "pozisyonları okuyup yerel holdings state'ine ekler (bkz. reconcile_symbols()).",
+    )
     args = parser.parse_args()
 
-    if args.once:
+    if args.reconcile_symbols:
+        reconcile_symbols([s.strip().upper() for s in args.reconcile_symbols.split(",") if s.strip()])
+    elif args.once:
         run_once()
