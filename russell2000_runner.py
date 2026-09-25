@@ -58,11 +58,30 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
+def _iter_holdings_click_candidates(page):
+    """"Holdings" sekmesini bulmak için önce en kesin adaylardan (ARIA tab/
+    link/button rolü + TAM "Holdings" adı) başlar, bulunamazsa daha gevşek
+    bir metin eşleşmesine düşer. DOM'da "holdings" geçen İLK eleman her
+    zaman doğru tıklanabilir sekme OLMUYOR (bkz. bu dosyanın git geçmişi -
+    get_by_text(...).first bir koşuda işe yaradı, bir sonrakinde 20 saniye
+    boyunca hiçbir isteği tetiklemedi) - bu yüzden artık BİRDEN FAZLA aday
+    sırayla denenir (bkz. fetch_holdings_json)."""
+    name_re = re.compile(r"^\s*holdings\s*$", re.IGNORECASE)
+    for role in ("tab", "link", "button"):
+        loc = page.get_by_role(role, name=name_re)
+        for i in range(loc.count()):
+            yield loc.nth(i)
+    loose = page.get_by_text(re.compile("holdings", re.IGNORECASE))
+    for i in range(min(loose.count(), 8)):  # sonsuz denemeye karşı üst sınır
+        yield loose.nth(i)
+
+
 def fetch_holdings_json() -> dict:
     """iShares'in Holdings sekmesi tıklandığında kendi JS'inin çağırdığı resmi
     get-product-data API'sinin yanıtını döner. URL'nin tam sorgu parametreleri
     (ör. asOfDate) sabit kodlanmıyor - sayfanın KENDİSİ doğru değerlerle
-    isteği atıyor, biz sadece o isteğin yanıtını bekleyip yakalıyoruz."""
+    isteği atıyor, biz sadece sayfa yüklenirken/dolaşılırken atılan istekleri
+    yakalayıp içinden bu isteği buluyoruz."""
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         try:
@@ -70,20 +89,47 @@ def fetch_holdings_json() -> dict:
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
             ))
+            seen_requests: list[str] = []
+            page.on("request", lambda req: seen_requests.append(req.url))
+
             page.goto(IWM_PRODUCT_PAGE_URL, wait_until="load", timeout=60000)
             page.wait_for_timeout(2000)
 
-            holdings_tab = page.get_by_text(re.compile("holdings", re.IGNORECASE)).first
-            if holdings_tab.count() == 0:
-                raise RuntimeError("'Holdings' metinli bir sekme/eleman bulunamadı - sayfa yapısı değişmiş olabilir.")
+            def find_captured_url() -> str | None:
+                for u in seen_requests:
+                    if "get-product-data" in u and "holdings" in u.lower():
+                        return u
+                return None
 
-            log("'Holdings' sekmesine tıklanıyor, get-product-data (holdings) yanıtı bekleniyor...")
-            with page.expect_response(
-                lambda r: "get-product-data" in r.url and "holdings" in r.url.lower(), timeout=20000,
-            ) as response_info:
-                holdings_tab.click(timeout=5000)
-            resp = response_info.value
-            log(f"get-product-data yanıtı: HTTP {resp.status}, Content-Type: {resp.headers.get('content-type')}, URL: {resp.url}")
+            api_url = find_captured_url()
+            if api_url is None:
+                candidates = list(_iter_holdings_click_candidates(page))
+                log(f"{len(candidates)} olası 'Holdings' tıklama adayı bulundu, sırayla deneniyor...")
+                for i, candidate in enumerate(candidates):
+                    try:
+                        candidate.click(timeout=5000)
+                    except Exception as e:
+                        log(f"Aday {i + 1}/{len(candidates)}: tıklanamadı ({e}), sıradaki deneniyor...")
+                        continue
+                    page.wait_for_timeout(2500)
+                    api_url = find_captured_url()
+                    if api_url:
+                        log(f"Aday {i + 1}/{len(candidates)} tıklaması get-product-data isteğini tetikledi: {api_url}")
+                        break
+                    log(f"Aday {i + 1}/{len(candidates)} tıklandı ama get-product-data isteği görülmedi, sıradaki deneniyor...")
+
+            if api_url is None:
+                interesting = [
+                    u for u in seen_requests
+                    if re.search(r"csv|xls|download|export|holdings|product-data", u, re.IGNORECASE)
+                ]
+                raise RuntimeError(
+                    f"get-product-data isteği hiçbir denemede yakalanamadı. {len(seen_requests)} istek görüldü, "
+                    f"ilgili görünenler: {interesting[:20]!r}"
+                )
+
+            resp = page.request.get(api_url)
+            log(f"get-product-data yanıtı: HTTP {resp.status}, Content-Type: {resp.headers.get('content-type')}, {len(resp.body())} bytes")
             if resp.status != 200:
                 raise RuntimeError(f"get-product-data isteği HTTP {resp.status} döndü.")
             return resp.json()
