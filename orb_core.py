@@ -244,6 +244,8 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
     # kırmak için (bkz. alpaca_trailing_stop.py'deki aynı notlar).
     from relative_strength_core import load_holdings_local as load_rs_holdings
     rs_symbols = set(load_rs_holdings(username).keys())
+    from heikin_ashi_intraday_core import load_holdings_local as load_ha_holdings
+    rs_symbols |= set(load_ha_holdings(username).keys())  # Heikin Ashi Gün İçi'nin elindekiler de
     already_held = set(own_holdings.keys())
     universe = [t for t in universe if t not in pbp_symbols and t not in rs_symbols and t not in already_held]
     universe = filter_by_liquidity(client, universe, cfg.get("min_avg_dollar_volume", DEFAULT_MIN_AVG_DOLLAR_VOLUME))

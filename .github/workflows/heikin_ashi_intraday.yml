@@ -1,0 +1,69 @@
+name: Heikin Ashi Gün İçi
+
+# Heikin Ashi Gün İçi modülünde (Streamlit) kullanıcı "otomatik çalıştır"
+# kutusunu işaretlediğinde ha_intraday_config_berkakar.json'a yazılan
+# ayarlarla, seans boyunca yarım saatte bir heikin_ashi_intraday_runner.py
+# çalışır: gün sonu kapatma → HA çıkış sinyali veren pozisyonları satma →
+# boş slotlar için evreni tarayıp yeni alım (bkz. heikin_ashi_intraday_core.py).
+#
+# Cron saati UTC'dir. 30 dakikalık barlar ET'de :00/:30'da kapanır, UTC'de de
+# :00/:30'a denk gelir (DST sadece saati kaydırır) - tetikleme bar kapanışından
+# 2 dakika sonra (:02/:32), verinin Alpaca'da oluşması için. 13-20 UTC aralığı
+# hem yaz (13:30-20:00 UTC) hem kış (14:30-21:00 UTC) seansını kapsar; piyasa
+# kapalıyken düşen tetiklemeler runner'ın is_open kontrolüyle atlanır.
+# "45 19,20" tetiklemeleri gün sonu kapatma içindir: yaz saatinde 19:45, kış
+# saatinde 20:45 UTC kapanıştan 15 dakika öncesine denk gelir (runner
+# kapanışa EOD_FLATTEN_MINUTES=20 dakikadan az kaldığını görünce her şeyi satar).
+
+on:
+  schedule:
+    - cron: "2,32 13-20 * * 1-5"
+    - cron: "45 19,20 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: heikin-ashi-intraday
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python heikin_ashi_intraday_runner.py --once
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
+
+      - name: Commit and push updated config/holdings state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in ha_intraday_config_berkakar.json ha_intraday_holdings_berkakar.json; do
+            [ -f "$f" ] && git add "$f"
+          done
+          if git diff --cached --quiet; then
+            echo "No state changes to commit."
+          else
+            git commit -m "Update Heikin Ashi Gün İçi state"
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
+          fi

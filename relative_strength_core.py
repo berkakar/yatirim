@@ -269,6 +269,8 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
     # kırmak için (bkz. alpaca_trailing_stop.py'deki aynı notlar).
     from orb_core import load_holdings_local as load_orb_holdings
     orb_symbols = set(load_orb_holdings(username).keys())
+    from heikin_ashi_intraday_core import load_holdings_local as load_ha_holdings
+    orb_symbols |= set(load_ha_holdings(username).keys())  # Heikin Ashi Gün İçi'nin elindekiler de
     universe = [t for t in universe if t not in pbp_symbols and t not in orb_symbols]  # bkz. modül üstü not #2
     universe = filter_by_liquidity(client, universe, cfg.get("min_avg_dollar_volume", DEFAULT_MIN_AVG_DOLLAR_VOLUME))
 

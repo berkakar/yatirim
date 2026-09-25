@@ -54,6 +54,7 @@ REBUY_NOTE = "🔁 Alım-Stop-Alım: stop sonrası otomatik yeniden alım"
 
 RELATIVE_STRENGTH_LABEL = "📈 Relative Strength Rotasyonu"
 ORB_SCAN_LABEL = "📈 Açılış Aralığı Kırılımı (ORB)"
+HA_INTRADAY_LABEL = "🕯️ Heikin Ashi Gün İçi"
 
 
 def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
@@ -67,18 +68,21 @@ def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
     aynı şekilde ama "rebuy-" öneki ile - bkz. o modülün docstring'i.
     relative_strength_core.py kendi emirlerini "rs-buy-<symbol>-<epoch>" /
     "rs-exit-<symbol>-<epoch>" ile, orb_core.py ise "orb-buy-<symbol>-<epoch>"
-    ile etiketler - ikisi de buy_algorithms.ALGORITHMS'a bağlı olmadığından
+    ile, heikin_ashi_intraday_core.py "hai-buy/exit/eod-<symbol>-<epoch>" ile
+    etiketler - bunlar da buy_algorithms.ALGORITHMS'a bağlı olmadığından
     (RS kesitsel bir strateji; ORB günlük bir tarama, ikisinin de tek bir
     "algoritma id"si yok) sabit bir etiketle gösterilir. Orders that aren't
     a tagged buy-limit/rebuy/rs/orb entry show "—" for both.
     Returns (algoritma_etiketi, mum_periyodu_etiketi, alım_stop_alım_mı)."""
     parts = (order.get("client_order_id") or "").split("-")
-    if not parts or parts[0] not in ("algo", "rebuy", "rs", "orb"):
+    if not parts or parts[0] not in ("algo", "rebuy", "rs", "orb", "hai"):
         return "—", "—", False
     if parts[0] == "rs":
         return RELATIVE_STRENGTH_LABEL, "—", False
     if parts[0] == "orb":
         return ORB_SCAN_LABEL, "—", False
+    if parts[0] == "hai":
+        return HA_INTRADAY_LABEL, "30 Dakika", False
     is_rebuy = parts[0] == "rebuy"
     if len(parts) == 5:
         algo_id, timeframe = parts[1], parts[2]

@@ -36,6 +36,7 @@ from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
 from relative_strength import render_relative_strength
 from orb_scan import render_orb_scan
+from heikin_ashi_intraday import render_heikin_ashi_intraday
 from tefas_fonlari import render_turk_fonlari
 from turk_fonlari_takip import render_turk_fonlari_takip
 from hisse_patern import render_hisse_patern
@@ -61,7 +62,8 @@ MODULE_GROUPS = {
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": [
         "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
-        "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🛡️ Stop Loss Ayarları",
+        "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🕯️ Heikin Ashi Gün İçi",
+        "🛡️ Stop Loss Ayarları",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
@@ -1466,6 +1468,20 @@ elif module == "📈 Açılış Aralığı Kırılımı (ORB)":
         "hesap nakdinden besleniyor, birbirinin payına/pozisyonuna dokunmaz."
     )
     render_orb_scan(username)
+
+# ==============================================================================
+# 8e. MODÜL: HEIKIN ASHI GÜN İÇİ
+# ==============================================================================
+elif module == "🕯️ Heikin Ashi Gün İçi":
+    st.header("🕯️ Heikin Ashi Gün İçi")
+    st.caption(
+        "Seans boyunca yarım saatte bir evreni (varsayılan NASDAQ 100) 30 dakikalık barlarda tarar; "
+        "Heikin Ashi + SMA50 + Stokastik alım şartlarını sağlayan en yüksek puanlı hisseler market emriyle "
+        "alınıp anında 'Heikin Ashi Çıkışı' stop-loss'u ile korunur. İlk kırmızı HA mumunda ya da "
+        "Stokastik aşırı alım kesişiminde satılır, gün sonunda tüm pozisyonlar kapatılır. Premium Buy "
+        "Point, Relative Strength Rotasyonu ve ORB'dan AYRI bir nakit payı ve pozisyon takibi kullanır."
+    )
+    render_heikin_ashi_intraday(username)
 
 # ==============================================================================
 # 9. MODÜL: TÜRK FONLARI

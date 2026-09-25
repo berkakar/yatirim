@@ -56,6 +56,7 @@ Dört algoritma var:
 
 import inspect
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Callable
 
 from heikin_ashi import long_exit_reason as heikin_ashi_long_exit_reason
@@ -439,6 +440,20 @@ def heikin_ashi_initial_stop(
     return structural_stop if structural_stop > entry_price else naive_stop
 
 
+def _closed_bars(bars: list[Bar]) -> list[Bar]:
+    """Canlı trailing stop botu (alpaca_trailing_stop.manage_position) henüz
+    oluşmakta olan son barı da geçiriyor - HA çıkış kuralı bar KAPANIŞINDA
+    tanımlı olduğundan o bar atılır. Periyot, ardışık barlar arasındaki en
+    kısa aralıktan çıkarılır; backtest'teki geçmiş barlar hiçbir zaman atılmaz."""
+    if len(bars) < 3:
+        return bars
+    stamps = [datetime.fromisoformat(b.t.replace("Z", "+00:00")) for b in bars[-6:]]
+    duration = min(b - a for a, b in zip(stamps, stamps[1:]))
+    if stamps[-1] + duration > datetime.now(timezone.utc):
+        return bars[:-1]
+    return bars
+
+
 def heikin_ashi_trail(
     ctx: StopContext,
     exit_buffer_pct: float = HEIKIN_ASHI_EXIT_BUFFER_PCT,
@@ -464,10 +479,13 @@ def heikin_ashi_trail(
     )
     if ctx.side != "long" or not ctx.bars:
         return base
-    reason = heikin_ashi_long_exit_reason(ctx.bars, stoch_k_period, stoch_d_period, stoch_overbought)
+    closed = _closed_bars(ctx.bars)
+    reason = heikin_ashi_long_exit_reason(closed, stoch_k_period, stoch_d_period, stoch_overbought)
     if reason is None:
         return base
-    exit_price = round(ctx.bars[-1].c * (1 - exit_buffer_pct), 2)
+    # Güncel fiyat (oluşmakta olan bar) kapanışın da altına indiyse stop onun
+    # altına kurulur - piyasa fiyatının üstünde bir satış stop'u reddedilir.
+    exit_price = round(min(closed[-1].c, ctx.bars[-1].c) * (1 - exit_buffer_pct), 2)
     best_so_far = base.price if base is not None else ctx.current_stop_price
     if exit_price <= best_so_far:
         return base
