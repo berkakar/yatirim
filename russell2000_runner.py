@@ -1,9 +1,8 @@
 """Russell 2000 hisse listesini (config.DEFAULT_RUSSELL_2000, en fazla ~80
 sembollük elle derlenmiş bir başlangıç seti - bkz. o sabitin üstündeki not)
-iShares'in Russell 2000'i birebir izleyen IWM ETF'inin resmi, herkese açık
-CSV export'undaki GERÇEK ~2000 bileşenle değiştirip
-custom_tickers_<kullanıcı>.json'a kalıcı olarak yazan, ayda 1 (+ istenirse
-elle) çalışan GitHub Actions script'i.
+IWM (iShares Russell 2000 ETF, endeksi birebir izler) bileşenlerinin
+GERÇEK ~2000 sembolüyle değiştirip custom_tickers_<kullanıcı>.json'a kalıcı
+olarak yazan, ayda 1 (+ istenirse elle) çalışan GitHub Actions script'i.
 
 Bu script Alpaca'ya HİÇ bağlanmaz (kimlik doğrulama gerekmez) - sadece
 config.py'nin zaten kullandığı yerel dosya + (varsa) GitHub API yazma
@@ -15,8 +14,6 @@ hesap için işlem yapılıyor" değil, "bu listeyi hangi custom_tickers_*.json
 dosyasına yazacağız" anlamına gelir (bkz. app.py'de her kullanıcının kendi
 custom_tickers_<username>.json'u olması)."""
 
-import csv
-import re
 import sys
 from datetime import datetime
 
@@ -26,29 +23,26 @@ from config import load_ticker_lists, save_ticker_lists
 
 USERNAME = "berkakar"
 
-# iShares'in herkese açık, kimlik doğrulama gerektirmeyen fon-bileşenleri CSV
-# export'u - IWM (iShares Russell 2000 ETF) Russell 2000 endeksini birebir
-# izlediği için endeksin kendisi yerine bu ETF'in güncel bileşen listesi
-# kullanılıyor (endeksin resmi bileşen listesi FTSE Russell'da ücretli).
+# İlk yaklaşım (iShares'in .ajax CSV export'u) çalışmadı: o endpoint artık
+# CSV yerine ürün sayfasının kendisini döndürüyor - indirme linki tarayıcıda
+# JavaScript ile kuruluyor, düz bir HTTP isteğiyle statik HTML'de bulunamıyor
+# (bkz. bu dosyanın git geçmişindeki önceki denemeler).
 #
-# Bu URL'nin ".ajax" öncesindeki sayısal kısmı iShares'in CMS'inde bir
-# içerik kimliği - sabit değil, onlar sayfayı yeniden yayınladığında
-# değişebiliyor (ilk gerçek koşuda tam olarak bu oldu: sabit kodlanmış eski
-# kimlik artık CSV yerine ürün sayfasının kendisini döndürüyordu). Bu yüzden
-# HER ÇALIŞTIRMADA önce ürün sayfasının HTML'i taranıp güncel indirme linki
-# bulunuyor (bkz. fetch_iwm_holdings_csv) - bu sabit sadece o keşif
-# başarısız olursa son çare (fallback) olarak kullanılıyor.
-IWM_PRODUCT_PAGE_URL = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"
-IWM_HOLDINGS_CSV_URL = (
-    f"{IWM_PRODUCT_PAGE_URL}/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund"
-)
-_CSV_LINK_PATTERN = re.compile(r'(/us/products/239710/[\w-]+/\d+\.ajax\?fileType=csv[^"\'\\\s]*)', re.IGNORECASE)
+# Bunun yerine stockanalysis.com'un ETF holdings sayfalarının kullandığı
+# SvelteKit "__data.json" endpoint'i kullanılıyor - bu, sayfa JS'inin
+# kendisinin veri çekmek için kullandığı, düz JSON dönen dahili bir uç nokta
+# (tarayıcı gerektirmez). IWM (iShares Russell 2000 ETF) yine referans -
+# Russell 2000 endeksini birebir izlediği için bu ETF'in bileşen listesi
+# endeksin kendisi yerine kullanılıyor (endeksin resmi listesi FTSE
+# Russell'da ücretli). Format "devalue" (SvelteKit'in JSON.stringify
+# yerine kullandığı serileştirme biçimi) - deref() bunu çözüyor.
+HOLDINGS_DATA_JSON_URL = "https://stockanalysis.com/etf/iwm/holdings/__data.json?x-sveltekit-trailing-slash=1"
 
 # Gerçek Russell 2000 endeksi ~1950-2050 arası bileşenden oluşur (yıl içinde
-# küçük dalgalanmalarla). Parse hatalı/eksik/bozuk giderse (ör. iShares CSV
-# formatını değiştirirse) bu aralığın çok dışında bir sayı üretir - böyle bir
-# durumda var olan listeyi SESSİZCE bozuk bir veriyle EZMEMEK için işlem
-# durdurulur (bkz. aşağısı).
+# küçük dalgalanmalarla). Parse hatalı/eksik/bozuk giderse (ör. stockanalysis.
+# com sayfa formatını değiştirirse) bu aralığın çok dışında bir sayı üretir -
+# böyle bir durumda var olan listeyi SESSİZCE bozuk bir veriyle EZMEMEK için
+# işlem durdurulur (bkz. aşağısı).
 MIN_EXPECTED_COUNT = 1500
 MAX_EXPECTED_COUNT = 2300
 
@@ -57,86 +51,77 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
-def fetch_iwm_holdings_csv() -> str:
-    # İlk denemede sade bir `requests.get` + User-Agent, sunucudan HTTP 200
-    # ve (yanlışlıkla) "Content-Type: text/csv" başlığıyla birlikte GERÇEK
-    # bir HTML sayfası döndürdü (CSV değil) - muhtemelen ürün sayfasını önce
-    # ziyaret etmeden doğrudan AJAX endpoint'ine gidildiğinde çerez/Referer
-    # eksikliğinden kaynaklı bir fallback. Bu yüzden gerçek bir tarayıcı gibi
-    # önce ürün sayfasını ziyaret edip çerezleri alıyoruz, sonra CSV'yi O
-    # sayfayı Referer göstererek istiyoruz.
-    session = requests.Session()
-    session.headers.update({
+def deref(idx, data: list, _depth: int = 0):
+    """SvelteKit'in "devalue" serileştirme biçimini çözer: `data` düz bir
+    dizi, her eleman ya bir sözlük (değerleri KENDİ İÇİNDE `data`'ya birer
+    indeks olan bir şablon), ya bir liste (yine `data`'ya indeksler), ya da
+    doğrudan bir ilkel (str/int/float/bool/None) - -1 evrensel null'u temsil
+    eder. Bkz. https://github.com/sveltejs/devalue (SvelteKit'in sayfa
+    verisini JSON.stringify yerine bununla kodluyor)."""
+    if _depth > 30 or not isinstance(idx, int):
+        return idx
+    if idx < 0 or idx >= len(data):
+        return None
+    v = data[idx]
+    if isinstance(v, dict):
+        return {k: deref(vi, data, _depth + 1) for k, vi in v.items()}
+    if isinstance(v, list):
+        return [deref(i, data, _depth + 1) for i in v]
+    return v
+
+
+def fetch_holdings_json() -> dict:
+    headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         ),
-        "Accept-Language": "en-US,en;q=0.9",
-    })
-    page_resp = session.get(IWM_PRODUCT_PAGE_URL, timeout=30)
-    log(f"Ürün sayfası: HTTP {page_resp.status_code}, {len(page_resp.content)} bytes, {len(session.cookies)} çerez alındı.")
-
-    link_match = _CSV_LINK_PATTERN.search(page_resp.text)
-    if link_match:
-        csv_url = "https://www.ishares.com" + link_match.group(1)
-        log(f"Ürün sayfasından güncel CSV linki bulundu: {csv_url}")
-    else:
-        csv_url = IWM_HOLDINGS_CSV_URL
-        log(f"Ürün sayfasında CSV linki bulunamadı, sabit kodlanmış son çare URL kullanılıyor: {csv_url}")
-
-    resp = session.get(
-        csv_url, timeout=30,
-        headers={"Accept": "text/csv,*/*", "Referer": IWM_PRODUCT_PAGE_URL},
-    )
-    log(f"CSV: HTTP {resp.status_code}, final URL: {resp.url}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
+        "Accept": "application/json",
+    }
+    resp = requests.get(HOLDINGS_DATA_JSON_URL, headers=headers, timeout=30)
+    log(f"HTTP {resp.status_code}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
     resp.raise_for_status()
-
-    if resp.text.lstrip().startswith("<"):
-        title_match = re.search(r"<title[^>]*>(.*?)</title>", resp.text, re.IGNORECASE | re.DOTALL)
-        title = title_match.group(1).strip() if title_match else "(başlık bulunamadı)"
-        log(f"Yanıt CSV değil, HTML - <title>: {title!r}. İlk 1500 karakter: {resp.text[:1500]!r}")
-
-    return resp.text
+    return resp.json()
 
 
-def parse_equity_tickers(csv_text: str) -> list[str]:
-    """iShares'in export'u önce birkaç satır fon meta verisi (fon adı, tarih,
-    vb.), sonra asıl holdings tablosunun başlık satırı ("Ticker","Name",...),
-    sonra veri satırları, en sonda da bir feragatname paragrafı içerir. Asıl
-    tabloyu bulmak için "Ticker" alanıyla başlayan satırı arıyoruz - iShares
-    metadata satır sayısını değiştirse bile bu sağlam kalır."""
-    lines = csv_text.splitlines()
-    header_idx = None
-    for i, line in enumerate(lines):
-        fields = next(csv.reader([line]), [])
-        if fields and fields[0].strip() == "Ticker":
-            header_idx = i
+def parse_equity_tickers(payload: dict) -> list[str]:
+    """SvelteKit yanıtı birkaç "node" içerir (oturum/kullanıcı bilgisi,
+    hisse/ETF meta verisi, sayfaya özel veri) - "holdings" alanını taşıyan
+    node'u arıyoruz, sayfanın node sırasını/sayısını değiştirmesine karşı
+    dayanıklı olsun diye pozisyona göre değil İÇERİĞE göre buluyoruz. Ticker
+    alanı ("s") "$AAPL" gibi baştan $ işaretli geliyor."""
+    holdings = None
+    for node in payload.get("nodes", []):
+        if node.get("type") == "skip":
+            continue
+        node_data = node.get("data") or []
+        if not node_data:
+            continue
+        parsed = deref(0, node_data)
+        if isinstance(parsed, dict) and isinstance(parsed.get("holdings"), list):
+            holdings = parsed["holdings"]
             break
-    if header_idx is None:
-        snippet = csv_text[:500].replace("\n", "\\n")
+
+    if holdings is None:
         raise RuntimeError(
-            "CSV içinde 'Ticker' başlık satırı bulunamadı - iShares export formatı değişmiş ya da "
-            f"istek engellenmiş olabilir. Yanıtın ilk 500 karakteri: {snippet!r}"
+            "Yanıttaki node'ların hiçbirinde 'holdings' alanı bulunamadı - "
+            "stockanalysis.com'un sayfa/veri formatı değişmiş olabilir."
         )
 
-    reader = csv.DictReader(lines[header_idx:])
     tickers = set()
-    for row in reader:
-        ticker = (row.get("Ticker") or "").strip()
-        asset_class = (row.get("Asset Class") or "").strip().lower()
-        if not ticker or ticker == "-" or " " in ticker or len(ticker) > 6:
-            continue  # boş/nakit satırı ya da tablo sonundaki feragatname metni
-        if asset_class and "equity" not in asset_class:
-            continue  # nakit/türev satırları (Asset Class "Cash" vb.)
-        tickers.add(ticker)
+    for row in holdings:
+        raw = (row.get("s") or "").strip().lstrip("$")
+        if not raw or raw == "-" or " " in raw or len(raw) > 6:
+            continue  # boş/nakit satırı vb.
+        tickers.add(raw.upper())
     return sorted(tickers)
 
 
 def run_once() -> None:
-    log("iShares IWM holdings CSV çekiliyor...")
-    csv_text = fetch_iwm_holdings_csv()
-    tickers = parse_equity_tickers(csv_text)
-    log(f"{len(tickers)} equity sembolü ayrıştırıldı.")
+    log("stockanalysis.com'dan IWM (Russell 2000) holdings verisi çekiliyor...")
+    payload = fetch_holdings_json()
+    tickers = parse_equity_tickers(payload)
+    log(f"{len(tickers)} sembol ayrıştırıldı.")
 
     if not (MIN_EXPECTED_COUNT <= len(tickers) <= MAX_EXPECTED_COUNT):
         raise RuntimeError(
