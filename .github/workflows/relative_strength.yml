@@ -49,5 +49,11 @@ jobs:
             echo "No state changes to commit."
           else
             git commit -m "Update Relative Strength Rotasyonu state"
-            git push
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
           fi

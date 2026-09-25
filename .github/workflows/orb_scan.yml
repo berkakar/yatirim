@@ -26,7 +26,16 @@ on:
   schedule:
     - cron: "30,45 14 * * 1-5"
     - cron: "30,45 15 * * 1-5"
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      reconcile_symbols:
+        description: >-
+          (Normal kullanımda BOŞ bırakın.) Virgülle ayrılmış sembol listesi -
+          scan_and_buy() bir sembolü GERÇEKTEN satın aldı ama state commit'i
+          bir git push çakışmasıyla kaybolduysa, bu, hiçbir alım/satım
+          YAPMADAN Alpaca'daki gerçek pozisyonu okuyup yerel state'e ekler.
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -44,13 +53,23 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - run: python orb_scan_runner.py --once
+      - run: |
+          if [ -n "${{ inputs.reconcile_symbols }}" ]; then
+            python orb_scan_runner.py --reconcile-symbols "${{ inputs.reconcile_symbols }}"
+          else
+            python orb_scan_runner.py --once
+          fi
         env:
           APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
           APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
           APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
           APCA_API_DATA_URL: https://data.alpaca.markets/v2
 
+      # Alpaca Trailing Stop'ta da aynı çakışma riski var (birden fazla
+      # workflow aynı anda main'e push edebiliyor) - o yüzden aynı yeniden
+      # deneme deseni: push reddedilirse pull --rebase edip tekrar dener
+      # (bkz. bu dosyanın git geçmişi - bir gerçek ORB alımının state'i
+      # tam bunun yüzünden kaybolmuştu).
       - name: Commit and push updated config/holdings state
         run: |
           git config user.name "github-actions[bot]"
@@ -62,5 +81,11 @@ jobs:
             echo "No state changes to commit."
           else
             git commit -m "Update Açılış Aralığı Kırılımı (ORB) state"
-            git push
+            for attempt in 1 2 3; do
+              if git push; then
+                break
+              fi
+              echo "Push rejected (attempt $attempt), pulling and retrying..."
+              git pull --rebase --autostash
+            done
           fi
