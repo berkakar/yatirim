@@ -45,6 +45,7 @@ USERNAME = "berkakar"
 
 IWM_PRODUCT_PAGE_URL = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"
 _TICKER_KEYS = ("ticker", "symbol", "secticker")
+HOLDINGS_DEBUG_DUMP_PATH = "holdings_debug_dump.json"
 
 # Gerçek Russell 2000 endeksi ~1950-2050 arası bileşenden oluşur (yıl içinde
 # küçük dalgalanmalarla). Parse hatalı/eksik/bozuk giderse (ör. iShares JSON
@@ -133,6 +134,14 @@ def fetch_holdings_json() -> dict:
             log(f"get-product-data yanıtı: HTTP {resp.status}, Content-Type: {resp.headers.get('content-type')}, {len(resp.body())} bytes")
             if resp.status != 200:
                 raise RuntimeError(f"get-product-data isteği HTTP {resp.status} döndü.")
+            # Ham yanıtı HER ZAMAN diske yazıyoruz (workflow bunu artifact
+            # olarak yüklüyor) - tahmine dayalı parse denemeleri art arda
+            # başarısız olursa gerçek şemayı loglardan parça parça değil,
+            # tam yanıtın kendisinden inceleyebilmek için (bkz. bu dosyanın
+            # git geçmişi).
+            with open(HOLDINGS_DEBUG_DUMP_PATH, "w", encoding="utf-8") as f:
+                f.write(resp.text())
+            log(f"Ham yanıt teşhis için {HOLDINGS_DEBUG_DUMP_PATH} dosyasına yazıldı.")
             return resp.json()
         finally:
             browser.close()
