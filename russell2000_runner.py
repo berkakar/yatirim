@@ -153,16 +153,27 @@ def fetch_holdings_json() -> dict:
             browser.close()
 
 
+def _is_col_value_wrapper(v) -> bool:
+    """iShares'in GERÇEK koşuda görülen şeması (bkz. bu dosyanın git geçmişi
+    - run #16): hücre değil SÜTUN seviyesinde sarmalama kullanıyor - her
+    sütun `{"value": [1989 ham değer], "formattedValue": [1989 biçimli
+    değer]}` şeklinde KENDİ İÇİNDE bir liste çifti taşıyor (tek bir hücre
+    değil)."""
+    return isinstance(v, dict) and isinstance(v.get("value"), list)
+
+
 def _find_holdings_table(obj) -> dict[str, list] | None:
     """iShares'in JSON şemasını tam bilmediğimiz için (dokümante değil, sayfa
     JS'inin kendi iç veri modeli) belirli bir path yerine İÇERİĞE göre
     arıyoruz - VE şeklin SATIR-bazlı (dict listesi, [{"ticker": "A", ...},
     {"ticker": "B", ...}]) mı yoksa SÜTUN-bazlı (her alan kendi değer
-    listesi, {"ticker": ["A", "B", ...], "weight": [...]}) mı olduğunu da
-    bilmiyoruz - ikisini de {sütun_adı: [değerler]} biçimine normalize edip
-    en çok satırlı olanı döner (get-product-data yanıtı zaten sadece
-    holdings'e - component=holdings.all - odaklı olduğu için bu neredeyse
-    kesin asıl tablodur)."""
+    listesi, {"ticker": ["A", "B", ...], "weight": [...]}) mı, yoksa SÜTUN-
+    SARMALI (her alan {"value": [...], "formattedValue": [...]} taşıyan bir
+    sözlük - bkz. _is_col_value_wrapper) mı olduğunu bilmiyoruz - hepsini
+    {sütun_adı: [değerler]} biçimine normalize edip en çok satırlı olanı
+    döner (get-product-data yanıtı zaten sadece holdings'e -
+    component=holdings.all - odaklı olduğu için bu neredeyse kesin asıl
+    tablodur)."""
     best: dict[str, list] | None = None
     best_len = 0
 
@@ -179,8 +190,25 @@ def _find_holdings_table(obj) -> dict[str, list] | None:
             for e in o:
                 walk(e)
         elif isinstance(o, dict):
+            # Sütun-sarmalı şema ÖNCE kontrol ediliyor: bu, aşağıdaki düz
+            # sütun-bazlı dalın TEK BİR sütunun kendi value/formattedValue
+            # çiftini yanlışlıkla "tüm tablo" sanmasını önlüyor (gerçek
+            # koşuda tam olarak bu oldu - bkz. bu dosyanın git geçmişi).
+            col_wrappers = {k: v for k, v in o.items() if _is_col_value_wrapper(v)}
+            if len(col_wrappers) >= 2:
+                length_counts = Counter(len(v["value"]) for v in col_wrappers.values())
+                modal_length, modal_count = length_counts.most_common(1)[0]
+                if modal_count >= 2 and modal_length >= 10:
+                    consider(
+                        {k: v["value"] for k, v in col_wrappers.items() if len(v["value"]) == modal_length},
+                        modal_length,
+                    )
+            # Düz sütun-bazlı: "value"/"formattedValue" dışında en az bir
+            # gerçek sütun adı taşımalı - aksi halde tek bir sütunun kendi
+            # value/formattedValue çiftini (yukarıdaki gibi) yanlışlıkla
+            # tablo sanarız.
             list_cols = {k: v for k, v in o.items() if isinstance(v, list)}
-            if len(list_cols) >= 2:
+            if len(list_cols) >= 2 and set(list_cols) - {"value", "formattedValue"}:
                 # TÜM sütunların TAM AYNI uzunlukta olmasını şart koşmuyoruz -
                 # iShares'te bazı yardımcı/opsiyonel alanlar farklı uzunlukta
                 # olabiliyor (ör. tek bir metadata listesi), bu tek bir farklı
