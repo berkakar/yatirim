@@ -51,8 +51,15 @@ def log(msg: str) -> None:
 def fetch_iwm_holdings_csv() -> str:
     # iShares varsayılan bir User-Agent olmadan (ör. çıplak `requests`)
     # isteği reddedebiliyor - normal bir tarayıcıymış gibi davranıyoruz.
-    headers = {"User-Agent": "Mozilla/5.0 (compatible; russell2000-refresh-script/1.0)"}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+        ),
+        "Accept": "text/csv,*/*",
+    }
     resp = requests.get(IWM_HOLDINGS_CSV_URL, headers=headers, timeout=30)
+    log(f"HTTP {resp.status_code}, final URL: {resp.url}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
     resp.raise_for_status()
     return resp.text
 
@@ -71,7 +78,11 @@ def parse_equity_tickers(csv_text: str) -> list[str]:
             header_idx = i
             break
     if header_idx is None:
-        raise RuntimeError("CSV içinde 'Ticker' başlık satırı bulunamadı - iShares export formatı değişmiş olabilir.")
+        snippet = csv_text[:500].replace("\n", "\\n")
+        raise RuntimeError(
+            "CSV içinde 'Ticker' başlık satırı bulunamadı - iShares export formatı değişmiş ya da "
+            f"istek engellenmiş olabilir. Yanıtın ilk 500 karakteri: {snippet!r}"
+        )
 
     reader = csv.DictReader(lines[header_idx:])
     tickers = set()
