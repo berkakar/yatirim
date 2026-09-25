@@ -30,10 +30,19 @@ USERNAME = "berkakar"
 # export'u - IWM (iShares Russell 2000 ETF) Russell 2000 endeksini birebir
 # izlediği için endeksin kendisi yerine bu ETF'in güncel bileşen listesi
 # kullanılıyor (endeksin resmi bileşen listesi FTSE Russell'da ücretli).
+#
+# Bu URL'nin ".ajax" öncesindeki sayısal kısmı iShares'in CMS'inde bir
+# içerik kimliği - sabit değil, onlar sayfayı yeniden yayınladığında
+# değişebiliyor (ilk gerçek koşuda tam olarak bu oldu: sabit kodlanmış eski
+# kimlik artık CSV yerine ürün sayfasının kendisini döndürüyordu). Bu yüzden
+# HER ÇALIŞTIRMADA önce ürün sayfasının HTML'i taranıp güncel indirme linki
+# bulunuyor (bkz. fetch_iwm_holdings_csv) - bu sabit sadece o keşif
+# başarısız olursa son çare (fallback) olarak kullanılıyor.
+IWM_PRODUCT_PAGE_URL = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"
 IWM_HOLDINGS_CSV_URL = (
-    "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf/"
-    "1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund"
+    f"{IWM_PRODUCT_PAGE_URL}/1467271812596.ajax?fileType=csv&fileName=IWM_holdings&dataType=fund"
 )
+_CSV_LINK_PATTERN = re.compile(r'(/us/products/239710/[\w-]+/\d+\.ajax\?fileType=csv[^"\'\\\s]*)', re.IGNORECASE)
 
 # Gerçek Russell 2000 endeksi ~1950-2050 arası bileşenden oluşur (yıl içinde
 # küçük dalgalanmalarla). Parse hatalı/eksik/bozuk giderse (ör. iShares CSV
@@ -46,9 +55,6 @@ MAX_EXPECTED_COUNT = 2300
 
 def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
-
-
-IWM_PRODUCT_PAGE_URL = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"
 
 
 def fetch_iwm_holdings_csv() -> str:
@@ -70,8 +76,16 @@ def fetch_iwm_holdings_csv() -> str:
     page_resp = session.get(IWM_PRODUCT_PAGE_URL, timeout=30)
     log(f"Ürün sayfası: HTTP {page_resp.status_code}, {len(page_resp.content)} bytes, {len(session.cookies)} çerez alındı.")
 
+    link_match = _CSV_LINK_PATTERN.search(page_resp.text)
+    if link_match:
+        csv_url = "https://www.ishares.com" + link_match.group(1)
+        log(f"Ürün sayfasından güncel CSV linki bulundu: {csv_url}")
+    else:
+        csv_url = IWM_HOLDINGS_CSV_URL
+        log(f"Ürün sayfasında CSV linki bulunamadı, sabit kodlanmış son çare URL kullanılıyor: {csv_url}")
+
     resp = session.get(
-        IWM_HOLDINGS_CSV_URL, timeout=30,
+        csv_url, timeout=30,
         headers={"Accept": "text/csv,*/*", "Referer": IWM_PRODUCT_PAGE_URL},
     )
     log(f"CSV: HTTP {resp.status_code}, final URL: {resp.url}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
