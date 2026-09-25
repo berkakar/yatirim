@@ -16,7 +16,7 @@ dosyasına yazacağız" anlamına gelir (bkz. app.py'de her kullanıcının kend
 custom_tickers_<username>.json'u olması)."""
 
 import csv
-import io
+import re
 import sys
 from datetime import datetime
 
@@ -48,19 +48,40 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
+IWM_PRODUCT_PAGE_URL = "https://www.ishares.com/us/products/239710/ishares-russell-2000-etf"
+
+
 def fetch_iwm_holdings_csv() -> str:
-    # iShares varsayılan bir User-Agent olmadan (ör. çıplak `requests`)
-    # isteği reddedebiliyor - normal bir tarayıcıymış gibi davranıyoruz.
-    headers = {
+    # İlk denemede sade bir `requests.get` + User-Agent, sunucudan HTTP 200
+    # ve (yanlışlıkla) "Content-Type: text/csv" başlığıyla birlikte GERÇEK
+    # bir HTML sayfası döndürdü (CSV değil) - muhtemelen ürün sayfasını önce
+    # ziyaret etmeden doğrudan AJAX endpoint'ine gidildiğinde çerez/Referer
+    # eksikliğinden kaynaklı bir fallback. Bu yüzden gerçek bir tarayıcı gibi
+    # önce ürün sayfasını ziyaret edip çerezleri alıyoruz, sonra CSV'yi O
+    # sayfayı Referer göstererek istiyoruz.
+    session = requests.Session()
+    session.headers.update({
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
             "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
         ),
-        "Accept": "text/csv,*/*",
-    }
-    resp = requests.get(IWM_HOLDINGS_CSV_URL, headers=headers, timeout=30)
-    log(f"HTTP {resp.status_code}, final URL: {resp.url}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
+        "Accept-Language": "en-US,en;q=0.9",
+    })
+    page_resp = session.get(IWM_PRODUCT_PAGE_URL, timeout=30)
+    log(f"Ürün sayfası: HTTP {page_resp.status_code}, {len(page_resp.content)} bytes, {len(session.cookies)} çerez alındı.")
+
+    resp = session.get(
+        IWM_HOLDINGS_CSV_URL, timeout=30,
+        headers={"Accept": "text/csv,*/*", "Referer": IWM_PRODUCT_PAGE_URL},
+    )
+    log(f"CSV: HTTP {resp.status_code}, final URL: {resp.url}, Content-Type: {resp.headers.get('Content-Type')}, {len(resp.content)} bytes")
     resp.raise_for_status()
+
+    if resp.text.lstrip().startswith("<"):
+        title_match = re.search(r"<title[^>]*>(.*?)</title>", resp.text, re.IGNORECASE | re.DOTALL)
+        title = title_match.group(1).strip() if title_match else "(başlık bulunamadı)"
+        log(f"Yanıt CSV değil, HTML - <title>: {title!r}. İlk 1500 karakter: {resp.text[:1500]!r}")
+
     return resp.text
 
 
