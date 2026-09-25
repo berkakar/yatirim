@@ -34,6 +34,14 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      # Playwright + Chromium SADECE bu workflow için - requirements.txt'e
+      # eklenmedi ki ana Streamlit uygulamasının/diğer workflow'ların
+      # pip install'unu gereksiz yere ağırlaştırmasın (bkz. russell2000_runner.
+      # py'nin modül üstü notu: iShares'in holdings sayfası artık indirme
+      # linkini JavaScript ile kuruyor, düz bir HTTP isteği bunu göremiyor).
+      - run: pip install playwright
+      - run: playwright install --with-deps chromium
+
       - run: python russell2000_runner.py
 
       - name: Commit and push updated Russell 2000 list
