@@ -227,31 +227,34 @@ def _guess_ticker_column(table: dict[str, list]) -> str | None:
     return best_key
 
 
-def _summarize_structure(obj, depth: int = 0, max_depth: int = 3) -> str:
-    """Hiçbir tablo/ticker sütunu bulunamadığında teşhis için yanıtın genel
-    şeklini (dict anahtarları, liste uzunlukları) özetler - bir sonraki
-    adımda tahmine değil veriye dayanılabilsin diye."""
+def _summarize_structure(obj, depth: int = 0, max_depth: int = 6) -> str:
+    """Teşhis için yanıtın genel şeklini (dict anahtarları, liste uzunlukları,
+    liste İÇİNDEKİ ilk elemanın da kendi şekli) özetler - artık sadece hiçbir
+    tablo bulunamadığında değil HER ZAMAN loglanıyor (bkz. bu dosyanın git
+    geçmişi: yanlış bir tablo bulunduğunda bu özet hiç görünmüyordu, bu da
+    2 turluk yanlış tahmine yol açtı) - bir sonraki adım gerekirse tahmine
+    değil veriye dayansın diye."""
     indent = "  " * depth
     if depth >= max_depth:
         return f"{indent}..."
     if isinstance(obj, dict):
-        lines = [f"{indent}dict({len(obj)} anahtar): {sorted(obj.keys())[:15]!r}"]
-        for k, v in list(obj.items())[:8]:
+        lines = [f"{indent}dict({len(obj)} anahtar): {sorted(obj.keys())!r}"]
+        for k, v in list(obj.items())[:25]:
             lines.append(f"{indent}  .{k} -> {_summarize_structure(v, depth + 1, max_depth)}")
         return "\n".join(lines)
     if isinstance(obj, list):
-        sample_type = type(obj[0]).__name__ if obj else "?"
-        return f"list(len={len(obj)}, örnek eleman tipi={sample_type})"
+        head = f"list(len={len(obj)})"
+        if obj:
+            head += f"\n{indent}  [0] -> {_summarize_structure(obj[0], depth + 1, max_depth)}"
+        return head
     return repr(obj)[:80]
 
 
 def parse_equity_tickers(payload: dict) -> list[str]:
+    log(f"Yanıt yapısı:\n{_summarize_structure(payload)}")
     table = _find_holdings_table(payload)
     if table is None:
-        raise RuntimeError(
-            "Yanıtta ne satır-bazlı ne sütun-bazlı, en az 10 satırlı bir holdings tablosu "
-            f"bulunamadı. Yanıt yapısı:\n{_summarize_structure(payload)}"
-        )
+        raise RuntimeError("Yanıtta ne satır-bazlı ne sütun-bazlı, en az 10 satırlı bir holdings tablosu bulunamadı.")
     row_count = len(next(iter(table.values())))
     log(f"Aday holdings tablosu bulundu: {row_count} satır, sütunlar: {sorted(table.keys())!r}")
 
