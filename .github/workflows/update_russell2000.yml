@@ -1,0 +1,49 @@
+name: Russell 2000 Listesini Güncelle
+
+# config.DEFAULT_RUSSELL_2000, elle derlenmiş ~80 sembollük bir başlangıç
+# seti (bkz. o sabitin üstündeki not) - bu workflow ayda 1 (+ istenirse
+# "Run workflow" ile elle) iShares'in IWM (Russell 2000 ETF) fonunun resmi,
+# herkese açık CSV export'undan GERÇEK ~2000 bileşeni çekip
+# custom_tickers_berkakar.json'daki "Russell 2000" alanına yazar
+# (russell2000_runner.py). Bu, hem ORB modülünün hem Otomatik Alım/Satım'ın
+# "Russell 2000" evren seçeneğinin kullandığı asıl liste.
+#
+# Alpaca kimlik bilgisi GEREKMEZ - bu script Alpaca'ya hiç bağlanmaz.
+#
+# Cron saati UTC'dir; her ayın 1'inde 06:00 UTC (düşük trafikli bir saat,
+# özel bir gerekçesi yok).
+
+on:
+  schedule:
+    - cron: "0 6 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python russell2000_runner.py
+
+      - name: Commit and push updated Russell 2000 list
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_tickers_berkakar.json
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Update Russell 2000 ticker list"
+            git push
+          fi
