@@ -1,0 +1,16 @@
+{
+  "LAUR": {
+    "qty": 45.0,
+    "entry_price": 37.58,
+    "stop_price": 37.47,
+    "entered_at": "2026-09-25T18:05:46+00:00",
+    "score": 11.5198
+  },
+  "LQDA": {
+    "qty": 24.0,
+    "entry_price": 68.79,
+    "stop_price": 68.25,
+    "entered_at": "2026-09-25T18:05:50+00:00",
+    "score": 4.2024
+  }
+}

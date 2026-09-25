@@ -7,5 +7,23 @@
   "include_russell": true,
   "custom_groups": [],
   "min_avg_dollar_volume": 0.0,
-  "stop_algorithm": "heikin_ashi_exit"
+  "stop_algorithm": "heikin_ashi_exit",
+  "last_run_at": "2026-09-25T17:45:05+00:00",
+  "last_run_summary": {
+    "run_at": "2026-09-25T17:45:05+00:00",
+    "skipped": false,
+    "sold": [],
+    "bought": [
+      "LAUR",
+      "LQDA"
+    ],
+    "errors": [],
+    "phase": "full",
+    "universe_size": 1662,
+    "candidate_count": 2,
+    "selected_symbols": [
+      "LAUR",
+      "LQDA"
+    ]
+  }
 }
