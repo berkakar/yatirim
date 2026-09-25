@@ -130,6 +130,12 @@ def fetch_holdings_json() -> dict:
                     f"ilgili görünenler: {interesting[:20]!r}"
                 )
 
+            # Yakalanan istek "excludeContent=true" taşıyorsa (sayfanın ilk
+            # yüklemede attığı, SADECE sütun yapılandırmasını/etiketlerini -
+            # gerçek 1989 satırlık holdings verisini DEĞİL - döndüren istek,
+            # bkz. bu dosyanın git geçmişi) bunu false'a çeviriyoruz ki
+            # gerçek içerik dönsün.
+            api_url = re.sub(r"([?&]excludeContent=)true\b", r"\1false", api_url, flags=re.IGNORECASE)
             resp = page.request.get(api_url)
             log(f"get-product-data yanıtı: HTTP {resp.status}, Content-Type: {resp.headers.get('content-type')}, {len(resp.body())} bytes")
             if resp.status != 200:
