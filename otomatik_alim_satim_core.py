@@ -32,6 +32,8 @@ DEFAULT_MOMENTUM_LOOKBACK_DAYS = 30
 DEFAULT_ALGORITHM_ID = next(iter(ALGORITHMS))
 DEFAULT_MIN_AVG_DOLLAR_VOLUME = 5_000_000.0  # ORB/kırılım tarzı market emirleri için makul bir likidite tabanı
 LIQUIDITY_LOOKBACK_DAYS = 20  # ~1 aylık işlem günü
+# Ücretsiz Alpaca planı son 15 dakikanın SIP verisini sorgulamaya izin vermez.
+SIP_RECENT_DATA_DELAY = timedelta(minutes=16)
 
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
@@ -98,14 +100,28 @@ def filter_by_liquidity(
 
     Veri çekilemeyen ya da hiç günlük barı olmayan semboller güvenli tarafta
     kalınarak (dahil edilmeyerek) elenir - bu sistemin diğer yerlerindeki
-    "hata olursa güvenli tarafa düş" örüntüsüyle aynı."""
-    start = datetime.now(timezone.utc) - timedelta(days=lookback_days * 2)  # hafta sonu/tatil payı
+    "hata olursa güvenli tarafa düş" örüntüsüyle aynı.
+
+    Hacim, tüm borsaları kapsayan SIP (konsolide) verisinden okunur - Alpaca'nın
+    varsayılan IEX feed'i toplam ABD hacminin yalnızca ~%2-3'ünü gördüğünden,
+    IEX hacmiyle hesaplanan ciro eşiği gerçekte ~30-50 kat daha sıkı
+    çalışıyordu. Ücretsiz plan son 15 dakikanın SIP verisine izin vermediği
+    için pencere bugünün (henüz tamamlanmamış) günlük barından ÖNCE biter -
+    zaten sadece tamamlanmış günler anlamlı bir ortalama verir. SIP isteği
+    başarısız olursa (ör. abonelik izni yok) o sembol için eski davranışa
+    (IEX) düşülür."""
+    now = datetime.now(timezone.utc)
+    start = now - timedelta(days=lookback_days * 2)  # hafta sonu/tatil payı
+    end = min(now.replace(hour=0, minute=0, second=0, microsecond=0), now - SIP_RECENT_DATA_DELAY)
     kept: list[str] = []
     for ticker in tickers:
         try:
-            raw = client.get_raw_bars(ticker, "1Day", start.isoformat())
+            raw = client.get_raw_bars(ticker, "1Day", start.isoformat(), feed="sip", end_iso=end.isoformat())
         except Exception:
-            continue
+            try:
+                raw = client.get_raw_bars(ticker, "1Day", start.isoformat())
+            except Exception:
+                continue
         recent = raw[-lookback_days:]
         if not recent:
             continue
