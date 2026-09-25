@@ -56,6 +56,16 @@ def log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}")
 
 
+def _find_csv_url_in(text: str) -> str | None:
+    m = _CSV_LINK_PATTERN.search(text)
+    if not m:
+        return None
+    # page.content()/istek URL'leri DOM'dan serileştirilmiş olabilir - href'teki
+    # "&" karakterleri "&amp;" olarak kodlanmış geliyor, unescape edilmezse sorgu
+    # parametreleri (fileType=csv&amp;fileName=...) bozuk URL'ye dönüşür.
+    return "https://www.ishares.com" + html.unescape(m.group(1))
+
+
 def fetch_iwm_holdings_csv() -> str:
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
@@ -64,36 +74,61 @@ def fetch_iwm_holdings_csv() -> str:
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                 "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
             ))
+
+            # Sayfa yüklenirken/dolaşırken atılan TÜM istekleri yakalıyoruz -
+            # indirme linki bir href yerine tıklama anında JS ile kurulup
+            # ateşlenen bir istekse (bkz. önceki koşuda hiçbir tahmini CSS
+            # selector'ın eşleşmemesi), bunu DOM'da aramak yerine doğrudan ağ
+            # trafiğinde yakalamak çok daha sağlam.
+            seen_requests: list[str] = []
+            page.on("request", lambda req: seen_requests.append(req.url))
+
             page.goto(IWM_PRODUCT_PAGE_URL, wait_until="load", timeout=60000)
             page.wait_for_timeout(4000)  # sayfanın JS'i indirme linkini doldursun diye küçük bir tampon
-            page_html = page.content()
-            log(f"Sayfa yüklendi (JS render sonrası), HTML uzunluğu: {len(page_html)}")
 
-            link_match = _CSV_LINK_PATTERN.search(page_html)
-            if link_match:
-                # page.content() DOM'dan serileştirilmiş HTML döner - href'teki
-                # "&" karakterleri "&amp;" olarak kodlanmış geliyor, unescape
-                # edilmezse sorgu parametreleri (fileType=csv&amp;fileName=...)
-                # bozuk URL'ye dönüşür.
-                csv_url = "https://www.ishares.com" + html.unescape(link_match.group(1))
-                log(f"JS render sonrası sayfada CSV linki bulundu: {csv_url}")
+            csv_url = _find_csv_url_in(page.content())
+            if csv_url is None:
+                csv_url = _find_csv_url_in("\n".join(seen_requests))
+                if csv_url:
+                    log(f"CSV linki DOM'da değil ama sayfa yüklenirken atılan bir istekte bulundu: {csv_url}")
+
+            if csv_url is None:
+                # "Holdings" sekmesi ayrı bir tab'sa, indirme kontrolü sadece o
+                # sekme aktifken DOM'a/ağ isteklerine yansıyor olabilir.
+                holdings_tab = page.get_by_text(re.compile("holdings", re.IGNORECASE)).first
+                if holdings_tab.count() > 0:
+                    log("'Holdings' metinli bir eleman bulundu, tıklanıp bekleniyor...")
+                    try:
+                        holdings_tab.click(timeout=5000)
+                        page.wait_for_timeout(3000)
+                    except Exception as e:
+                        log(f"'Holdings' elemanına tıklanamadı (yok sayılıyor): {e}")
+                    csv_url = _find_csv_url_in(page.content()) or _find_csv_url_in("\n".join(seen_requests))
+
+            if csv_url:
                 resp = page.request.get(csv_url)
                 log(f"CSV isteği: HTTP {resp.status}, Content-Type: {resp.headers.get('content-type')}, {len(resp.body())} bytes")
                 if resp.status != 200:
                     raise RuntimeError(f"CSV isteği HTTP {resp.status} döndü.")
                 return resp.text()
 
-            log("JS render sonrası sayfada da CSV linki bulunamadı - olası indirme elemanlarına tıklanmaya çalışılıyor.")
+            # Hiçbir yerde CSV linki bulunamadı - teşhis için "indirme/csv/xls/
+            # export" geçen istekleri ve olası tıklanabilir elemanları logluyoruz,
+            # böylece bir sonraki adımda tahmin değil veriyle ilerlenebilir.
+            interesting = [u for u in seen_requests if re.search(r"csv|xls|download|export|holdings", u, re.IGNORECASE)]
+            log(f"CSV linki hiçbir yerde bulunamadı. {len(seen_requests)} istek yakalandı, "
+                f"{len(interesting)} tanesi ilgili görünüyor: {interesting[:20]!r}")
             candidates = page.locator(
                 'a[href*=".ajax"], a[aria-label*="download" i], a[title*="download" i], '
-                'a[class*="icon-xls" i], a[class*="icon-csv" i], button[aria-label*="download" i]'
+                'a[class*="icon-xls" i], a[class*="icon-csv" i], button[aria-label*="download" i], '
+                '[class*="download" i], [class*="export" i], [aria-label*="csv" i], [aria-label*="xls" i]'
             )
             count = candidates.count()
-            log(f"{count} olası indirme elemanı bulundu.")
+            log(f"{count} olası indirme elemanı bulundu (genişletilmiş selector).")
             if count == 0:
                 raise RuntimeError(
-                    "Sayfada ne CSV linki ne de olası bir indirme elemanı bulunamadı - "
-                    "iShares sayfa yapısını daha köklü değiştirmiş olabilir."
+                    "Sayfada ne CSV linki, ne ilgili bir ağ isteği, ne de olası bir indirme elemanı "
+                    "bulunamadı - iShares sayfa yapısını daha köklü değiştirmiş olabilir."
                 )
             with page.expect_download(timeout=30000) as download_info:
                 candidates.first.click()
