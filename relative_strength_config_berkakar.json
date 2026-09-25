@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "cash_allocation_pct": 0.0,
   "include_nasdaq": true,
   "include_nyse": true,
