@@ -22,5 +22,35 @@
     "entry_price": 44.64,
     "entered_at": "2026-09-25T15:01:49+00:00",
     "score": null
+  },
+  "BHRB": {
+    "qty": 23.0,
+    "entry_price": 70.04,
+    "entered_at": "2026-09-25T18:52:29+00:00",
+    "score": 7.0913
+  },
+  "BFC": {
+    "qty": 10.0,
+    "entry_price": 152.43,
+    "entered_at": "2026-09-25T18:52:32+00:00",
+    "score": 4.5987
+  },
+  "AIN": {
+    "qty": 27.0,
+    "entry_price": 60.94,
+    "entered_at": "2026-09-25T18:52:33+00:00",
+    "score": 4.3895
+  },
+  "MHO": {
+    "qty": 11.0,
+    "entry_price": 139.82,
+    "entered_at": "2026-09-25T18:52:38+00:00",
+    "score": 3.6272
+  },
+  "ARMP": {
+    "qty": 451.0,
+    "entry_price": 3.68,
+    "entered_at": "2026-09-25T18:52:39+00:00",
+    "score": 3.3774
   }
 }
