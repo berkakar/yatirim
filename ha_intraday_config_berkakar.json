@@ -1,5 +1,5 @@
 {
-  "enabled": false,
+  "enabled": true,
   "cash_allocation_pct": 10.0,
   "max_positions": 5,
   "include_nasdaq": true,
