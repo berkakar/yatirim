@@ -1,0 +1,29 @@
+name: ORB Stop Durumu (Teşhis)
+
+# ORB pozisyonlarının güncel stop-loss seviyelerini Alpaca'dan okuyup
+# loglayan salt-okunur teşhis workflow'u - hiçbir emir vermez/değiştirmez,
+# hiçbir dosya commit'lemez (bkz. orb_stop_status.py). Sadece elle
+# tetiklenir.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install -r requirements.txt
+
+      - run: python orb_stop_status.py
+        env:
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
