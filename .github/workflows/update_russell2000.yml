@@ -44,6 +44,21 @@ jobs:
 
       - run: python russell2000_runner.py
 
+      # Sadece teşhis içindir - russell2000_runner.py parse denemesi başarısız
+      # olduğunda ham get-product-data yanıtını diske yazıyor (bkz. o
+      # dosyadaki HOLDINGS_DEBUG_DUMP_PATH), bu adım script başarısız olsa
+      # bile (if: always()) onu bir artifact olarak yüklüyor - böylece gerçek
+      # JSON şemasını loglardaki küçük parçalardan tahmin etmek yerine
+      # doğrudan inceleyebiliyoruz.
+      - name: Upload raw holdings response for debugging
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: holdings-debug-dump
+          path: holdings_debug_dump.json
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Commit and push updated Russell 2000 list
         run: |
           git config user.name "github-actions[bot]"
