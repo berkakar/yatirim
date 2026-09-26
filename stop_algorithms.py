@@ -370,6 +370,18 @@ def wait_then_trail_trail(
 # mantık yok - breakeven_atr_structure_trail'i olduğu gibi kullanır.
 
 ORB_STOP_BUFFER_PCT = 0.002
+# breakeven_atr_structure_trail'in paylaşılan TREND_EMA_PERIOD'undan (50)
+# BİLEREK farklı: günlük EMA50 trend filtresi, pozisyon/swing-trade mantığından
+# geliyor - ORB gibi gün-içi bir kırılım stratejisi zaten sadece o günün
+# momentumuna göre alınıyor, günlük trendin "doğru tarafında" olması şart
+# değil. Filtre açıkken (trend uygun değilse) yapısal trail tamamen devre
+# dışı kalıp pozisyon sadece breakeven'de korunuyordu (gözlemlenen gerçek
+# örnek: OMCL, 2026-09-26, fiyat girişin %3.69 üzerindeyken stop hâlâ tam
+# breakeven'deydi). 0 = filtre kapalı, sadece 15dk'lık swing-low yapısı
+# temel alınır - resolve_kwargs bunu stop_settings["opening_range"]["trend_ema_period"]
+# üzerinden PAYLAŞILAN (breakeven_atr_structure/wait_then_trail'in kullandığı)
+# değerden bağımsız uygular (bkz. stop_loss_settings.py).
+ORB_TREND_EMA_PERIOD = 0
 
 
 def opening_range_initial_stop(

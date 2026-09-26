@@ -18,7 +18,8 @@ import streamlit as st
 from github_config import read_json_from_github, write_json_to_github
 from stop_algorithms import (
     ATR_MULTIPLIER, ATR_PERIOD, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
-    HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
+    HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
+    STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
     WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT, WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
     WAIT_THEN_TRAIL_PROFIT_LOCK_PCT, WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT,
 )
@@ -174,10 +175,11 @@ def render_stop_loss_settings(username: str):
     st.caption(
         "buy_algorithms.orb_signal (Açılış Aralığı Kırılımı) ile birlikte kullanılmak üzere tasarlandı - "
         "ilk stop, sabit bir yüzde yerine pozisyonun açıldığı seansın açılış barının ters ucuna (long için "
-        "low) küçük bir tamponla kurulur. Bu bölümün kendi ayrı bir trail ayarı yoktur - eşik aşıldıktan "
-        "sonra yukarıdaki Breakeven + Yapısal Trail bölümündeki (paylaşılan ATR/trend/swing) aynı yapısal "
-        "trail devreye girer. Açılış barı bulunamazsa (ör. ORB dışı bir algoritmanın sinyaliyle bu stop "
-        "seçildiyse) aşağıdaki Yedek Stop % kullanılır."
+        "low) küçük bir tamponla kurulur. Trail aşamasında yukarıdaki Breakeven + Yapısal Trail bölümündeki "
+        "(paylaşılan ATR/swing) aynı yapısal trail devreye girer, TEK FARKLA: günlük trend EMA periyodu "
+        "aşağıda AYRICA ayarlanabilir - ORB gün-içi bir kırılım stratejisi olduğu için varsayılan olarak "
+        "kapalıdır (paylaşılan bölümdeki değeri kullanmaz). Açılış barı bulunamazsa (ör. ORB dışı bir "
+        "algoritmanın sinyaliyle bu stop seçildiyse) aşağıdaki Yedek Stop % kullanılır."
     )
     a3c1, a3c2 = st.columns(2)
     algo3_buffer_pct = a3c1.number_input(
@@ -194,6 +196,16 @@ def render_stop_loss_settings(username: str):
         help="`bars` verilmediği bazı çağrı yollarında (ör. bazı fallback/top-up senaryoları) ya da "
              "hesaplanan seviye girişin yanlış tarafında kaldığında, bu sabit yüzdeye güvenli şekilde "
              "geri düşülür.",
+    )
+    algo3_trend_ema_period = a3c1.number_input(
+        "Trend EMA Periyodu (0 = kapalı, ORB varsayılanı)", min_value=0, max_value=500,
+        value=int(algo3.get("trend_ema_period", ORB_TREND_EMA_PERIOD)), step=1,
+        key="sls_algo3_trend_ema_period",
+        help="ORB'un yapısal trail'i için AYRI günlük EMA trend filtresi - yukarıdaki paylaşılan Trend EMA "
+             "Periyodu'ndan bağımsızdır. Varsayılan olarak 0 (kapalı): ORB gün-içi bir kırılım stratejisi "
+             "olduğu için günlük trendin doğru tarafında olma şartı aranmaz, sadece 15dk'lık swing-low "
+             "yapısı temel alınır. Açık bırakılırsa (>0), trend uygun olmadığında yapısal trail tamamen "
+             "devre dışı kalıp pozisyon sadece breakeven'de korunur.",
     )
 
     st.subheader(f"🕯️ {STOP_ALGORITHMS['heikin_ashi_exit'].label}")
@@ -244,6 +256,7 @@ def render_stop_loss_settings(username: str):
             "opening_range": {
                 "buffer_pct": float(algo3_buffer_pct),
                 "fallback_pct": float(algo3_fallback_pct),
+                "trend_ema_period": int(algo3_trend_ema_period),
             },
             "heikin_ashi_exit": {
                 "buffer_pct": float(algo4_buffer_pct),
