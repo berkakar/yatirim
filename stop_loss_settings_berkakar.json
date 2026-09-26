@@ -16,5 +16,8 @@
     "breakeven_trigger_pct": 1.0,
     "profit_lock_trigger_pct": 5.0,
     "profit_lock_pct": 4.0
+  },
+  "opening_range": {
+    "trend_ema_period": 0
   }
 }
