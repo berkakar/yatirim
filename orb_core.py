@@ -49,7 +49,9 @@ from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from buy_algorithms import orb_signal
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
+from risk_sizing import risk_based_qty
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
+from stop_tags import stop_tag
 
 DEFAULT_TOP_N = 5
 DEFAULT_TIMEFRAME = "15Min"
@@ -257,6 +259,17 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
     target_per_position = total_orb_cash / top_n if top_n > 0 else 0.0
     available_cash = compute_available_cash_for_scan(client, cash_allocation_pct)
 
+    # [2026-09-28 · Öneri 5] Premium Buy Point'teki risk bazlı büyüklük ayarları
+    # (portfolio_config "risk_sizing") ORB girişlerine de TAVAN olarak uygulanır:
+    # açılış aralığının dibine kurulan stopa kadar olan risk, işlem başına
+    # risk$'ı ve kalan portföy ısısını aşamaz. Fonksiyon içi import: döngüsel
+    # import (alpaca_buy_points -> orb_core) nedeniyle.
+    try:
+        from alpaca_buy_points import build_risk_context, load_local_config
+        risk = build_risk_context(client, load_local_config())
+    except Exception:
+        risk = None
+
     bought: list[str] = []
     buy_errors: list[str] = []
     holdings = own_holdings
@@ -268,8 +281,30 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
                 buy_errors.append(f"{cand.symbol}: kullanılabilir nakit yetersiz")
                 continue
             qty = math.floor(dollar_amount / cand.price) if cand.price > 0 else 0
+
+            # Stop için bars (scan_candidates zaten çekmişti ama saklamadı -
+            # sadelik için; en fazla top_n=birkaç sembol için ekstra bir API
+            # çağrısı, önemsiz maliyet). Artık alımdan ÖNCE çekiliyor ki risk
+            # bazlı adet tahmini stopla hesaplanabilsin.
+            try:
+                stop_bars = get_bars_for_timeframe(client, cand.symbol, timeframe, start, exclude_forming=True)
+            except Exception:
+                stop_bars = None
+
+            if risk is not None and qty > 0:
+                estimated_stop = stop_algo.initial_stop(
+                    cand.price, "long", bars=stop_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                )
+                sizing = risk_based_qty(
+                    risk["equity"], cand.price, estimated_stop, risk["risk_per_trade_pct"],
+                    risk["max_position_pct"], risk["remaining"],
+                )
+                qty = min(qty, sizing.qty)
+                if qty > 0:
+                    risk["remaining"] -= qty * sizing.risk_per_share
             if qty <= 0:
-                buy_errors.append(f"{cand.symbol}: hedef tutar (${dollar_amount:.2f}) 1 adet için yetersiz")
+                buy_errors.append(f"{cand.symbol}: hedef tutar (${dollar_amount:.2f}) ya da risk tavanı 1 adet için yetersiz")
                 continue
 
             tag = f"{ORDER_TAG_PREFIX}-buy-{cand.symbol}-{int(datetime.now(timezone.utc).timestamp())}"
@@ -279,20 +314,12 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
             filled_qty = float(filled["filled_qty"])
             available_cash -= filled_qty * fill_price
 
-            # Stop için bars TEKRAR çekiliyor (scan_candidates zaten çekmişti
-            # ama saklamadı - sadelik için; en fazla top_n=birkaç sembol için
-            # ekstra bir API çağrısı, önemsiz maliyet).
-            try:
-                stop_bars = get_bars_for_timeframe(client, cand.symbol, timeframe, start, exclude_forming=True)
-            except Exception:
-                stop_bars = None
-
             stop_price = round(stop_algo.initial_stop(
                 fill_price, "long", bars=stop_bars,
                 **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
-                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price)
+                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", cand.symbol))
             except Exception as e:
                 buy_errors.append(f"{cand.symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
 

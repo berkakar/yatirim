@@ -8,6 +8,7 @@ from alpaca_client import AlpacaClient
 from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
 from config import load_initial_capital, save_initial_capital
+from stop_tags import parse_shield_real_stop
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -268,6 +269,12 @@ def render_alpaca_dashboard(username):
             entry = float(pos["avg_entry_price"])
             current = float(pos["current_price"])
             stop_price = float(stop_order["stop_price"]) if stop_order else None
+            # [2026-09-28 · Öneri 3] Açılış kalkanı aktifse resting emir felaket
+            # seviyesinde bekliyor; tabloda asıl (09:45'te geri dönülecek) stop gösterilir.
+            shield_real = parse_shield_real_stop(stop_order.get("client_order_id")) if stop_order else None
+            shield_note = f"🛡️ kalkan (felaket {stop_price:.2f})" if shield_real is not None else ""
+            if shield_real is not None:
+                stop_price = shield_real
 
             rows.append({
                 "Hisse": symbol,
@@ -278,6 +285,7 @@ def render_alpaca_dashboard(username):
                 "Kâr/Zarar %": round(float(pos["unrealized_plpc"]) * 100, 2),
                 "Stop Fiyatı": round(stop_price, 2) if stop_price is not None else "—",
                 "Stoptan Uzaklık %": round((current - stop_price) / current * 100, 2) if stop_price is not None else "—",
+                "Açılış Kalkanı": shield_note,
             })
 
         freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
@@ -288,37 +296,30 @@ def render_alpaca_dashboard(username):
             st.markdown(
                 "Yukarıdaki 'Stop Fiyatı' sütunu, elle değil, aşağıdaki kurallarla otomatik "
                 "yönetilen structure-based bir trailing-stop sistemini yansıtır:\n\n"
-                "- Pozisyon açıldığında (ya da elle açılmış, hiç stopu olmayan bir pozisyonda) "
-                "önce giriş fiyatının %1.5 altına (long) / üstüne (short) sabit bir ilk stop konur.\n"
-                "- Fiyat lehe en az %1 hareket ettiğinde stop, en azından giriş fiyatına "
-                "(breakeven) çekilir.\n"
-                "- Fiyat daha da ilerlerse, stop; kırılma-onaylı (break-of-structure) son swing "
-                "noktasının biraz gerisine, ATR ile ölçeklenen bir tampon payıyla taşınır - bu "
-                "sadece günlük EMA trend filtresi izin verdiği sürece uygulanır.\n"
-                "- O an geçerli adaylardan (breakeven, top-up, structure) hangisi en sıkıysa o "
-                "seçilir; stop hiçbir zaman gevşetilmez ve güncel fiyatı geçmez.\n"
-                "- Pozisyona ilave alım yapıldığında stopun adedi otomatik güncellenir; tercihe "
-                "göre yeni ortalama giriş fiyatına göre ek bir sıkılaştırma adayı da "
-                "değerlendirilir.\n"
-                "- Normal stop emirleri yalnızca normal seansta (09:30-16:00 ET) tetiklenebiliyor - "
-                "fiyat pre-market'te (04:00-09:30 ET) ya da after-hours'ta (16:00-20:00 ET) stopu "
-                "kırarsa emir tetiklenemeden öylece bekler ve ancak bir sonraki seans açılışında, "
-                "muhtemelen çok daha kötü bir fiyattan (gap ile), tetiklenir. Bunu önlemek için "
-                "ayrı bir **extended-hours guard** mekanizması var:\n"
-                "  - Bu pencerelerde ~10 dakikada bir çalışıp fiyatın resting stopu kırıp "
-                "kırmadığını kontrol eder.\n"
-                "  - Kırmışsa, normal stop iptal edilir; yerine Alpaca'nın bu saatlerde çalışmasına "
-                "izin verdiği tek emir türü olan *day + extended-hours limit emri* gönderilir "
-                "(fiyata yakın, küçük bir kayma payıyla - marketable olsun, hızlı dolsun diye).\n"
-                "  - Bu acil emir de seans sonuna (20:00 ET) kadar dolmadan kalırsa, pozisyon "
-                "bir sonraki iş gününü beklemeden korumasız kalmasın diye bir sonraki guard "
-                "çalışması (~10 dk sonra) son bilinen stop seviyesini otomatik olarak geri kurar.\n"
-                "  - **Kırılmamışsa da** (stop hâlâ korumadaysa) aynı guard, fiyat pre-market/"
-                "after-hours'ta LEHE hareket ettiyse yukarıdaki breakeven/yapısal-trail mantığını "
-                "extended-hours barlarıyla (pre-market/after-hours dahil) tekrar değerlendirir ve "
-                "uygunsa stopu sıkılaştırır - böylece stop, seans açılana kadar donmuş kalmaz.\n"
-                "  - Mekanizma bir kırılmayı yakalayıp acil emir gönderdiğinde Telegram'dan bildirim "
-                "gönderir; sadece stopu sıkılaştırdığında (kırılma yoksa) bildirim göndermez.\n"
+                "**[2026-09-28 güncellemesi - ayrıntılar: 📒 İşlem Günlüğü > Değişiklik Günlüğü]**\n\n"
+                "- İlk stop, hisse için seçili stop-loss algoritmasına göre kurulur (varsayılan: girişin "
+                "%1.5 altı). Seçenek olarak eklenen **Oynaklık (ATR) Stop** seçilirse stop, giriş sinyalinin "
+                "mum periyodundaki ATR'nin 2 katı aşağıya kurulur.\n"
+                "- Breakeven artık fiyat 1R kadar (sabit-% algoritmalarda +%1.5; ATR stopunda bir bar "
+                "kapanışı giriş + 1R'yi geçince) lehe gittiğinde devreye girer ve stop tam girişe değil "
+                "girişin biraz üstüne çekilir.\n"
+                "- Premium Buy Point hisselerinde stop, girişin kendi mum periyodunda izlenir "
+                "(günlük sinyalle alınan hisse günlük barlarla).\n"
+                "- Fiyat ilerledikçe stop yapısal trail (swing noktaları) ya da ATR stopunda "
+                "chandelier trail (en yüksek fiyat - 3xATR) ile sıkılaştırılır; hiçbir zaman "
+                "gevşetilmez ve güncel fiyatı geçmez.\n"
+                "- Pozisyona ilave alım yapıldığında stopun adedi otomatik güncellenir.\n"
+                "- **Açılış kalkanı:** Seans dışında (after-hours/pre-market) extended-hours guard "
+                "stopu asıl seviyenin %4 altındaki bir *felaket stopuna* çeker; asıl seviye emrin "
+                "etiketinde saklanır ('Açılış Kalkanı' sütunu). Seans açılışından 15 dakika sonra "
+                "stop asıl seviyeye geri döner; fiyat o seviyenin altındaysa pozisyon market "
+                "emriyle kapatılır. Böylece açılışın ilk dakikalarındaki oynaklık stopu "
+                "tetiklemez.\n"
+                "- Guard, felaket stopu seans dışında kırılırsa onu *day + extended-hours limit "
+                "emri* ile değiştirir ve Telegram'dan bildirir; bu acil emir dolmadan düşerse bir "
+                "sonraki çalışmada koruma otomatik yeniden kurulur.\n"
+                "- Seans dışında düşük hacimli barlarla stop sıkılaştırma (eski davranış) varsayılan "
+                "olarak kapalı - Stop Loss Ayarları sayfasından açılabilir.\n"
                 "- Tüm bu kontroller GitHub Actions üzerinden normal seansta 5 dakikada, seans "
                 "dışında ~10 dakikada bir otomatik çalışır - manuel müdahale gerekmez."
             )

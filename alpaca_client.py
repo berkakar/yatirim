@@ -233,18 +233,41 @@ class AlpacaClient:
         r = requests.delete(f"{self.trading_url}/orders/{order_id}", headers=self.headers)
         r.raise_for_status()
 
-    def place_stop_order(self, symbol: str, qty: float, side: str, stop_price: float) -> dict:
-        return self._post("/orders", {
+    def place_stop_order(self, symbol: str, qty: float, side: str, stop_price: float,
+                         client_order_id: str | None = None) -> dict:
+        """client_order_id: [2026-09-28 · Öneri 3/6] stop emrine bir etiket
+        (bkz. stop_tags.py) - açılış kalkanının gerçek stop seviyesini ve
+        İşlem Günlüğü'nün çıkış sebebini Alpaca'nın kendi emir geçmişinde
+        taşır, ayrı bir state dosyasına gerek kalmaz."""
+        payload = {
             "symbol": symbol,
             "qty": qty,
             "side": "sell" if side == "long" else "buy",
             "type": "stop",
             "stop_price": f"{stop_price:.2f}",
             "time_in_force": "gtc",
-        })
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
 
-    def replace_stop_price(self, order_id: str, stop_price: float) -> dict:
-        return self._patch(f"/orders/{order_id}", {"stop_price": f"{stop_price:.2f}"})
+    def replace_stop_price(self, order_id: str, stop_price: float, client_order_id: str | None = None,
+                           allow_untagged_fallback: bool = True) -> dict:
+        """client_order_id verilirse yeni (replace edilen) emre etiket olarak
+        yazılır. Etiketli istek herhangi bir sebeple reddedilirse etiketsiz
+        tekrar denenir - etiket sadece bilgi amaçlı, stopun kendisi asla
+        etiket yüzünden güncellenmeden kalmamalı. TEK istisna açılış kalkanı
+        (allow_untagged_fallback=False): orada gerçek stop seviyesi SADECE
+        etikette saklanıyor, etiketsiz genişletme o seviyeyi kaybettirirdi."""
+        payload = {"stop_price": f"{stop_price:.2f}"}
+        if client_order_id is None:
+            return self._patch(f"/orders/{order_id}", payload)
+        try:
+            return self._patch(f"/orders/{order_id}", {**payload, "client_order_id": client_order_id})
+        except requests.HTTPError:
+            if not allow_untagged_fallback:
+                raise
+            return self._patch(f"/orders/{order_id}", payload)
 
     def place_extended_hours_limit(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
         """Alpaca normal seans dışında (extended hours) yalnızca limit
@@ -284,15 +307,18 @@ class AlpacaClient:
         r.raise_for_status()
         return [o for o in r.json() if o["type"] in ("stop", "stop_limit")]
 
-    def get_recent_orders(self, days: int = 30, limit: int = 500) -> list[dict]:
+    def get_recent_orders(self, days: int = 30, limit: int = 500, nested: bool = False) -> list[dict]:
         """Every order (any symbol, any status - open, filled, replaced,
         canceled) submitted in the last `days` days, across the whole
         account. Unlike get_stop_order_history this isn't scoped to
         currently-open positions, so closed-out trades still show up."""
         after = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-        r = self._get("/orders", params={
-            "status": "all", "after": after, "direction": "desc", "limit": limit,
-        })
+        params = {"status": "all", "after": after, "direction": "desc", "limit": limit}
+        if nested:
+            # [2026-09-28 · Öneri 6] OTO/bracket bacaklarını ana emrin "legs"
+            # alanında döndürür - İşlem Günlüğü ilk stopu (1R) buradan bulur.
+            params["nested"] = "true"
+        r = self._get("/orders", params=params)
         r.raise_for_status()
         return r.json()
 

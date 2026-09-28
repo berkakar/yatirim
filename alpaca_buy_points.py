@@ -125,6 +125,15 @@ regular hours see it still unfilled, so it's never left permanently
 unprotected. Top-up during extended hours isn't supported yet - its market
 order can't execute outside regular hours either, and would need the same
 kind of redesign.
+
+2026-09-28 emir analizi değişiklikleri (ayrıntı: 📒 İşlem Günlüğü > 📝 Değişiklik
+Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
+  - Öneri 4: Seans dışında bekleyen pullback limit alışlar iptal edilir,
+    pre-market'te giriş yapılmaz, seansın ilk 15 dakikasında hiç alım yapılmaz
+    (ENTRY_TIMING_DEFAULTS, cancel_pullback_limit_buys, in_entry_guard).
+  - Öneri 5: Adet risk bazlı - (özsermaye x risk%) / (giriş - stop); ağırlık
+    bütçesi ve nakit sadece tavan; portföy ısısı sınırı (build_risk_context,
+    risk_sizing.py). İlave alımlar da aynı risk tavanına tabi.
 """
 
 import argparse
@@ -141,13 +150,15 @@ from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
     extended_hours_session, get_bars_for_timeframe, load_stop_loss_settings, load_telegram_settings,
-    load_top_up_stop_mode, resolve_stop_algorithm, TIMEFRAME, log,
+    load_top_up_stop_mode, minutes_since_regular_open, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 from heikin_ashi_intraday_core import get_cash_allocation_pct as get_ha_cash_allocation_pct
 from orb_core import get_cash_allocation_pct as get_orb_cash_allocation_pct
 from relative_strength_core import get_cash_allocation_pct as get_rs_cash_allocation_pct
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
+from risk_sizing import load_risk_settings, position_risk, remaining_portfolio_risk, risk_based_qty, top_up_qty_cap
+from stop_tags import parse_shield_real_stop, stop_tag
 from telegram_notify import TelegramError, send_telegram_message
 
 load_dotenv()
@@ -180,6 +191,55 @@ EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS = int(os.environ.get("BUY_EXTENDED_HOUR
 EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS = int(os.environ.get("BUY_EXTENDED_HOURS_POLL_INTERVAL_SECONDS", "15"))
 
 
+# [2026-09-28 · Öneri 4] Giriş zamanlaması - portfolio_config'teki
+# "entry_timing" anahtarı (Premium Buy Point sayfasından değiştirilir):
+#   pre_open_cancel_enabled: Seans dışında (after-hours ve pre-market) bu
+#       sistemin normal seans için bıraktığı pullback limit alışları iptal
+#       edilir, pre-market'te yeni giriş yapılmaz. Neden: 2026-09-28
+#       analizinde 17 girişin 8'i 09:33-09:36 ET'de doldu - GTC limit emirleri
+#       hisse açılışta o seviyenin altına boşlukla açılınca, yani TAM fiyat
+#       düştüğü için doluyordu (ters seçim / adverse selection).
+#   entry_guard_minutes: Seans açılışından sonraki bu kadar dakika boyunca
+#       HİÇBİR yeni alım (limit, kırılım market emri, ilave alım) yapılmaz;
+#       sinyal bu süreden sonra (varsayılan 09:45 ET) yeniden değerlendirilir.
+ENTRY_TIMING_DEFAULTS = {"pre_open_cancel_enabled": True, "entry_guard_minutes": 15}
+
+
+def load_entry_timing(config: dict) -> dict:
+    saved = config.get("entry_timing") or {}
+    return {**ENTRY_TIMING_DEFAULTS, **{k: v for k, v in saved.items() if v is not None}}
+
+
+def cancel_pullback_limit_buys(client: AlpacaClient, include_extended_hours_orders: bool) -> list[str]:
+    """[2026-09-28 · Öneri 4] Bu sistemin ("algo-" etiketli) açık limit
+    alışlarını iptal eder. include_extended_hours_orders=False iken sadece
+    normal seans emirleri (GTC bracket) iptal edilir - after-hours'ta
+    run_extended_hours_entry_scan'in kendi day+extended_hours emirlerine
+    dokunulmaz. İptal edilen sembolleri döner."""
+    canceled = []
+    try:
+        open_orders = client.get_open_orders()
+    except Exception as e:
+        log(f"açılış öncesi limit iptali: açık emirler alınamadı: {e}")
+        return canceled
+    for order in open_orders:
+        if order["type"] != "limit" or order["side"] != "buy":
+            continue
+        if not (order.get("client_order_id") or "").startswith("algo-"):
+            continue
+        if order.get("extended_hours") and not include_extended_hours_orders:
+            continue
+        try:
+            client.cancel_order(order["id"])
+            canceled.append(order["symbol"])
+        except Exception as e:
+            log(f"{order['symbol']}: açılış öncesi limit iptali başarısız: {e}")
+    if canceled:
+        log(f"Açılış öncesi limit iptali: {', '.join(sorted(canceled))} için bekleyen limit alış iptal edildi "
+            f"(sinyal seans açılışından sonra yeniden değerlendirilecek).")
+    return canceled
+
+
 def load_local_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
         return {"budget": 0, "weights": {}}
@@ -205,7 +265,7 @@ def check_symbol(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
     max_loss_pct: float | None = None, available_cash: float | None = None,
     top_up_stop_mode: str = "keep", stop_algorithm: str = DEFAULT_STOP_ALGORITHM,
-    stop_settings: dict | None = None,
+    stop_settings: dict | None = None, in_entry_guard: bool = False, risk: dict | None = None,
 ) -> float:
     """Pozisyon yoksa: sinyale göre yeni bir giriş (bracket buy-limit) açar
     veya bekleyen girişi günceller - aşağıdaki asıl akış budur. TEK istisna:
@@ -253,6 +313,14 @@ def check_symbol(
         client.cancel_order(existing_order["id"])
         existing_order = None
         log(f"{symbol}: position already open, canceled stale buy-limit order.")
+
+    if in_entry_guard:
+        # [2026-09-28 · Öneri 4] Seansın ilk dakikaları: yeni alım yok, bekleyen
+        # limit de (pre-market iptalinden kaçmış olabilir) iptal edilir.
+        if existing_order is not None:
+            client.cancel_order(existing_order["id"])
+            log(f"{symbol}: açılış koruma süresi - bekleyen limit alış iptal edildi.")
+        return 0.0
 
     dollar_amount = budget * (weight_pct / 100)
     if dollar_amount <= 0:
@@ -337,9 +405,28 @@ def check_symbol(
             log(f"{symbol}: ilave alım için resting stop bulunamadı, güvenlik için bu pass'te atlanıyor "
                 "(alpaca_trailing_stop.py'nin bir sonraki geçişi stop'u kuracaktır).")
             return 0.0
+        if parse_shield_real_stop(stop_order.get("client_order_id")) is not None:
+            # [2026-09-28 · Öneri 3] Stop hâlâ açılış kalkanında (felaket seviyesinde) -
+            # iptal edip yeniden kurmak etikette saklanan gerçek seviyeyi kaybettirirdi.
+            log(f"{symbol}: açılış kalkanı henüz kaldırılmadı, ilave alım bu pass'te atlanıyor.")
+            return 0.0
 
         old_stop_price = float(stop_order["stop_price"])
         old_qty = float(position["qty"])
+        if risk is not None:
+            # [2026-09-28 · Öneri 5] İlave alım sonrası pozisyonun toplam riski
+            # (ortalama - stop) x adet, işlem başına risk$'ı ve kalan portföy
+            # ısısını aşmasın.
+            cap = top_up_qty_cap(
+                risk["equity"], risk["risk_per_trade_pct"], float(position["avg_entry_price"]), old_qty,
+                old_stop_price, live_price, risk["remaining"],
+            )
+            if cap < top_up_qty:
+                log(f"{symbol}: ilave alım risk tavanıyla {top_up_qty} -> {cap} adede indirildi "
+                    f"(stop {old_stop_price:.2f}, işlem başına risk %{risk['risk_per_trade_pct']:g}).")
+                top_up_qty = cap
+            if top_up_qty <= 0:
+                return 0.0
         client.cancel_order(stop_order["id"])
         try:
             buy_order = client.place_market_entry(symbol, top_up_qty, "long")
@@ -349,7 +436,7 @@ def check_symbol(
             # korumasız kalmasın, eski adet/fiyatla stop'u hemen geri kur.
             log(f"{symbol}: ilave alım market emri başarısız/zaman aşımı ({e}), stop ${old_stop_price:.2f} "
                 "olarak geri kuruldu, ilave alım yapılmadı.")
-            client.place_stop_order(symbol, old_qty, "long", old_stop_price)
+            client.place_stop_order(symbol, old_qty, "long", old_stop_price, client_order_id=stop_tag("restore", symbol))
             return 0.0
 
         fill_price = float(filled["filled_avg_price"])
@@ -366,7 +453,9 @@ def check_symbol(
         else:
             new_stop_price = old_stop_price
 
-        client.place_stop_order(symbol, new_qty, "long", new_stop_price)
+        client.place_stop_order(symbol, new_qty, "long", new_stop_price, client_order_id=stop_tag("topup", symbol))
+        if risk is not None:
+            risk["remaining"] -= max(0.0, fill_price - new_stop_price) * top_up_qty
         spent = top_up_qty * fill_price
         log(f"{symbol}: bütçe arttı (yatırılan ${invested:.2f} -> hedef ${dollar_amount:.2f}), ilave al "
             f"sinyaliyle ({signal.reason}) {top_up_qty} adet market emriyle @ {fill_price:.2f} alındı "
@@ -382,6 +471,27 @@ def check_symbol(
             target_qty = affordable_qty
     if target_qty <= 0:
         return 0.0
+
+    if risk is not None:
+        # [2026-09-28 · Öneri 5] Adet, stopa kadar olan risk işlem başına
+        # risk$'ı aşmayacak şekilde hesaplanır; yukarıdaki ağırlık bütçesi ve
+        # nakit artık sadece TAVAN. Kırılımda dolum fiyatı henüz bilinmediği
+        # için güncel fiyatla tahmin edilir (stop yine gerçek dolumdan kurulur).
+        sizing_price = live_price if signal.style == "breakout" else target_price
+        estimated_stop = stop_algo.initial_stop(
+            sizing_price, "long", bars=bars,
+            **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+        )
+        sizing = risk_based_qty(
+            risk["equity"], sizing_price, estimated_stop, risk["risk_per_trade_pct"],
+            risk["max_position_pct"], risk["remaining"],
+        )
+        if sizing.qty < target_qty:
+            log(f"{symbol}: risk bazlı büyüklük - {sizing.explanation} (ağırlık bütçesi {target_qty} adet izin veriyordu).")
+            target_qty = sizing.qty
+        if target_qty <= 0:
+            return 0.0
+        risk["remaining"] -= target_qty * sizing.risk_per_share
 
     if signal.style == "breakout":
         # Diğer algoritmalar "pullback" tarzı olduğundan resting bir bracket
@@ -430,7 +540,7 @@ def check_symbol(
         ), 2)
         stop_msg_suffix = f", stop ${stop_loss_price:.2f} kuruldu."
         try:
-            client.place_stop_order(symbol, filled_qty, "long", stop_loss_price)
+            client.place_stop_order(symbol, filled_qty, "long", stop_loss_price, client_order_id=stop_tag("initial", symbol))
         except Exception as e:
             stop_msg_suffix = f" ama koruma stopu KURULAMADI, pozisyon KORUMASIZ: {e}"
             log(f"{symbol}: kırılım sonrası stop kurulamadı: {e}")
@@ -488,7 +598,8 @@ def check_symbol(
 
 def check_symbol_extended_hours_entry(
     client: AlpacaClient, symbol: str, weight_pct: float, budget: float, algorithm: str, timeframe: str,
-    max_loss_pct: float | None = None, available_cash: float | None = None,
+    max_loss_pct: float | None = None, available_cash: float | None = None, risk: dict | None = None,
+    stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
 ) -> tuple[float, str | None]:
     """check_symbol'ün fresh-entry dalının extended-hours varyantı - top-up
     burada YOK: top-up'ın market emri extended hours'ta hiç çalışmıyor,
@@ -555,6 +666,21 @@ def check_symbol_extended_hours_entry(
     target_qty = math.floor(dollar_amount / target_price)
     if available_cash is not None:
         target_qty = min(target_qty, math.floor(available_cash / target_price))
+    if risk is not None and target_qty > 0:
+        # [2026-09-28 · Öneri 5] check_symbol ile aynı risk bazlı tavan.
+        stop_algo = STOP_ALGORITHMS[stop_algorithm]
+        stop_settings = stop_settings or {}
+        estimated_stop = stop_algo.initial_stop(
+            target_price, "long", bars=bars if stop_algorithm == "atr_volatility" else None,
+            **resolve_kwargs(stop_algo.initial_stop, stop_settings.get(stop_algorithm) or {}, stop_settings.get("shared") or {}),
+        )
+        sizing = risk_based_qty(
+            risk["equity"], target_price, estimated_stop, risk["risk_per_trade_pct"],
+            risk["max_position_pct"], risk["remaining"],
+        )
+        target_qty = min(target_qty, sizing.qty)
+        if target_qty > 0:
+            risk["remaining"] -= target_qty * sizing.risk_per_share
     if target_qty <= 0:
         return 0.0, None
 
@@ -610,13 +736,23 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
     stop_settings = load_stop_loss_settings()
     stop_shared_settings = stop_settings.get("shared") or {}
 
+    # [2026-09-28 · Öneri 4] Normal seans için bırakılmış GTC pullback limitleri
+    # seans dışında iptal edilir (açılış boşluğunda dolmasınlar); pre-market'te
+    # yeni giriş de yapılmaz - sinyal seans açılışından sonra yeniden değerlendirilir.
+    if load_entry_timing(config)["pre_open_cancel_enabled"]:
+        cancel_pullback_limit_buys(client, include_extended_hours_orders=(session == "pre-market"))
+        if session == "pre-market":
+            log("pre-market: açılış öncesi iptal açık - pre-market girişi yapılmıyor.")
+            return
+
     try:
         available_cash = compute_available_cash_for_buying(client)
+        risk = build_risk_context(client, config)
     except Exception as e:
         log(f"{session}: hesap nakti alınamadı, bu pass atlanıyor: {e}")
         return
 
-    pending: dict[str, tuple[str, str]] = {}  # symbol -> (order_id, stop_algorithm), dolumu izlenecek
+    pending: dict[str, tuple[str, str, str]] = {}  # symbol -> (order_id, stop_algorithm, timeframe), dolumu izlenecek
     for symbol in sorted(watchlist_symbols):
         settings = symbol_settings.get(symbol) or {}
         algorithm = settings.get("algorithm") or default_algorithm
@@ -627,11 +763,11 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
         try:
             spent, order_id = check_symbol_extended_hours_entry(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe,
-                max_loss_pct, available_cash,
+                max_loss_pct, available_cash, risk=risk, stop_algorithm=stop_algorithm, stop_settings=stop_settings,
             )
             available_cash -= spent
             if order_id is not None:
-                pending[symbol] = (order_id, stop_algorithm)
+                pending[symbol] = (order_id, stop_algorithm, timeframe)
         except Exception as e:
             log(f"{symbol}: extended-hours check_symbol failed, atlanıyor: {e}")
 
@@ -645,7 +781,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
 
     deadline = time.monotonic() + EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS
     while pending and time.monotonic() < deadline:
-        for symbol, (order_id, stop_algorithm) in list(pending.items()):
+        for symbol, (order_id, stop_algorithm, timeframe) in list(pending.items()):
             try:
                 order = client.get_order(order_id)
             except Exception as e:
@@ -657,8 +793,20 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                 qty = float(order["filled_qty"])
                 stop_algo = STOP_ALGORITHMS[stop_algorithm]
                 stop_algo_settings = stop_settings.get(stop_algorithm) or {}
+                # [2026-09-28 · Öneri 1] bars: ATR tabanlı stop (atr_volatility) girişin
+                # periyodundaki ATR'yi kullansın - risk bazlı adet de aynı stopla hesaplandı.
+                try:
+                    entry_bars = get_bars_for_timeframe(
+                        client, symbol, timeframe, datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS),
+                        exclude_forming=True, cache_file=INTRADAY_BARS_CACHE_PATH,
+                    )
+                except Exception:
+                    entry_bars = None
                 naive_stop = stop_algo.initial_stop(
-                    entry_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                    # Sadece ATR stopuna geçirilir: ORB/HA stopları barları "son seans"
+                    # olarak yorumlar, seans dışında eski davranış (bars yok) korunur.
+                    entry_price, "long", bars=(entry_bars or None) if stop_algorithm == "atr_volatility" else None,
+                    **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
                 )
                 stop_price = round(naive_stop, 2)
                 try:
@@ -672,7 +820,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                     # saklanıyor, extended-hours guard (guard_position) onu
                     # resting stop olarak görüp kırılırsa marketable limite
                     # çeviriyor, normal seans açılınca da kendisi devreye giriyor.
-                    client.place_stop_order(symbol, qty, "long", stop_price)
+                    client.place_stop_order(symbol, qty, "long", stop_price, client_order_id=stop_tag("initial", symbol))
                     msg = (
                         f"✅ {symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
                         f"koruma stopu {stop_price:.2f} seviyesinden (GTC stop - seans dışında "
@@ -729,6 +877,43 @@ def cancel_orphaned_buy_limits(client: AlpacaClient, watchlist_symbols: set[str]
             log(f"{symbol}: portföyden çıkarılmış, kalan buy-limit emri iptal edildi ({order['id']}).")
         except Exception as e:
             log(f"{symbol}: orphan buy-limit cleanup failed, skipping: {e}")
+
+
+def build_risk_context(client: AlpacaClient, config: dict) -> dict | None:
+    """[2026-09-28 · Öneri 5] Pass başında bir kez: özsermaye ve portföy
+    ısısı (açık pozisyonların stopa kadar riski + bekleyen giriş emirleri).
+    Risk bazlı büyüklük kapalıysa None - check_symbol eski (sadece ağırlık
+    bütçesi) davranışa döner. Dönen dict'in "remaining" alanı check_symbol
+    tarafından her yeni emirde azaltılır."""
+    settings = load_risk_settings(config)
+    if not settings["risk_sizing_enabled"]:
+        return None
+    equity = float(client.get_account()["equity"])
+    per_trade = equity * float(settings["risk_per_trade_pct"]) / 100
+    orders = client.get_open_orders()
+    stops: dict[str, float] = {}
+    pending_risk = 0.0
+    for o in orders:
+        if o["type"] in ("stop", "stop_limit") and o["side"] == "sell":
+            real = parse_shield_real_stop(o.get("client_order_id"))
+            stops[o["symbol"]] = real if real is not None else float(o["stop_price"])
+        elif o["type"] == "limit" and o["side"] == "buy" and (o.get("client_order_id") or "").startswith("algo-"):
+            # Bekleyen girişler zaten risk bazlı boyutlandığı için her biri ~1 risk$ sayılır.
+            pending_risk += per_trade
+    open_risk = pending_risk
+    for pos in client.get_all_positions():
+        qty = float(pos["qty"])
+        if qty > 0 and pos.get("asset_class", "us_equity") == "us_equity":
+            open_risk += position_risk(float(pos["avg_entry_price"]), qty, stops.get(pos["symbol"]))
+    remaining = remaining_portfolio_risk(equity, float(settings["max_portfolio_risk_pct"]), open_risk)
+    log(f"Risk bağlamı: özsermaye {equity:,.0f}$, açık risk {open_risk:,.0f}$, kalan portföy riski "
+        f"{remaining:,.0f}$ (işlem başına %{settings['risk_per_trade_pct']:g} = {per_trade:,.0f}$).")
+    return {
+        "equity": equity,
+        "risk_per_trade_pct": float(settings["risk_per_trade_pct"]),
+        "max_position_pct": float(settings["max_position_pct"]),
+        "remaining": remaining,
+    }
 
 
 def compute_available_cash_for_buying(client: AlpacaClient) -> float:
@@ -789,9 +974,21 @@ def run_once(client: AlpacaClient) -> None:
 
     try:
         available_cash = compute_available_cash_for_buying(client)
+        risk = build_risk_context(client, config)
     except Exception as e:
         log(f"failed to fetch account cash, skipping this pass to avoid buying blind: {e}")
         return
+
+    # [2026-09-28 · Öneri 4] Seansın ilk entry_guard_minutes dakikasında yeni alım yok.
+    timing = load_entry_timing(config)
+    minutes_since_open = minutes_since_regular_open(client)
+    in_entry_guard = (
+        float(timing["entry_guard_minutes"]) > 0 and minutes_since_open is not None
+        and minutes_since_open < float(timing["entry_guard_minutes"])
+    )
+    if in_entry_guard:
+        log(f"Açılış koruma süresi ({minutes_since_open:.0f}/{timing['entry_guard_minutes']} dk) - "
+            "bu pass'te yeni alım yapılmıyor, bekleyen limit alışlar iptal ediliyor.")
 
     for symbol in sorted(watchlist_symbols):
         settings = symbol_settings.get(symbol) or {}
@@ -804,6 +1001,7 @@ def run_once(client: AlpacaClient) -> None:
             spent = check_symbol(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe, max_loss_pct,
                 available_cash, top_up_stop_mode, stop_algorithm, stop_settings,
+                in_entry_guard=in_entry_guard, risk=risk,
             )
             available_cash -= spent
         except Exception as e:

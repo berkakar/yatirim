@@ -9,15 +9,35 @@
   },
   "breakeven_atr_structure": {
     "initial_stop_pct": 1.5,
-    "breakeven_trigger_pct": 1.0
+    "breakeven_trigger_pct": 1.5,
+    "breakeven_buffer_pct": 0.2
   },
   "wait_then_trail": {
     "initial_stop_pct": 4.0,
-    "breakeven_trigger_pct": 1.0,
+    "breakeven_trigger_pct": 4.0,
     "profit_lock_trigger_pct": 5.0,
-    "profit_lock_pct": 4.0
+    "profit_lock_pct": 4.0,
+    "breakeven_buffer_pct": 0.2
   },
   "opening_range": {
     "trend_ema_period": 0
+  },
+  "heikin_ashi_exit": {
+    "breakeven_buffer_pct": 0.2
+  },
+  "atr_volatility": {
+    "initial_atr_mult": 2.0,
+    "max_stop_pct": 12.0,
+    "fallback_pct": 3.0,
+    "breakeven_r": 1.0,
+    "breakeven_buffer_atr": 0.1,
+    "trail_start_r": 2.0,
+    "trail_atr_mult": 3.0
+  },
+  "execution": {
+    "opening_shield_enabled": true,
+    "opening_shield_minutes": 15,
+    "shield_disaster_pct": 4.0,
+    "extended_hours_trail_enabled": false
   }
 }

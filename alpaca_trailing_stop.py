@@ -84,6 +84,17 @@ Run with --once for a single pass (used by the GitHub Actions workflow,
 which handles the scheduling). Without --once it loops locally, sleeping
 between passes and until the market reopens. --extended-hours-guard runs the
 separate mechanism described above and exits.
+
+2026-09-28 emir analizi değişiklikleri (ayrıntı: 📒 İşlem Günlüğü > 📝 Değişiklik
+Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
+  - Öneri 1: Premium Buy Point hisselerinde stop, girişin kendi mum periyodunda
+    izlenir (resolve_stop_timeframe_for_position, _stop_bars_for_timeframe);
+    StopContext'e ilk stop (1R) ve ATR için giriş öncesi bar penceresi geçirilir.
+  - Öneri 3: Açılış kalkanı - seans dışında guard stopu felaket seviyesine
+    genişletir, gerçek seviye emrin etiketinde saklanır (stop_tags.py); seans
+    açılışından 15 dk sonra manage_position gerçek seviyeye döner ya da
+    kırılmışsa market çıkışı yapar. Seans dışı trail varsayılan olarak kapalı.
+  - Öneri 6: Tüm stop emirleri çıkış sebebini gösteren bir etiketle kurulur.
 """
 
 import argparse
@@ -102,6 +113,7 @@ from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, g
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
+from stop_tags import parse_shield_real_stop, reason_code, shield_exit_tag, shield_tag, stop_tag
 from structure import Bar
 from telegram_notify import TelegramError, send_telegram_message
 
@@ -156,6 +168,48 @@ NOTIFICATION_SETTINGS_PATH = "bildirim_ayarlari_berkakar.json"
 MANAGEMENT_START_CACHE_PATH = "alpaca_position_management_cache_berkakar.json"
 
 ET = ZoneInfo("America/New_York")
+
+# [2026-09-28 · Öneri 3] Emir yürütme ayarları - stop_loss_settings_<kullanıcı>.json
+# içindeki "execution" anahtarında (Stop Loss Ayarları sayfasından değiştirilir),
+# yoksa buradaki varsayılanlar geçerli:
+#   opening_shield_enabled   : Açılış kalkanı. 2026-09-28 analizinde 17 çıkışın
+#                              7'si 09:30-09:35 ET'de, 3'ü seans dışında oldu -
+#                              düz stop emri açılış fiyatlamasının oynaklığında
+#                              piyasa fiyatından doluyordu. Kalkan açıkken seans
+#                              dışında (extended-hours guard) stop, gerçek
+#                              seviyenin shield_disaster_pct altına ("felaket
+#                              stopu") çekilir; gerçek seviye emrin etiketinde
+#                              saklanır (stop_tags.py). Seans açıldıktan
+#                              opening_shield_minutes dakika sonra manage_position
+#                              gerçek seviyeye döner - fiyat o seviyenin altındaysa
+#                              pozisyonu market emriyle kapatır.
+#   extended_hours_trail_enabled: Seans dışında (işlem hacmi düşük pre-market
+#                              barlarıyla) stopu sıkılaştırma - analizde bu,
+#                              stopun açılışta tetiklenmesine yol açıyordu;
+#                              varsayılan olarak KAPALI.
+EXECUTION_DEFAULTS = {
+    "opening_shield_enabled": True,
+    "opening_shield_minutes": 15,
+    "shield_disaster_pct": 4.0,
+    "extended_hours_trail_enabled": False,
+}
+
+# [2026-09-28 · Öneri 1] Stopun izlendiği bar periyodu artık Premium Buy
+# Point hisseleri için GİRİŞ SİNYALİNİN periyodu (symbol_settings[sembol].
+# timeframe) - eskiden her hisse sabit TIMEFRAME (30Min) ile yönetiliyordu, günlük
+# sinyalle alınan MSFT/PAYX 30 dakikalık gürültüyle stoplanıyordu. ATR (hem
+# initial stop hem trail) için giriş ÖNCESİNİ de kapsayan bir pencere gerekir:
+# günlükte ATR(14) için ~3 hafta işlem günü, gün içinde birkaç gün yeterli.
+STOP_HISTORY_DAYS_DAILY = 45
+STOP_HISTORY_DAYS_INTRADAY = 7
+
+
+def load_execution_settings(stop_settings: dict | None = None) -> dict:
+    """EXECUTION_DEFAULTS'un kullanıcı override'larıyla birleşmiş hali."""
+    if stop_settings is None:
+        stop_settings = load_stop_loss_settings()
+    saved = stop_settings.get("execution") or {}
+    return {**EXECUTION_DEFAULTS, **{k: v for k, v in saved.items() if v is not None}}
 
 
 def log(msg: str) -> None:
@@ -235,6 +289,28 @@ def resolve_stop_algorithm_for_position(
         from heikin_ashi_intraday_core import resolve_stop_algorithm as resolve_ha_stop_algorithm
         return resolve_ha_stop_algorithm(ha_config or {})
     return resolve_stop_algorithm(pbp_config, symbol)
+
+
+def resolve_stop_timeframe(config: dict, symbol: str) -> str:
+    """[2026-09-28 · Öneri 1] Premium Buy Point hissesi için stopun izleneceği
+    bar periyodu: config["stop_timeframe_mode"] "entry" (varsayılan) ise
+    hissenin giriş sinyali periyodu (symbol_settings[sembol].timeframe), yoksa
+    "global" ise eskisi gibi TIMEFRAME (TRADE_TIMEFRAME, 30Min)."""
+    if (config.get("stop_timeframe_mode") or "entry") != "entry":
+        return TIMEFRAME
+    settings = (config.get("symbol_settings") or {}).get(symbol) or {}
+    return settings.get("timeframe") or TIMEFRAME
+
+
+def resolve_stop_timeframe_for_position(
+    pbp_config: dict, rs_holdings: dict, orb_holdings: dict, ha_holdings: dict | None, symbol: str,
+) -> str:
+    """RS/ORB/HA modüllerinin pozisyonları eskisi gibi TIMEFRAME ile yönetilir
+    (bu modüllerin stop mantığı bu değişiklikte bilerek değiştirilmedi); sadece
+    Premium Buy Point hisseleri girişin kendi periyoduna geçer."""
+    if symbol in rs_holdings or symbol in orb_holdings or (ha_holdings and symbol in ha_holdings):
+        return TIMEFRAME
+    return resolve_stop_timeframe(pbp_config, symbol)
 
 
 def _load_cross_module_holdings_pruned(live_symbols: set[str]):
@@ -428,17 +504,119 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
 
     cache = _load_management_start_cache()
     cached = cache.get(symbol)
-    if cached is not None:
+    # "earliest_stop_at" anahtarının VARLIĞI kontrol edilir (kaydın varlığı
+    # değil): aynı kayıtta artık get_initial_stop_price'ın alanı da tutuluyor.
+    if cached is not None and "earliest_stop_at" in cached:
         earliest = _parse_iso(cached["earliest_stop_at"]) if cached.get("earliest_stop_at") else None
     else:
         history = client.get_stop_order_history(symbol, limit=200)
         earliest = min((_parse_iso(o["created_at"]) for o in history), default=None)
-        cache[symbol] = {"earliest_stop_at": earliest.isoformat() if earliest else None}
+        cache[symbol] = {**(cached or {}), "earliest_stop_at": earliest.isoformat() if earliest else None}
         _save_management_start_cache(cache)
 
     if earliest is None:
         return default_start
     return max(default_start, earliest)
+
+
+def get_initial_stop_price(client: AlpacaClient, symbol: str) -> float | None:
+    """[2026-09-28 · Öneri 1-2] Pozisyonun İLK stop seviyesi (en eski stop
+    emrinin fiyatı) - 1R = giriş - ilk stop hesabı için (StopContext.
+    initial_stop_price). get_management_start ile aynı cache dosyasında,
+    sembol başına bir kez hesaplanır; eski cache kayıtlarında alan yoksa
+    geçmiş bir kez daha çekilip eklenir."""
+    cache = _load_management_start_cache()
+    cached = cache.get(symbol) or {}
+    if "initial_stop_price" in cached:
+        return cached["initial_stop_price"]
+    history = client.get_stop_order_history(symbol, limit=200)
+    earliest = min(history, key=lambda o: _parse_iso(o["created_at"]), default=None)
+    price = None
+    if earliest is not None:
+        # Kalkanlı bir emir en eskisiyse (ör. pozisyon seans dışında açıldıysa)
+        # etiketteki gerçek seviye esas alınır, felaket seviyesi değil.
+        price = parse_shield_real_stop(earliest.get("client_order_id")) or float(earliest["stop_price"])
+    cached["initial_stop_price"] = price
+    cache[symbol] = {**(cache.get(symbol) or {}), **cached}
+    _save_management_start_cache(cache)
+    return price
+
+
+def minutes_since_regular_open(client: AlpacaClient) -> float | None:
+    """[2026-09-28 · Öneri 3] Bugünkü normal seans açılışından bu yana geçen
+    dakika - seans kapalıysa/tatilse None. Yarım günler için takvimden okunur."""
+    now_et = datetime.now(timezone.utc).astimezone(ET)
+    today = now_et.date().isoformat()
+    try:
+        days = client.get_calendar(today, today)
+    except Exception:
+        return None
+    if not days:
+        return None
+    open_t = datetime.strptime(days[0]["open"], "%H:%M").time()
+    close_t = datetime.strptime(days[0]["close"], "%H:%M").time()
+    if not open_t <= now_et.time() < close_t:
+        return None
+    open_dt = now_et.replace(hour=open_t.hour, minute=open_t.minute, second=0, microsecond=0)
+    return (now_et - open_dt).total_seconds() / 60
+
+
+def shield_disaster_price(real_stop_price: float, side: str, execution: dict) -> float:
+    pct = float(execution.get("shield_disaster_pct") or 0) / 100
+    return real_stop_price * (1 - pct) if side == "long" else real_stop_price * (1 + pct)
+
+
+def apply_opening_shield(
+    client: AlpacaClient, symbol: str, side: str, stop_order: dict, execution: dict,
+) -> dict | None:
+    """[2026-09-28 · Öneri 3] Resting stopu felaket seviyesine genişletir,
+    gerçek seviyeyi yeni emrin etiketine yazar. Etiket yazılamazsa stop
+    genişletilmez (gerçek seviye kaybolmasın) - None döner."""
+    real = float(stop_order["stop_price"])
+    disaster = round(shield_disaster_price(real, side, execution), 2)
+    try:
+        new_order = client.replace_stop_price(
+            stop_order["id"], disaster, client_order_id=shield_tag(symbol, real), allow_untagged_fallback=False,
+        )
+    except requests.HTTPError as e:
+        log(f"{symbol}: açılış kalkanı kurulamadı, stop {real:.2f}'de bırakıldı: {e}")
+        return None
+    log(f"{symbol}: açılış kalkanı - stop {real:.2f} -> felaket seviyesi {disaster:.2f} "
+        f"(gerçek seviye seans açılışından {execution['opening_shield_minutes']} dk sonra geri kurulacak).")
+    return new_order
+
+
+def restore_from_shield(
+    client: AlpacaClient, symbol: str, side: str, qty: float, stop_order: dict, real: float,
+) -> dict | None:
+    """[2026-09-28 · Öneri 3] Kalkan süresi dolunca: fiyat gerçek stopun
+    doğru tarafındaysa stop gerçek seviyeye geri çekilir ve güncel emir
+    döner; kırılmışsa stop iptal edilip pozisyon market emriyle kapatılır
+    (None döner). Market çıkışı başarısız olursa stop felaket seviyesinde
+    yeniden kurulur - pozisyon hiçbir adımda korumasız kalmaz."""
+    last_price = client.get_latest_trade_price(symbol)
+    breached = last_price is not None and (last_price <= real if side == "long" else last_price >= real)
+    if not breached:
+        new_order = client.replace_stop_price(stop_order["id"], real, client_order_id=stop_tag("restore", symbol))
+        log(f"{symbol}: açılış kalkanı bitti - stop gerçek seviyeye ({real:.2f}) geri çekildi "
+            f"(son fiyat {last_price}).")
+        return new_order
+    if side != "long":
+        # Sistem short açmıyor; yine de güvenli taraf: stopu gerçek seviyeye
+        # çekmek piyasanın yanlış tarafında kalacağı için felakette bırak.
+        log(f"{symbol}: short pozisyonda kalkan kırıldı, stop felaket seviyesinde bırakıldı.")
+        return None
+    disaster = float(stop_order["stop_price"])
+    client.cancel_order(stop_order["id"])
+    time.sleep(1)  # iptalin hisseleri serbest bırakması için
+    try:
+        client.place_market_exit(symbol, qty, client_order_id=shield_exit_tag(symbol))
+        log(f"{symbol}: açılış kalkanı bitti, fiyat ({last_price:.2f}) gerçek stopun ({real:.2f}) altında - "
+            f"pozisyon market emriyle kapatıldı.")
+    except Exception as e:
+        client.place_stop_order(symbol, qty, side, disaster, client_order_id=shield_tag(symbol, real))
+        log(f"{symbol}: kalkan sonrası market çıkışı başarısız ({e}), felaket stopu {disaster:.2f} yeniden kuruldu.")
+    return None
 
 
 def get_trend_daily_closes(client: AlpacaClient, symbol: str, trend_ema_period: int) -> list[float]:
@@ -479,19 +657,48 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
     age = datetime.now(timezone.utc) - _parse_iso(latest["created_at"])
     if age > timedelta(days=EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS):
         return None
-    return float(latest["stop_price"])
+    # [2026-09-28 · Öneri 3] Son emir açılış kalkanıysa, felaket seviyesi değil
+    # etiketteki gerçek seviye "son trail edilmiş seviye"dir.
+    real = parse_shield_real_stop(latest.get("client_order_id"))
+    return real if real is not None else float(latest["stop_price"])
+
+
+def _stop_bars_for_timeframe(
+    client: AlpacaClient, symbol: str, timeframe: str, management_start: datetime,
+) -> tuple[list[Bar], list[Bar]]:
+    """[2026-09-28 · Öneri 1] (bars, history_bars): bars = yönetim
+    başlangıcından bu yana, history_bars = ATR için giriş öncesini de kapsayan
+    pencere - ikisi de stopun izlendiği periyotta (get_bars_for_timeframe,
+    "1Day" için günlük cache). Günlükte giriş gününün barı da dahil olsun
+    diye başlangıç o günün 00:00 UTC'sine çekilir."""
+    if timeframe == "1Day":
+        start = management_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        history_days = STOP_HISTORY_DAYS_DAILY
+    else:
+        start = management_start
+        history_days = STOP_HISTORY_DAYS_INTRADAY
+    history_start = start - timedelta(days=history_days)
+    history_bars = get_bars_for_timeframe(client, symbol, timeframe, history_start, cache_file=INTRADAY_BARS_CACHE_PATH)
+    bars = [b for b in history_bars if _parse_iso(b.t) >= start]
+    return bars, history_bars
 
 
 def manage_position(
     client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT,
     stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
+    timeframe: str | None = None, minutes_since_open: float | None = None,
 ) -> None:
+    """timeframe: [2026-09-28 · Öneri 1] stopun izlendiği bar periyodu
+    (resolve_stop_timeframe_for_position), verilmezse TIMEFRAME.
+    minutes_since_open: [2026-09-28 · Öneri 3] seans açılışından beri geçen
+    dakika (minutes_since_regular_open) - açılış kalkanı kararı için."""
     symbol = pos["symbol"]
     signed_qty = float(pos["qty"])
     qty = abs(signed_qty)
     side = "long" if signed_qty > 0 else "short"
     entry_price = float(pos["avg_entry_price"])
     algo = STOP_ALGORITHMS[stop_algorithm]
+    timeframe = timeframe or TIMEFRAME
     # Stop Loss Ayarları sayfasında kaydedilmiş override'lar (bkz.
     # stop_loss_settings.py) - "shared" ATR/yapısal-trail ayarları + seçili
     # algoritmaya özgü ayarlar. Kaydedilmemiş bir alan için ilgili
@@ -499,6 +706,14 @@ def manage_position(
     stop_settings = stop_settings or {}
     shared_settings = stop_settings.get("shared") or {}
     algo_settings = stop_settings.get(stop_algorithm) or {}
+    execution = load_execution_settings(stop_settings)
+    shield_window = (
+        bool(execution["opening_shield_enabled"]) and minutes_since_open is not None
+        and minutes_since_open < float(execution["opening_shield_minutes"])
+    )
+
+    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
+    bars, history_bars = _stop_bars_for_timeframe(client, symbol, timeframe, management_start)
 
     topped_up = False
     stop_order = client.get_open_stop_order(symbol)
@@ -514,7 +729,13 @@ def manage_position(
                 f"(muhtemelen extended-hours guard), fallback stop atlanıyor.")
             return
 
-        naive_stop = algo.initial_stop(entry_price, side, **resolve_kwargs(algo.initial_stop, algo_settings, shared_settings))
+        # bars=history_bars: ATR tabanlı ilk stop (atr_volatility) girişin
+        # periyodundaki ATR'yi görebilsin - diğer algoritmalar bars'ı ya
+        # yoksayar ya da (ORB/HA) kendi mantığıyla kullanır.
+        naive_stop = algo.initial_stop(
+            entry_price, side, bars=history_bars or None,
+            **resolve_kwargs(algo.initial_stop, algo_settings, shared_settings),
+        )
         restored = last_trailed_stop_price(client, symbol)
         if restored is not None:
             # Extended-hours guard'ın bıraktığı acil limit emri seans
@@ -531,11 +752,29 @@ def manage_position(
             initial_stop = naive_stop
             reason = "geçmişte yakın zamanlı bir stop yok, naif ilk stop"
 
-        stop_order = client.place_stop_order(symbol, qty, side, initial_stop)
+        stop_order = client.place_stop_order(symbol, qty, side, initial_stop, client_order_id=stop_tag("initial", symbol))
         log(f"{symbol}: no resting stop found (not opened as a bracket order here, or "
             f"extended-hours guard emri seans bitiminde dolmadan düştü) - {reason}: "
             f"{initial_stop:.2f} (entry {entry_price:.2f}).")
     else:
+        # [2026-09-28 · Öneri 3] Açılış kalkanı - adet yeniden boyutlandırmadan
+        # ÖNCE bakılır: replace_stop_qty yeni emri etiketsiz oluşturur ve
+        # etikette saklanan gerçek seviye kaybolurdu.
+        real = parse_shield_real_stop(stop_order.get("client_order_id"))
+        if real is not None:
+            if shield_window:
+                log(f"{symbol}: açılış kalkanı aktif (felaket stopu {float(stop_order['stop_price']):.2f}, "
+                    f"gerçek {real:.2f}) - seansın ilk {execution['opening_shield_minutes']} dakikası bekleniyor.")
+                return
+            stop_order = restore_from_shield(client, symbol, side, qty, stop_order, real)
+            if stop_order is None:
+                return
+        elif shield_window:
+            # Guard seans dışında çalışamadıysa (GitHub Actions gecikmesi) kalkan
+            # ilk 15 dakikada burada kurulur.
+            if apply_opening_shield(client, symbol, side, stop_order, execution) is not None:
+                return
+
         stop_qty = float(stop_order["qty"])
         if abs(stop_qty - qty) > 1e-9:
             # alpaca_buy_points.py's budget top-up (or a manual trade) changed
@@ -549,10 +788,8 @@ def manage_position(
     current_stop_price = float(stop_order["stop_price"])
     stop_order_id = stop_order["id"]
 
-    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
-    bars = get_regular_hours_bars(client, symbol, TIMEFRAME, management_start, cache_file=INTRADAY_BARS_CACHE_PATH)
     if not bars:
-        log(f"{symbol}: no regular-hours bars available, skipping.")
+        log(f"{symbol}: {timeframe} periyodunda bar yok, trail atlanıyor.")
         return
 
     # trend_ema_period, ctx için gereken günlük kapanış penceresini boyutlamak
@@ -564,14 +801,15 @@ def manage_position(
     ctx = StopContext(
         side=side, entry_price=entry_price, current_stop_price=current_stop_price,
         bars=bars, daily_closes=daily_closes, topped_up=topped_up, top_up_stop_mode=top_up_stop_mode,
+        initial_stop_price=get_initial_stop_price(client, symbol), history_bars=history_bars,
     )
     decision = algo.trail(ctx, **resolve_kwargs(algo.trail, algo_settings, shared_settings))
     if decision is None:
         return
 
     try:
-        client.replace_stop_price(stop_order_id, decision.price)
-        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {decision.price:.2f} ({decision.reason}).")
+        client.replace_stop_price(stop_order_id, decision.price, client_order_id=stop_tag(reason_code(decision.reason), symbol))
+        log(f"{symbol}: trailed stop {current_stop_price:.2f} -> {decision.price:.2f} ({decision.reason}, {timeframe}).")
     except requests.HTTPError as e:
         log(f"{symbol}: failed to replace stop order: {e}")
 
@@ -664,6 +902,12 @@ def guard_position(
     client: AlpacaClient, pos: dict, bot_token: str | None, chat_id: str | None,
     stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
 ) -> None:
+    # [2026-09-28 · Öneri 3] Açılış kalkanı açıkken (varsayılan) guard, resting
+    # stopu önce felaket seviyesine genişletir (apply_opening_shield) ve
+    # kırılma kontrolünü O seviyeye göre yapar: gerçek stopun seans dışında
+    # düşük hacimle kırılması artık tek başına satış sebebi değil - karar
+    # seans açılışından 15 dk sonra manage_position/restore_from_shield'de
+    # verilir. Seans dışı trail (_extended_hours_trail) varsayılan olarak kapalı.
     """Normal bir "stop" emri şu an (extended hours) tetiklenemeyeceği için,
     fiyat zaten stop seviyesini kırmışsa onun yerine geçebilecek tek şeyi -
     day+extended_hours bir limit emri - gönderir.
@@ -703,8 +947,18 @@ def guard_position(
     side = "long" if signed_qty > 0 else "short"
     entry_price = float(pos["avg_entry_price"])
 
+    execution = load_execution_settings(stop_settings or {})
+    shield_enabled = bool(execution["opening_shield_enabled"])
+    real_stop = None  # kalkan açıkken etiketteki gerçek seviye
+
     stop_order = client.get_open_stop_order(symbol)
     if stop_order is not None:
+        real_stop = parse_shield_real_stop(stop_order.get("client_order_id"))
+        if shield_enabled and real_stop is None:
+            shielded = apply_opening_shield(client, symbol, side, stop_order, execution)
+            if shielded is not None:
+                real_stop = float(stop_order["stop_price"])
+                stop_order = shielded
         reference_price = float(stop_order["stop_price"])
         resting_order_id = stop_order["id"]
     elif client.has_open_exit_order(symbol, side):
@@ -713,6 +967,9 @@ def guard_position(
         reference_price = last_trailed_stop_price(client, symbol)
         if reference_price is None:
             return  # ne resting emir ne güvenilir geçmiş var - yapacak bir şey yok
+        if shield_enabled:
+            real_stop = reference_price
+            reference_price = round(shield_disaster_price(real_stop, side, execution), 2)
         resting_order_id = None
 
     last_price = client.get_latest_trade_price(symbol)
@@ -722,9 +979,10 @@ def guard_position(
     breached = last_price <= reference_price if side == "long" else last_price >= reference_price
     if not breached:
         if resting_order_id is not None:
-            _extended_hours_trail(
-                client, symbol, side, entry_price, reference_price, resting_order_id, stop_algorithm, stop_settings,
-            )
+            if execution["extended_hours_trail_enabled"] and real_stop is None:
+                _extended_hours_trail(
+                    client, symbol, side, entry_price, reference_price, resting_order_id, stop_algorithm, stop_settings,
+                )
             return
         # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, seviyeyi normal
         # bir GTC stop emri olarak geri kuruyoruz. Burada BİLEREK referans
@@ -736,7 +994,8 @@ def guard_position(
         # bir sonraki guard çalışması onu resting stop olarak görür (kırılırsa
         # marketable limite çevirir), normal seans açılınca da kendisi çalışır.
         try:
-            client.place_stop_order(symbol, qty, side, reference_price)
+            tag = shield_tag(symbol, real_stop) if real_stop is not None else stop_tag("restore", symbol)
+            client.place_stop_order(symbol, qty, side, reference_price, client_order_id=tag)
         except requests.HTTPError as e:
             msg = (f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
                    f"seviyesinden yeniden kurulamadı, pozisyon şu an KORUMASIZ olabilir: {e}")
@@ -849,11 +1108,20 @@ def run_once(client: AlpacaClient) -> None:
     rs_holdings, rs_config, orb_holdings, orb_config, ha_holdings, ha_config = (
         _load_cross_module_holdings_pruned(live_symbols)
     )
+    minutes_since_open = minutes_since_regular_open(client)
     for pos in positions:
         stop_algorithm = resolve_stop_algorithm_for_position(
             config, rs_holdings, rs_config, orb_holdings, orb_config, pos["symbol"], ha_holdings, ha_config,
         )
-        manage_position(client, pos, top_up_stop_mode, stop_algorithm, stop_settings)
+        timeframe = resolve_stop_timeframe_for_position(config, rs_holdings, orb_holdings, ha_holdings, pos["symbol"])
+        try:
+            manage_position(
+                client, pos, top_up_stop_mode, stop_algorithm, stop_settings,
+                timeframe=timeframe, minutes_since_open=minutes_since_open,
+            )
+        except Exception as e:
+            # Bir pozisyondaki hata diğerlerinin stop yönetimini durdurmasın.
+            log(f"{pos['symbol']}: manage_position başarısız, bu pass atlanıyor: {e}")
 
 
 def run_loop(client: AlpacaClient) -> None:

@@ -43,6 +43,7 @@ from hisse_patern import render_hisse_patern
 from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
+from trade_journal_page import render_trade_journal
 from version_info import get_version_label
 from connection_status import check_all_connections
 
@@ -63,7 +64,7 @@ MODULE_GROUPS = {
     "🤖 Algoritmik Ticaret": [
         "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
         "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🕯️ Heikin Ashi Gün İçi",
-        "🛡️ Stop Loss Ayarları",
+        "🛡️ Stop Loss Ayarları", "📒 İşlem Günlüğü",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
@@ -1522,6 +1523,18 @@ elif module == "🛡️ Stop Loss Ayarları":
     st.header("🛡️ Stop Loss Ayarları")
     st.caption("Stop-loss algoritmalarının (Trailing Stop, Premium Buy Point bracket girişleri, BackTest) parametrelerini buradan ayarlayıp kaydedebilirsiniz.")
     render_stop_loss_settings(username)
+
+# ==============================================================================
+# 11c. MODÜL: İŞLEM GÜNLÜĞÜ (2026-09-28 emir analizi · Öneri 6)
+# ==============================================================================
+elif module == "📒 İşlem Günlüğü":
+    st.header("📒 İşlem Günlüğü")
+    st.caption(
+        "Tüm modüllerin (Premium Buy Point, ORB, Relative Strength, Heikin Ashi) kapanmış işlemleri: R çarpanı, "
+        "çıkış sebebi, açılış/seans dışı dağılımı ve mevcut kural sürümüyle kaç işlem biriktiği. "
+        "'Değişiklik Günlüğü' sekmesi sistemde yapılan değişikliklerin gerekçesini ve nasıl takip edileceğini anlatır."
+    )
+    render_trade_journal(username)
 
 # ==============================================================================
 # 12. MODÜL: BIÇAK KANALI TESTİ
