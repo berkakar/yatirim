@@ -26,7 +26,8 @@ alan hiç değiştirilmemiş) ilgili fonksiyonun kod-varsayılanı geçerli olur
 yeni bir algoritma/parametre eklendiğinde resolve_kwargs'ta HİÇBİR değişiklik
 gerekmez.
 
-Dört algoritma var:
+Beş algoritma var (beşincisi, "atr_volatility", 2026-09-28 emir analizinin
+1-2. önerileriyle eklendi - dosyanın sonundaki bölüm notuna bakın):
   - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
     breakeven floor + günlük EMA trend filtresiyle gate'lenen ATR-buffered
     break-of-structure trail.
@@ -75,6 +76,16 @@ class StopContext:
     daily_closes: list[float] | None = None  # trend filtresi için, artan sırada kapanışlar
     topped_up: bool = False
     top_up_stop_mode: str = "keep"
+    # [2026-09-28 · Öneri 1-2] Pozisyonun İLK stop seviyesi - 1R'nin (giriş -
+    # ilk stop) hesaplanabilmesi için. Canlıda alpaca_trailing_stop, sembolün
+    # en eski stop emrinden okur; backtest, pozisyonu açarken kurduğu stoptan.
+    # None ise R kullanan algoritmalar (atr_volatility) kendi tahminine düşer.
+    initial_stop_price: float | None = None
+    # [2026-09-28 · Öneri 1] Giriş ÖNCESİNİ de içeren daha uzun bar penceresi -
+    # SADECE ATR hesabı için. `bars` pozisyon yönetim başlangıcından (≈ giriş)
+    # başladığı için günlük periyotta ilk 2-3 hafta ATR(14) hiç
+    # hesaplanamıyordu; yapısal analiz yine `bars` üzerinden yapılır.
+    history_bars: list[Bar] | None = None
 
 
 @dataclass(frozen=True)
@@ -140,7 +151,15 @@ def resolve_kwargs(fn: Callable, settings_for_algo: dict, shared_settings: dict)
 INITIAL_STOP_PCT = 0.015
 ATR_PERIOD = 14
 ATR_MULTIPLIER = 0.25
-BREAKEVEN_TRIGGER_PCT = 0.01
+# [2026-09-28 · Öneri 2] %1 -> %1.5 (= 1R, çünkü ilk stop %1.5): eskiden stop,
+# fiyat daha 0.67R kâr görmeden girişe çekiliyordu; MSFT/NOW/SKHY/NVDA'da
+# +%2-4.6 kâr görmüş işlemler normal gün içi dalgalanmayla başa baş ya da
+# zararla kapandı (bkz. İşlem Günlüğü > Değişiklik Günlüğü sayfası).
+BREAKEVEN_TRIGGER_PCT = 0.015
+# [2026-09-28 · Öneri 2] Breakeven stopu tam girişe değil, girişin bu kadar
+# üstüne kurulur: açılış boşluğunda stop piyasa fiyatından dolduğunda
+# (MSFT: giriş 494.44, çıkış 492.52) "başa baş" zarara dönmesin.
+BREAKEVEN_BUFFER_PCT = 0.002
 STALE_REFERENCE_DAYS = 10.0
 TREND_EMA_PERIOD = 50
 SWING_ORDER = 2
@@ -157,6 +176,27 @@ def _trend_ok(daily_closes: list[float] | None, side: str, trend_ema_period: int
         return True
     last_close = daily_closes[-1]
     return last_close > trend_ema if side == "long" else last_close < trend_ema
+
+
+def _breakeven_candidate(
+    ctx: StopContext, breakeven_trigger_pct: float, breakeven_buffer_pct: float,
+) -> tuple[float, str] | None:
+    """Fiyat girişin breakeven_trigger_pct kadar lehine geçtiyse, girişin
+    breakeven_buffer_pct kadar ötesine (long için üstüne) bir breakeven adayı.
+    [2026-09-28 · Öneri 2] Önceden aday tam giriş fiyatıydı (tampon yoktu) ve
+    aynı kod breakeven_atr_structure/wait_then_trail'de iki kez yazılıydı."""
+    last_price = ctx.bars[-1].c
+    if ctx.side == "long":
+        gain_pct = (last_price - ctx.entry_price) / ctx.entry_price
+        level = ctx.entry_price * (1 + breakeven_buffer_pct)
+        if gain_pct >= breakeven_trigger_pct and ctx.current_stop_price < level < last_price:
+            return level, "breakeven"
+        return None
+    gain_pct = (ctx.entry_price - last_price) / ctx.entry_price
+    level = ctx.entry_price * (1 - breakeven_buffer_pct)
+    if gain_pct >= breakeven_trigger_pct and ctx.current_stop_price > level > last_price:
+        return level, "breakeven"
+    return None
 
 
 def _structure_trail_candidate(
@@ -201,6 +241,7 @@ def breakeven_atr_structure_trail(
     trend_ema_period: int = TREND_EMA_PERIOD,
     swing_order: int = SWING_ORDER,
     fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+    breakeven_buffer_pct: float = BREAKEVEN_BUFFER_PCT,
 ) -> StopDecision | None:
     """Breakeven floor + (top-up sonrası "tighten_to_new_entry" seçiliyse)
     yeni ortalamaya göre nefes payı adayı + günlük EMA trend filtresiyle
@@ -212,13 +253,9 @@ def breakeven_atr_structure_trail(
     last_price = ctx.bars[-1].c
     candidates: list[tuple[float, str]] = []
 
-    gain_pct = ((last_price - ctx.entry_price) / ctx.entry_price if side == "long"
-                else (ctx.entry_price - last_price) / ctx.entry_price)
-    if gain_pct >= breakeven_trigger_pct:
-        if side == "long" and ctx.entry_price > ctx.current_stop_price and ctx.entry_price < last_price:
-            candidates.append((ctx.entry_price, "breakeven"))
-        elif side == "short" and ctx.entry_price < ctx.current_stop_price and ctx.entry_price > last_price:
-            candidates.append((ctx.entry_price, "breakeven"))
+    breakeven = _breakeven_candidate(ctx, breakeven_trigger_pct, breakeven_buffer_pct)
+    if breakeven is not None:
+        candidates.append(breakeven)
 
     if ctx.topped_up and ctx.top_up_stop_mode == "tighten_to_new_entry":
         if side == "long":
@@ -299,6 +336,7 @@ def wait_then_trail_trail(
     trend_ema_period: int = TREND_EMA_PERIOD,
     swing_order: int = SWING_ORDER,
     fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+    breakeven_buffer_pct: float = BREAKEVEN_BUFFER_PCT,
 ) -> StopDecision | None:
     """Beklemeli ve İz Süren Stop: breakeven floor (+%1.5 tetikte) + (top-up
     sonrası "tighten_to_new_entry" seçiliyse) nefes payı adayı - buraya kadar
@@ -313,13 +351,9 @@ def wait_then_trail_trail(
     last_price = ctx.bars[-1].c
     candidates: list[tuple[float, str]] = []
 
-    gain_pct = ((last_price - ctx.entry_price) / ctx.entry_price if side == "long"
-                else (ctx.entry_price - last_price) / ctx.entry_price)
-    if gain_pct >= breakeven_trigger_pct:
-        if side == "long" and ctx.entry_price > ctx.current_stop_price and ctx.entry_price < last_price:
-            candidates.append((ctx.entry_price, "breakeven"))
-        elif side == "short" and ctx.entry_price < ctx.current_stop_price and ctx.entry_price > last_price:
-            candidates.append((ctx.entry_price, "breakeven"))
+    breakeven = _breakeven_candidate(ctx, breakeven_trigger_pct, breakeven_buffer_pct)
+    if breakeven is not None:
+        candidates.append(breakeven)
 
     if ctx.topped_up and ctx.top_up_stop_mode == "tighten_to_new_entry":
         if side == "long":
@@ -480,6 +514,7 @@ def heikin_ashi_trail(
     trend_ema_period: int = TREND_EMA_PERIOD,
     swing_order: int = SWING_ORDER,
     fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+    breakeven_buffer_pct: float = BREAKEVEN_BUFFER_PCT,
 ) -> StopDecision | None:
     """HA/Stokastik çıkış sinyali varsa stopu son kapanışın exit_buffer_pct
     altına çeker; yoksa (ya da o aday daha gevşekse) breakeven_atr_structure_
@@ -487,7 +522,7 @@ def heikin_ashi_trail(
     short pozisyonlarda yalnızca yapısal trail çalışır."""
     base = breakeven_atr_structure_trail(
         ctx, initial_stop_pct, atr_period, atr_multiplier, breakeven_trigger_pct,
-        stale_reference_days, trend_ema_period, swing_order, fallback_buffer_pct,
+        stale_reference_days, trend_ema_period, swing_order, fallback_buffer_pct, breakeven_buffer_pct,
     )
     if ctx.side != "long" or not ctx.bars:
         return base
@@ -502,6 +537,127 @@ def heikin_ashi_trail(
     if exit_price <= best_so_far:
         return base
     return StopDecision(price=exit_price, reason=f"HA çıkış sinyali - {reason}")
+
+
+# ---- Beşinci algoritma: "Oynaklık (ATR) Stop" - [2026-09-28 · Öneri 1-2].
+#
+# Neden: sabit %1.5 ilk stop, portföydeki hisselerin GÜNLÜK ATR'sinin sadece
+# 0.3-0.7'si kadardı (MSFT %2.0, NOW %4.9, SKHY %5.0, UROY %5.2 günlük ATR) -
+# yani stop hissenin sıradan günlük gürültüsünün içindeydi. Aynı işlemlerde
+# 2xATR stop MSFT/NOW/SKHY/UROY'da hiç tetiklenmeyecekti (MSFT +%4.3'te).
+#
+# Nasıl:
+#   - İlk stop = giriş - initial_atr_mult x ATR(atr_period). ATR, GİRİŞ
+#     SİNYALİNİN ZAMAN DİLİMİNDEKİ barlardan hesaplanır (alpaca_buy_points
+#     initial_stop'a sembolün kendi periyodundaki barları geçirir; canlı trail
+#     de alpaca_trailing_stop.resolve_stop_timeframe ile aynı periyodu kullanır).
+#     Stop max_stop_pct'den daha uzağa düşmez (çok oynak hissede tavan).
+#   - 1R = giriş - ilk stop. Breakeven, bir bar KAPANIŞI giriş + breakeven_r x R'yi
+#     geçince giriş + breakeven_buffer_atr x ATR'ye çekilir (tam girişe değil).
+#   - En yüksek fiyat giriş + trail_start_r x R'ye ulaştıktan sonra chandelier
+#     trail: (girişten beri en yüksek fiyat) - trail_atr_mult x ATR.
+#   - Stop hiçbir zaman gevşemez ve güncel fiyatın üstüne çıkmaz.
+# Pozisyon büyüklüğü bu stopa göre risk_sizing.py'de hesaplanır (Öneri 5) -
+# geniş stop ancak küçülen pozisyonla güvenli.
+#
+# DURUM: Seçenek olarak mevcut, hiçbir hissenin VARSAYILANI DEĞİL. 2026-09-28
+# doğrulama backtestinde (scripts/compare_stop_algorithms.py, 11 hisse, günlük)
+# breakeven_atr_structure'ın günlük barlarda izlenen hali +237R, bu algoritma
+# -0.7R (8xATR trail ile +8.7R) verdi - chandelier büyük trendlerden erken
+# çıkıyor. Ayrıntı: İşlem Günlüğü > Değişiklik Günlüğü > Test sonuçları.
+
+ATR_VOL_INITIAL_ATR_MULT = 2.0
+ATR_VOL_MAX_STOP_PCT = 0.12
+ATR_VOL_FALLBACK_PCT = 0.03
+ATR_VOL_BREAKEVEN_R = 1.0
+ATR_VOL_BREAKEVEN_BUFFER_ATR = 0.1
+ATR_VOL_TRAIL_START_R = 2.0
+ATR_VOL_TRAIL_ATR_MULT = 3.0
+
+
+def _atr_from_context(bars: list[Bar] | None, history_bars: list[Bar] | None, atr_period: int) -> float | None:
+    """history_bars (giriş öncesini de içeren) varsa ATR ondan, yoksa bars'tan."""
+    for source in (history_bars, bars):
+        if source:
+            value = atr(source, atr_period)
+            if value is not None:
+                return value
+    return None
+
+
+def atr_volatility_initial_stop(
+    entry_price: float, side: str, bars: list[Bar] | None = None,
+    initial_atr_mult: float = ATR_VOL_INITIAL_ATR_MULT, atr_period: int = ATR_PERIOD,
+    max_stop_pct: float = ATR_VOL_MAX_STOP_PCT, fallback_pct: float = ATR_VOL_FALLBACK_PCT,
+) -> float:
+    """giriş - initial_atr_mult x ATR (short için +). ATR hesaplanamazsa
+    (bars yok / yetersiz) fallback_pct; mesafe max_stop_pct ile sınırlı."""
+    atr_value = atr(bars, atr_period) if bars else None
+    distance = initial_atr_mult * atr_value if atr_value else entry_price * fallback_pct
+    distance = min(distance, entry_price * max_stop_pct)
+    return entry_price - distance if side == "long" else entry_price + distance
+
+
+def atr_volatility_trail(
+    ctx: StopContext,
+    initial_atr_mult: float = ATR_VOL_INITIAL_ATR_MULT,
+    atr_period: int = ATR_PERIOD,
+    max_stop_pct: float = ATR_VOL_MAX_STOP_PCT,
+    fallback_pct: float = ATR_VOL_FALLBACK_PCT,
+    breakeven_r: float = ATR_VOL_BREAKEVEN_R,
+    breakeven_buffer_atr: float = ATR_VOL_BREAKEVEN_BUFFER_ATR,
+    trail_start_r: float = ATR_VOL_TRAIL_START_R,
+    trail_atr_mult: float = ATR_VOL_TRAIL_ATR_MULT,
+) -> StopDecision | None:
+    """R bazlı breakeven + chandelier trail - bkz. bölüm notu. Breakeven
+    kararı KAPANMIŞ bara göre verilir (oluşmakta olan barın anlık iğnesi
+    tetiklemez); stopun güncel fiyatın doğru tarafında kalması ise son
+    (oluşan) barın fiyatına göre kontrol edilir."""
+    if not ctx.bars:
+        return None
+    side = ctx.side
+    last_price = ctx.bars[-1].c
+    atr_value = _atr_from_context(ctx.bars, ctx.history_bars, atr_period)
+
+    if ctx.initial_stop_price is not None and ctx.initial_stop_price != ctx.entry_price:
+        one_r = abs(ctx.entry_price - ctx.initial_stop_price)
+    elif atr_value is not None:
+        one_r = min(initial_atr_mult * atr_value, ctx.entry_price * max_stop_pct)
+    else:
+        one_r = ctx.entry_price * fallback_pct
+    if one_r <= 0:
+        return None
+
+    closed = _closed_bars(ctx.bars)
+    last_close = closed[-1].c if closed else last_price
+    sign = 1 if side == "long" else -1
+    candidates: list[tuple[float, str]] = []
+
+    if sign * (last_close - ctx.entry_price) >= breakeven_r * one_r:
+        buffer_amount = breakeven_buffer_atr * atr_value if atr_value is not None else 0.0
+        candidates.append((ctx.entry_price + sign * buffer_amount, f"breakeven (+{breakeven_r:g}R)"))
+
+    if side == "long":
+        extreme = max(b.h for b in ctx.bars)
+        reached = extreme - ctx.entry_price >= trail_start_r * one_r
+    else:
+        extreme = min(b.l for b in ctx.bars)
+        reached = ctx.entry_price - extreme >= trail_start_r * one_r
+    if reached and atr_value is not None:
+        candidates.append((extreme - sign * trail_atr_mult * atr_value, f"chandelier ({trail_atr_mult:g}xATR)"))
+
+    valid = [c for c in candidates if (c[0] < last_price if side == "long" else c[0] > last_price)]
+    if not valid:
+        return None
+    if side == "long":
+        best_price, reason = max(valid, key=lambda c: c[0])
+        improves = best_price > ctx.current_stop_price
+    else:
+        best_price, reason = min(valid, key=lambda c: c[0])
+        improves = best_price < ctx.current_stop_price
+    if not improves:
+        return None
+    return StopDecision(price=best_price, reason=reason)
 
 
 STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
@@ -524,6 +680,11 @@ STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
         label="Heikin Ashi Çıkışı",
         initial_stop=heikin_ashi_initial_stop,
         trail=heikin_ashi_trail,
+    ),
+    "atr_volatility": StopAlgorithm(
+        label="Oynaklık (ATR) Stop + R Bazlı Breakeven",
+        initial_stop=atr_volatility_initial_stop,
+        trail=atr_volatility_trail,
     ),
 }
 DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"

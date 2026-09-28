@@ -102,5 +102,18 @@
   "max_loss_pct": 2.5,
   "top_up_stop_mode": "keep",
   "buy_stop_rebuy_enabled": false,
-  "buy_stop_rebuy_window_hours": 2.0
+  "buy_stop_rebuy_window_hours": 2.0,
+  "risk_sizing": {
+    "risk_sizing_enabled": true,
+    "risk_per_trade_pct": 0.5,
+    "max_position_pct": 20.0,
+    "max_portfolio_risk_pct": 5.0
+  },
+  "entry_timing": {
+    "pre_open_cancel_enabled": true,
+    "entry_guard_minutes": 15
+  },
+  "stop_timeframe_mode": "entry",
+  "rules_fingerprint": "954265c8691d",
+  "rules_version_since": "2026-09-28T08:21:21+00:00"
 }

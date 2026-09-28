@@ -11,6 +11,8 @@ from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
+from risk_sizing import load_risk_settings
+from rules_version import MIN_TRADES_FOR_EVALUATION, stamp_rules_version
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
 from alpaca_buy_points import PBP_INCOMPATIBLE_STOP_ALGORITHMS
 from ui_style import zebra_style, freshness_caption
@@ -167,9 +169,15 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         st.markdown(
             "- **Normal seansta (09:30-16:00 ET):** Watchlist'teki, pozisyonu olmayan her hisse için "
             "seçili algoritma taranır; sinyal varsa fiyatından bekleyen (GTC) bir limit-buy emri "
-            "konur/güncellenir - **bracket (OTO)** olarak, yani emrin stop-loss bacağı (giriş fiyatının "
-            "%1.5 altı) dolduğu anda Alpaca tarafında otomatik aktif olur, hiçbir gecikme olmaz.\n"
-            "- **Pre-market (04:00-09:30 ET) / after-hours (16:00-20:00 ET):** Alpaca bu saatlerde "
+            "konur/güncellenir - **bracket (OTO)** olarak, yani emrin stop-loss bacağı (seçili stop "
+            "algoritmasının ilk stopu) dolduğu anda Alpaca tarafında otomatik aktif olur, hiçbir gecikme olmaz.\n"
+            "- **[2026-09-28] Açılış koruması:** Seansın ilk 15 dakikasında (09:30-09:45 ET) hiçbir yeni alım "
+            "yapılmaz; seans dışında normal seans için bırakılmış bekleyen limit alışlar iptal edilir ve "
+            "pre-market'te giriş yapılmaz - açılış boşluğunda 'fiyat düştüğü için dolan' emirler önlenir. "
+            "Sinyal 09:45'ten sonra yeniden değerlendirilir.\n"
+            "- **[2026-09-28] Risk bazlı adet:** Adet = (özsermaye × işlem başına risk %) / (giriş − stop). "
+            "Ağırlık bütçesi ve nakit sadece tavan.\n"
+            "- **After-hours (16:00-20:00 ET)** (pre-market girişi açılış koruması açıkken kapalı): Alpaca bu saatlerde "
             "bracket emirlere izin vermediği için, aynı sinyal fiyatından düz (bracket'sız) bir "
             "*day + extended-hours limit-buy* gönderilir. Ayrı bir mekanizma, kendi içinde birkaç "
             "dakika boyunca sıkı bir döngüyle dolup dolmadığını kontrol eder ve dolduğu anda naif "
@@ -448,6 +456,66 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "alım durdurulur.",
     )
 
+    # ---- [2026-09-28 · Öneri 1, 4, 5, 6] ----
+    st.subheader("📐 Risk Bazlı Pozisyon Büyüklüğü")
+    st.caption(
+        "[2026-09-28 · Öneri 5] Adet = (özsermaye × işlem başına risk %) / (giriş − stop). Böylece stop "
+        "yakın da olsa uzak da olsa her kayıp yaklaşık aynı dolar tutarında olur; oynak hisse küçük, sakin "
+        "hisse büyük pozisyon alır. Yukarıdaki ağırlık bütçesi ve nakit artık sadece TAVAN. Analizde "
+        "işlem başına risk 14$ ile 282$ arasında değişiyordu (20 kat) - en iyi işlemler en küçük riskle "
+        "açıldığı için hesaba yansımadı. Aynı ayarlar ORB, Relative Strength ve Heikin Ashi modüllerinin "
+        "girişlerine de tavan olarak uygulanır; toplam açık risk tavanı tüm modüllerle ortaktır."
+    )
+    risk_settings = load_risk_settings(config)
+    rs1, rs2, rs3, rs4 = st.columns(4)
+    risk_sizing_enabled = rs1.checkbox(
+        "Risk bazlı büyüklük açık", value=bool(risk_settings["risk_sizing_enabled"]), key="pbp_risk_enabled",
+    )
+    risk_per_trade_pct = rs2.number_input(
+        "İşlem başına risk %", min_value=0.05, max_value=5.0, value=float(risk_settings["risk_per_trade_pct"]),
+        step=0.05, format="%.2f", key="pbp_risk_per_trade_pct", disabled=not risk_sizing_enabled,
+        help="Stop çalışırsa kaybedilecek tutar, özsermayenin bu yüzdesi. %0.5 önerilir; 30-50 işlem "
+             "birikmeden artırmayın.",
+    )
+    max_position_pct = rs3.number_input(
+        "Tek pozisyon tavanı %", min_value=1.0, max_value=100.0, value=float(risk_settings["max_position_pct"]),
+        step=1.0, format="%.0f", key="pbp_max_position_pct", disabled=not risk_sizing_enabled,
+        help="Çok dar stoplu bir hissede formülün devasa pozisyon çıkarmasını engeller.",
+    )
+    max_portfolio_risk_pct = rs4.number_input(
+        "Toplam açık risk tavanı %", min_value=0.5, max_value=50.0,
+        value=float(risk_settings["max_portfolio_risk_pct"]), step=0.5, format="%.1f",
+        key="pbp_max_portfolio_risk_pct", disabled=not risk_sizing_enabled,
+        help="Portföy ısısı: tüm açık pozisyonların (ortalama maliyet − stop) × adet toplamı. Breakeven'e "
+             "çekilmiş pozisyonun riski 0'dır ve yer açar.",
+    )
+
+    st.subheader("⏱️ Giriş Zamanlaması ve Stop Periyodu")
+    entry_timing = {"pre_open_cancel_enabled": True, "entry_guard_minutes": 15, **(config.get("entry_timing") or {})}
+    et1, et2, et3 = st.columns(3)
+    pre_open_cancel_enabled = et1.checkbox(
+        "Açılış öncesi limitleri iptal et", value=bool(entry_timing["pre_open_cancel_enabled"]),
+        key="pbp_pre_open_cancel",
+        help="[2026-09-28 · Öneri 4] Seans dışında normal seans için bırakılmış bekleyen limit alışlar "
+             "iptal edilir, pre-market'te giriş yapılmaz. Analizde 17 girişin 8'i 09:33-09:36 ET'de, "
+             "hisse boşlukla limit seviyesinin altına açıldığı için dolmuştu.",
+    )
+    entry_guard_minutes = et2.number_input(
+        "Açılıştan sonra alım yok (dk)", min_value=0, max_value=120, value=int(entry_timing["entry_guard_minutes"]),
+        step=5, key="pbp_entry_guard_minutes",
+        help="Seans açılışından sonraki bu süre boyunca hiçbir yeni alım (limit, kırılım, ilave alım) yapılmaz.",
+    )
+    stop_timeframe_options = ["entry", "global"]
+    stop_timeframe_mode = et3.selectbox(
+        "Stop mum periyodu", stop_timeframe_options,
+        index=stop_timeframe_options.index(config.get("stop_timeframe_mode") or "entry"),
+        format_func=lambda v: {"entry": "Girişin periyodu (önerilen)",
+                               "global": f"Sabit {TIMEFRAME_LABELS.get(TIMEFRAME, TIMEFRAME)} (eski)"}[v],
+        key="pbp_stop_timeframe_mode",
+        help="[2026-09-28 · Öneri 1] Günlük sinyalle alınan hisse günlük barlarla, 30 dakikalık sinyalle "
+             "alınan 30 dakikalıkla izlenir. Eskiden her hisse sabit 30 dakikalık barlarla izleniyordu.",
+    )
+
     st.info(
         "💡 **İlave Alım (Top-up) nasıl çalışır?** Bir hissede pozisyon zaten açıkken bütçe artırılıp "
         "ağırlık sabit bırakılırsa ve algoritmanın sinyal fiyatı güncel fiyata yakınsa (%0.5 içinde), "
@@ -541,6 +609,15 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     weights_map = {row["Hisse"]: float(row["Ağırlık %"]) for _, row in edited_weights.iterrows()}
 
+    # [2026-09-28 · Öneri 6] Kural dondurma hatırlatıcısı.
+    if config.get("rules_version_since"):
+        st.caption(
+            f"🧊 Mevcut kural sürümü: **{config['rules_version_since'][:10]}** tarihinden beri. Algoritma, stop, "
+            f"risk ya da zamanlama ayarlarını değiştirmek yeni bir kural sürümü başlatır - sonuçların "
+            f"ölçülebilmesi için en az {MIN_TRADES_FOR_EVALUATION} kapanan işlem birikmeden değiştirmemeniz "
+            "önerilir (sayaç: 📒 İşlem Günlüğü). Bütçe ve ağırlık değişiklikleri kural sürümünü sıfırlamaz."
+        )
+
     if st.button("💾 Portföyü Kaydet", type="primary"):
         if live_cash is not None and budget > live_cash:
             st.error(
@@ -551,6 +628,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             client.set_watchlist_symbols(watchlist["id"], selected_symbols)
             st.session_state["premium_buy_transfer_carry"] = []
             new_config = {
+                **{k: v for k, v in config.items() if k in ("rules_fingerprint", "rules_version_since")},
                 "budget": float(budget),
                 "weights": weights_map,
                 "algorithm": selected_algorithm,
@@ -561,7 +639,20 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
                 "top_up_stop_mode": top_up_stop_mode,
                 "buy_stop_rebuy_enabled": bool(buy_stop_rebuy_enabled),
                 "buy_stop_rebuy_window_hours": float(buy_stop_rebuy_window_hours),
+                "risk_sizing": {
+                    "risk_sizing_enabled": bool(risk_sizing_enabled),
+                    "risk_per_trade_pct": float(risk_per_trade_pct),
+                    "max_position_pct": float(max_position_pct),
+                    "max_portfolio_risk_pct": float(max_portfolio_risk_pct),
+                },
+                "entry_timing": {
+                    "pre_open_cancel_enabled": bool(pre_open_cancel_enabled),
+                    "entry_guard_minutes": int(entry_guard_minutes),
+                },
+                "stop_timeframe_mode": stop_timeframe_mode,
             }
+            # [2026-09-28 · Öneri 6] Kural parmak izi değiştiyse kural sürümü yenilenir.
+            new_config = stamp_rules_version(new_config, config)
             write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
             st.success("Portföy kaydedildi.")
             st.rerun()

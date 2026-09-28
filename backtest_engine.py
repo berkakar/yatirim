@@ -44,6 +44,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 from alpaca_trailing_stop import LOOKBACK_DAYS as TRAIL_LOOKBACK_DAYS
+from alpaca_trailing_stop import STOP_HISTORY_DAYS_DAILY, STOP_HISTORY_DAYS_INTRADAY
 from buy_algorithms import ALGORITHMS, reject_if_marketable
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from structure import Bar
@@ -117,6 +118,11 @@ def _manage_position(
     entry_idx = _last_index_at_or_before(stop_bars, entry_ts)
     position = {**position, "entry_idx": entry_idx}
     last_ts = entry_ts
+    # [2026-09-28 · Öneri 1-2] Canlı sistemle (alpaca_trailing_stop.
+    # manage_position) aynı: 1R için ilk stop, ATR için giriş öncesini de
+    # kapsayan bar penceresi.
+    initial_stop_price = position.get("initial_stop", position["stop_price"])
+    history_days = STOP_HISTORY_DAYS_DAILY if is_daily_tf_stop else STOP_HISTORY_DAYS_INTRADAY
 
     # Kontrol, entry_idx+1'den değil entry_ts'den KESİN SONRAKİ ilk bar'dan
     # başlar: stop_bars, entry_ts'den önce/eşit hiçbir bar içermiyorsa (ör.
@@ -148,6 +154,8 @@ def _manage_position(
         ctx = StopContext(
             side="long", entry_price=position["entry_price"], current_stop_price=position["stop_price"],
             bars=struct_bars, daily_closes=daily_closes,
+            initial_stop_price=initial_stop_price,
+            history_bars=_window(stop_bars, j, TRAIL_LOOKBACK_DAYS + history_days),
         )
         decision = stop_algo.trail(ctx, **resolve_kwargs(stop_algo.trail, algo_settings, shared_settings))
         if decision is not None and decision.price > position["stop_price"]:

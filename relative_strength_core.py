@@ -58,7 +58,9 @@ from datetime import datetime, timedelta, timezone
 
 from alpaca_client import AlpacaClient
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
+from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
+from stop_tags import stop_tag
 
 DEFAULT_TOP_N = 10
 DEFAULT_LOOKBACK_WEEKS = 8
@@ -302,6 +304,14 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
     target_per_position = total_rs_cash / top_n if top_n > 0 else 0.0
     available_cash = compute_available_cash_for_rotation(client, cash_allocation_pct)
 
+    # [2026-09-28 · Öneri 5] Premium Buy Point'in risk ayarları (portfolio_config
+    # "risk_sizing") bu modülün girişlerine de TAVAN olarak uygulanır: stopa
+    # kadar olan risk işlem başına risk$'ı ve kalan portföy ısısını aşamaz.
+    # Fonksiyon içi import: döngüsel import (alpaca_buy_points -> bu modül).
+    from alpaca_buy_points import load_module_risk_context
+    risk = load_module_risk_context(client)
+    risk_notes: list[str] = []
+
     bought: list[str] = []
     buy_errors: list[str] = []
     for symbol in plan.to_buy:
@@ -318,8 +328,17 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
                 buy_errors.append(f"{symbol}: güncel fiyat alınamadı")
                 continue
             qty = math.floor(dollar_amount / live_price)
+            if risk is not None and qty > 0:
+                # RS stopu bar kullanmıyor (sabit yüzde) - tahmin, gerçek dolumdan
+                # kurulacak stopla aynı formül.
+                estimated_stop = stop_algo.initial_stop(
+                    live_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                )
+                qty, note = apply_risk_cap(risk, qty, live_price, estimated_stop)
+                if note:
+                    risk_notes.append(f"{symbol}: {note}")
             if qty <= 0:
-                buy_errors.append(f"{symbol}: hedef tutar (${dollar_amount:.2f}) 1 adet için yetersiz")
+                buy_errors.append(f"{symbol}: hedef tutar (${dollar_amount:.2f}) ya da risk tavanı 1 adet için yetersiz")
                 continue
 
             tag = f"{ORDER_TAG_PREFIX}-buy-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
@@ -333,7 +352,7 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
                 fill_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
-                client.place_stop_order(symbol, filled_qty, "long", stop_price)
+                client.place_stop_order(symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", symbol))
             except Exception as e:
                 buy_errors.append(f"{symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
 
@@ -358,6 +377,7 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
         "bought": bought,
         "sell_errors": sell_errors,
         "buy_errors": buy_errors,
+        "risk_notes": risk_notes,
         "cash_allocation_pct": cash_allocation_pct,
         "top_n": top_n,
     }

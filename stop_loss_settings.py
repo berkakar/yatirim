@@ -1,4 +1,4 @@
-"""Stop Loss Ayarları modülü - dört stop-loss algoritmasının (stop_algorithms.py)
+"""Stop Loss Ayarları modülü - beş stop-loss algoritmasının (stop_algorithms.py)
 parametrelerini kullanıcı bazında ayarlamayı ve GitHub'a kalıcı olarak
 kaydetmeyi sağlar (bkz. github_config.py - premium_buy_portfolio.py'nin
 portföy config'i için kullandığı aynı okuma/yazma deseni,
@@ -16,8 +16,11 @@ değerleri, doğrudan stop_algorithms.py'den okunur) geçerli olur.
 import streamlit as st
 
 from github_config import read_json_from_github, write_json_to_github
+from alpaca_trailing_stop import EXECUTION_DEFAULTS
 from stop_algorithms import (
-    ATR_MULTIPLIER, ATR_PERIOD, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
+    ATR_MULTIPLIER, ATR_PERIOD, ATR_VOL_BREAKEVEN_BUFFER_ATR, ATR_VOL_BREAKEVEN_R, ATR_VOL_FALLBACK_PCT,
+    ATR_VOL_INITIAL_ATR_MULT, ATR_VOL_MAX_STOP_PCT, ATR_VOL_TRAIL_ATR_MULT, ATR_VOL_TRAIL_START_R,
+    BREAKEVEN_BUFFER_PCT, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
     HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
     STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
     WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT, WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
@@ -54,7 +57,7 @@ def save_stop_loss_settings(username: str, settings: dict) -> None:
 def render_stop_loss_settings(username: str):
     st.caption(
         "Trailing Stop modülünün, Premium Buy Point'in bracket girişlerinin ve BackTest'in kullandığı "
-        "dört stop-loss algoritmasının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
+        "beş stop-loss algoritmasının ve emir yürütme (açılış kalkanı) ayarlarının parametrelerini burada ayarlayabilirsiniz. Aşağıdaki kutular kod "
         "içindeki varsayılan değerlerle dolu geliyor - hiç değiştirmeden kaydetseniz bile mevcut davranış "
         "aynen korunur. Bir kutuyu boşaltıp tekrar kod-varsayılanına dönmek isterseniz, değeri elle "
         "yukarıdaki varsayılana geri yazmanız yeterli."
@@ -70,6 +73,16 @@ def render_stop_loss_settings(username: str):
     algo2 = existing.get("wait_then_trail") or {}
     algo3 = existing.get("opening_range") or {}
     algo4 = existing.get("heikin_ashi_exit") or {}
+    algo5 = existing.get("atr_volatility") or {}
+    execution = {**EXECUTION_DEFAULTS, **(existing.get("execution") or {})}
+
+    st.info(
+        "🆕 **2026-09-28 güncellemesi (emir analizi önerileri 1-3):** Breakeven tetiği %1'den %1.5'e (=1R) "
+        "çıkarıldı ve breakeven stopu tam girişe değil girişin %0.2 üstüne kuruluyor; seans dışında **açılış "
+        "kalkanı** devrede. Yeni **Oynaklık (ATR) Stop** algoritması seçenek olarak eklendi ama doğrulama "
+        "backtestinde mevcut algoritmadan kötü çıktığı için hiçbir hissede varsayılan yapılmadı. "
+        "Gerekçeler ve takip ölçütleri: **📒 İşlem Günlüğü > 📝 Değişiklik Günlüğü**."
+    )
 
     st.subheader(f"🎯 {STOP_ALGORITHMS['breakeven_atr_structure'].label}")
     st.caption(
@@ -91,6 +104,15 @@ def render_stop_loss_settings(username: str):
         key="sls_algo1_breakeven_trigger_pct",
         help="Fiyat ortalama maliyetin bu yüzde kadar lehine hareket ettiğinde, stop ortalama "
              "maliyete (breakeven) çekilir.",
+    )
+
+    algo1_breakeven_buffer_pct = a1c1.number_input(
+        "Breakeven Tamponu %", min_value=0.0, max_value=5.0,
+        value=float(algo1.get("breakeven_buffer_pct", BREAKEVEN_BUFFER_PCT * 100)), step=0.05, format="%.2f",
+        key="sls_algo1_breakeven_buffer_pct",
+        help="[2026-09-28] Breakeven stopu tam giriş fiyatına değil, girişin bu yüzde kadar üstüne "
+             "kurulur - açılış boşluğunda piyasa fiyatından dolan stop 'başa baş'ı zarara çevirmesin. "
+             "Beklemeli ve İz Süren Stop ile Heikin Ashi Çıkışı da bu değeri kullanır.",
     )
 
     sc1, sc2, sc3 = st.columns(3)
@@ -233,6 +255,88 @@ def render_stop_loss_settings(username: str):
     )
 
     st.divider()
+    st.subheader(f"📏 {STOP_ALGORITHMS['atr_volatility'].label}")
+    st.caption(
+        "[2026-09-28 · Öneri 1-2] İlk stop sabit bir yüzde yerine hissenin kendi oynaklığına göre kurulur: "
+        "giriş − (ATR Çarpanı × ATR). ATR, giriş sinyalinin mum periyodundan hesaplanır (günlük sinyal → "
+        "günlük ATR). 1R = giriş − ilk stop. Bir bar kapanışı giriş + (Breakeven R × 1R)'yi geçince stop "
+        "giriş + (tampon × ATR)'ye çekilir; en yüksek fiyat giriş + (Trail Başlangıç R × 1R)'ye ulaşınca "
+        "chandelier trail başlar: en yüksek fiyat − (Trail ATR Çarpanı × ATR). ATR Periyodu yukarıdaki "
+        "paylaşılan değerdir. Pozisyon büyüklüğü Premium Buy Point sayfasındaki risk ayarlarıyla bu stopa "
+        "göre hesaplanır - geniş stop, küçük pozisyon."
+    )
+    a5c1, a5c2, a5c3 = st.columns(3)
+    algo5_initial_atr_mult = a5c1.number_input(
+        "İlk Stop ATR Çarpanı", min_value=0.5, max_value=10.0,
+        value=float(algo5.get("initial_atr_mult", ATR_VOL_INITIAL_ATR_MULT)), step=0.25, format="%.2f",
+        key="sls_algo5_initial_atr_mult",
+        help="İlk stop = giriş − bu çarpan × ATR. Günlük sinyaller için 2, gün içi için 1.5-2 önerilir.",
+    )
+    algo5_max_stop_pct = a5c2.number_input(
+        "Maksimum Stop Mesafesi %", min_value=1.0, max_value=50.0,
+        value=float(algo5.get("max_stop_pct", ATR_VOL_MAX_STOP_PCT * 100)), step=0.5, format="%.1f",
+        key="sls_algo5_max_stop_pct",
+        help="Çok oynak hisselerde ATR stopu bu yüzdeden daha uzağa kurulmaz.",
+    )
+    algo5_fallback_pct = a5c3.number_input(
+        "Yedek Stop % (ATR hesaplanamazsa)", min_value=0.1, max_value=50.0,
+        value=float(algo5.get("fallback_pct", ATR_VOL_FALLBACK_PCT * 100)), step=0.1, format="%.2f",
+        key="sls_algo5_fallback_pct",
+    )
+    a5c4, a5c5, a5c6, a5c7 = st.columns(4)
+    algo5_breakeven_r = a5c4.number_input(
+        "Breakeven Tetiği (R)", min_value=0.25, max_value=10.0,
+        value=float(algo5.get("breakeven_r", ATR_VOL_BREAKEVEN_R)), step=0.25, format="%.2f",
+        key="sls_algo5_breakeven_r",
+        help="Bir bar KAPANIŞI giriş + bu kadar R'yi geçince stop breakeven'e çekilir.",
+    )
+    algo5_breakeven_buffer_atr = a5c5.number_input(
+        "Breakeven Tamponu (×ATR)", min_value=0.0, max_value=2.0,
+        value=float(algo5.get("breakeven_buffer_atr", ATR_VOL_BREAKEVEN_BUFFER_ATR)), step=0.05, format="%.2f",
+        key="sls_algo5_breakeven_buffer_atr",
+    )
+    algo5_trail_start_r = a5c6.number_input(
+        "Trail Başlangıcı (R)", min_value=0.5, max_value=20.0,
+        value=float(algo5.get("trail_start_r", ATR_VOL_TRAIL_START_R)), step=0.25, format="%.2f",
+        key="sls_algo5_trail_start_r",
+    )
+    algo5_trail_atr_mult = a5c7.number_input(
+        "Trail ATR Çarpanı", min_value=0.5, max_value=10.0,
+        value=float(algo5.get("trail_atr_mult", ATR_VOL_TRAIL_ATR_MULT)), step=0.25, format="%.2f",
+        key="sls_algo5_trail_atr_mult",
+        help="Chandelier trail: girişten beri en yüksek fiyat − bu çarpan × ATR.",
+    )
+
+    st.divider()
+    st.subheader("🌅 Emir Yürütme: Açılış Kalkanı")
+    st.caption(
+        "[2026-09-28 · Öneri 3] Emir analizinde 17 çıkışın 7'si açılışın ilk 5 dakikasında, 3'ü seans "
+        "dışında gerçekleşti. Kalkan açıkken seans dışında stop, asıl seviyenin aşağıdaki yüzde kadar "
+        "altındaki bir felaket stopuna çekilir (asıl seviye emrin etiketinde saklanır). Seans açılışından "
+        "belirtilen dakika sonra stop asıl seviyeye döner; fiyat o seviyenin altındaysa pozisyon market "
+        "emriyle kapatılır. Tüm algoritmalar ve modüller (PBP, ORB, RS, HA) için geçerlidir."
+    )
+    e1, e2, e3, e4 = st.columns(4)
+    exec_shield_enabled = e1.checkbox(
+        "Açılış kalkanı açık", value=bool(execution["opening_shield_enabled"]), key="sls_exec_shield_enabled",
+    )
+    exec_shield_minutes = e2.number_input(
+        "Kalkan süresi (dk)", min_value=1, max_value=120, value=int(execution["opening_shield_minutes"]),
+        step=1, key="sls_exec_shield_minutes",
+    )
+    exec_disaster_pct = e3.number_input(
+        "Felaket stopu mesafesi %", min_value=0.5, max_value=30.0,
+        value=float(execution["shield_disaster_pct"]), step=0.5, format="%.1f", key="sls_exec_disaster_pct",
+        help="Seans dışında stop, asıl seviyenin bu yüzde kadar altına çekilir.",
+    )
+    exec_ext_trail = e4.checkbox(
+        "Seans dışında trail yap", value=bool(execution["extended_hours_trail_enabled"]), key="sls_exec_ext_trail",
+        help="Eski davranış: düşük hacimli pre-market/after-hours barlarıyla stopu sıkılaştırır. Analizde "
+             "bu, stopun açılışta tetiklenmesine yol açtığı için varsayılan olarak kapalı. Kalkan açıkken "
+             "etkisizdir.",
+    )
+
+    st.divider()
     if st.button("💾 Kaydet", type="primary", key="sls_save_btn"):
         new_settings = {
             "shared": {
@@ -246,8 +350,10 @@ def render_stop_loss_settings(username: str):
             "breakeven_atr_structure": {
                 "initial_stop_pct": float(algo1_initial_stop_pct),
                 "breakeven_trigger_pct": float(algo1_breakeven_trigger_pct),
+                "breakeven_buffer_pct": float(algo1_breakeven_buffer_pct),
             },
             "wait_then_trail": {
+                "breakeven_buffer_pct": float(algo1_breakeven_buffer_pct),
                 "initial_stop_pct": float(algo2_initial_stop_pct),
                 "breakeven_trigger_pct": float(algo2_breakeven_trigger_pct),
                 "profit_lock_trigger_pct": float(algo2_profit_lock_trigger_pct),
@@ -262,6 +368,22 @@ def render_stop_loss_settings(username: str):
                 "buffer_pct": float(algo4_buffer_pct),
                 "exit_buffer_pct": float(algo4_exit_buffer_pct),
                 "fallback_pct": float(algo4_fallback_pct),
+                "breakeven_buffer_pct": float(algo1_breakeven_buffer_pct),
+            },
+            "atr_volatility": {
+                "initial_atr_mult": float(algo5_initial_atr_mult),
+                "max_stop_pct": float(algo5_max_stop_pct),
+                "fallback_pct": float(algo5_fallback_pct),
+                "breakeven_r": float(algo5_breakeven_r),
+                "breakeven_buffer_atr": float(algo5_breakeven_buffer_atr),
+                "trail_start_r": float(algo5_trail_start_r),
+                "trail_atr_mult": float(algo5_trail_atr_mult),
+            },
+            "execution": {
+                "opening_shield_enabled": bool(exec_shield_enabled),
+                "opening_shield_minutes": int(exec_shield_minutes),
+                "shield_disaster_pct": float(exec_disaster_pct),
+                "extended_hours_trail_enabled": bool(exec_ext_trail),
             },
         }
         try:

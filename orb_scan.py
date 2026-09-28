@@ -185,6 +185,15 @@ def render_orb_scan(username: str):
                 f"seçilen: {', '.join(summary.get('selected_symbols') or []) or 'yok'}, "
                 f"alınan: {', '.join(summary.get('bought') or []) or 'yok'}."
             )
+            # [2026-09-28 · Öneri 5] Risk bazlı adet tavanının bu koşuda kıstığı girişler.
+            if summary.get("risk_notes"):
+                st.caption("📐 Risk tavanı: " + " · ".join(summary["risk_notes"]))
+
+    st.caption(
+        "📐 [2026-09-28] Bu modülün girişlerine, 🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
+        "ayarları TAVAN olarak uygulanır: adet, nakit payından hesaplanan adetle (özsermaye × işlem başına "
+        "risk %) / (giriş − stop) arasındaki küçük olan; toplam açık risk tavanı da tüm modüllerle ortak."
+    )
 
     if st.button("💾 Ayarları Kaydet", type="primary"):
         new_config = dict(config)
