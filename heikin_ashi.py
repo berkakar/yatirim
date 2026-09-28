@@ -4,7 +4,8 @@ GitHub Action job'ları hafif kalsın).
 
 Alım (buy_algorithms.heikin_ashi_stoch_signal):
   - Trend: kapanış SMA(50) üzerinde.
-  - Momentum: Stokastik %K < 30 VE %K > %D (aşırı satım bölgesinde yukarı dönüş).
+  - Momentum: Stokastik %K < 30 VE %K bu mumda %D'yi YUKARI KESTİ (önceki mumda
+    %K <= %D, şimdi %K > %D) - aşırı satım bölgesinde taze yukarı dönüş.
   - Mum: önceki HA mumu kırmızı, güncel HA mumu yeşil VE alt fitili yok
     (|HA_Low - HA_Open|, HA mumunun toplam boyunun en fazla %5'i).
 
@@ -92,19 +93,23 @@ def long_entry(
     d_period: int = STOCH_D_PERIOD, oversold: float = STOCH_OVERSOLD,
     max_lower_wick_ratio: float = MAX_LOWER_WICK_RATIO,
 ) -> tuple[float, float, float] | None:
-    """Son bar alım koşullarının hepsini sağlıyorsa (sma, %K, %D), yoksa None."""
-    if len(bars) < max(sma_period, k_period + d_period - 1, 2):
+    """Son bar alım koşullarının hepsini sağlıyorsa (sma, %K, %D), yoksa None.
+
+    Stokastik koşulu bir DURUM değil KESİŞİM: önceki mumda %K <= %D, bu mumda
+    %K > %D. [2026-09-28] Önceden sadece "%K > %D" aranıyordu - kesişim birkaç
+    mum önce olmuş olsa da sinyal veriyordu, belgelenen kural bu değildi."""
+    if len(bars) < max(sma_period, k_period + d_period, 2):
         return None
     last = bars[-1]
     sma = sum(b.c for b in bars[-sma_period:]) / sma_period
     if last.c <= sma:
         return None
 
-    stoch = _last_stoch(bars, k_period, d_period)
-    if stoch is None:
+    k_series, d_series = stochastic_series(bars[-(k_period + d_period):], k_period, d_period)
+    k, d, prev_k, prev_d = k_series[-1], d_series[-1], k_series[-2], d_series[-2]
+    if None in (k, d, prev_k, prev_d):
         return None
-    k, d = stoch
-    if not (k < oversold and k > d):
+    if not (k < oversold and k > d and prev_k <= prev_d):
         return None
 
     ha = heikin_ashi(bars)

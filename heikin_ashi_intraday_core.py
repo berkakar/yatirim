@@ -42,6 +42,7 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
@@ -62,6 +63,18 @@ DEFAULT_CASH_ALLOCATION_PCT = 0.0  # opt-in - bkz. orb_core.DEFAULT_CASH_ALLOCAT
 EOD_FLATTEN_MINUTES = 20
 NO_NEW_ENTRY_MINUTES = 60
 ORDER_TAG_PREFIX = "hai"
+# [2026-09-28] Sinyal mumu en fazla bu kadar önce kapanmış olmalı: 30 dk'lık
+# periyot + Alpaca'da bar verisinin oluşması için 5 dk pay. Aksi halde
+# sinyal bayat bir mumdan geliyor demektir - en tipik hali 09:32 ET taraması:
+# 09:30 mumu henüz kapanmadığı için "son kapanmış mum" DÜNKÜ 15:30 mumuydu ve
+# dünün sinyaliyle bugünün (boşluklu) açılış fiyatından alım yapılıyordu. IEX
+# verisinde işlem olmayan bir yarım saat de (mum hiç gelmez) aynı sonucu verir.
+MAX_SIGNAL_BAR_AGE = timedelta(minutes=35)
+BAR_DURATION = timedelta(minutes=30)
+SESSION_OPEN_ET = (9, 30)
+# Yarım günlerde (13:00 kapanış) son mum 12:30'da başlar.
+MIN_LAST_BAR_ET = (12, 30)
+ET = ZoneInfo("America/New_York")
 HA_INTRADAY_DEFAULT_STOP_ALGORITHM = "heikin_ashi_exit"
 
 
@@ -135,17 +148,63 @@ def _fetch_bars(client: AlpacaClient, symbol: str) -> list:
     return get_bars_for_timeframe(client, symbol, TIMEFRAME, start, exclude_forming=True)
 
 
-def scan_candidates(client: AlpacaClient, universe: list[str]) -> list[HaCandidate]:
+def _bar_start_et(bar) -> datetime:
+    return datetime.fromisoformat(bar.t.replace("Z", "+00:00")).astimezone(ET)
+
+
+def signal_bars_problem(bars: list, now: datetime | None = None) -> str | None:
+    """Sinyal hesaplamadan ÖNCE bar penceresini doğrular; sorun varsa kısa
+    bir açıklama, yoksa None döner. İki kontrol:
+
+    1. Tazelik: son (kapanmış) mum bugünün seansına ait ve en fazla
+       MAX_SIGNAL_BAR_AGE önce kapanmış olmalı - bkz. MAX_SIGNAL_BAR_AGE.
+    2. Bütünlük: penceredeki her seans 09:30 mumuyla başlamalı, mumlar
+       arasında boşluk olmamalı ve geçmiş seanslar en az 12:30 mumuna kadar
+       gitmeli. Veri IEX akışından geliyor; küçük hisselerde işlem olmayan
+       yarım saatlerde mum hiç oluşmuyor (repo önbelleğinde AAT'de 44 günün
+       27'si eksik). Eksik mumla Heikin Ashi/SMA50/Stokastik yanlış
+       zaman ölçeğinde hesaplanır ve sinyal mumunun dibi güvenilmez olur."""
+    if not bars:
+        return "mum yok"
+    now = now or datetime.now(timezone.utc)
+    last_start = _bar_start_et(bars[-1])
+    if last_start.date() != now.astimezone(ET).date():
+        return f"son mum bugüne ait değil ({last_start:%Y-%m-%d %H:%M} ET)"
+    age = now - (last_start + BAR_DURATION)
+    if age > MAX_SIGNAL_BAR_AGE:
+        return f"son mum {int(age.total_seconds() // 60)} dk önce kapanmış"
+
+    by_day: dict = {}
+    for bar in bars:
+        start = _bar_start_et(bar)
+        by_day.setdefault(start.date(), []).append(start)
+    today = last_start.date()
+    first_day = next(iter(by_day))
+    for day, starts in by_day.items():
+        # Pencerenin ilk günü, "şu andan BARS_LOOKBACK_DAYS önce" başlangıcı
+        # yüzünden neredeyse her zaman seansın ortasından başlar - 09:30 şartı
+        # ona uygulanmaz (içindeki boşluk kontrolü yine yapılır).
+        if day != first_day and (starts[0].hour, starts[0].minute) != SESSION_OPEN_ET:
+            return f"{day} seansı 09:30 mumuyla başlamıyor"
+        if any(b - a != BAR_DURATION for a, b in zip(starts, starts[1:])):
+            return f"{day} seansında eksik mum var"
+        if day != today and (starts[-1].hour, starts[-1].minute) < MIN_LAST_BAR_ET:
+            return f"{day} seansı erken bitiyor (eksik mum)"
+    return None
+
+
+def scan_candidates(client: AlpacaClient, universe: list[str], now: datetime | None = None) -> list[HaCandidate]:
     """Salt-okunur: emir vermez, dosya yazmaz. Evrendeki her sembol için
     kapanmış 30 dakikalık barlarda alım sinyali var mı bakar, puana göre
-    büyükten küçüğe sıralı döner."""
+    büyükten küçüğe sıralı döner. Bar penceresi signal_bars_problem'den
+    geçmeyen (bayat ya da eksik mumlu) semboller atlanır."""
     candidates = []
     for symbol in universe:
         try:
             bars = _fetch_bars(client, symbol)
         except Exception:
             continue
-        if not bars:
+        if not bars or signal_bars_problem(bars, now) is not None:
             continue
         signal = heikin_ashi_stoch_signal(bars)
         if signal is None:
@@ -259,7 +318,12 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
         cfg.get("custom_groups") or [], cfg.get("include_russell", False),
     )
     universe = [t for t in universe if t not in excluded_symbols(client, username) and t not in holdings]
-    universe = filter_by_liquidity(client, universe, cfg.get("min_avg_dollar_volume", DEFAULT_MIN_AVG_DOLLAR_VOLUME))
+    # "or": ayarlar sayfası (heikin_ashi_intraday.py) 0'ı boş sayıp varsayılanı
+    # (5M $) gösteriyor - canlı tarama da aynı değeri kullanmalı. Önceden kayıtlı
+    # 0.0 burada olduğu gibi kullanılıyordu: ekranda 5M $ filtre görünürken
+    # canlıda hiç likidite filtresi yoktu.
+    min_dollar_volume = float(cfg.get("min_avg_dollar_volume") or DEFAULT_MIN_AVG_DOLLAR_VOLUME)
+    universe = filter_by_liquidity(client, universe, min_dollar_volume)
     candidates = scan_candidates(client, universe)
     selected = candidates[:free_slots]
 

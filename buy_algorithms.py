@@ -237,8 +237,8 @@ def heikin_ashi_stoch_signal(bars: list[Bar], daily_closes: list[float] | None =
                              sma_period: int = 50, k_period: int = 14, d_period: int = 3,
                              oversold: float = 30.0, max_lower_wick_ratio: float = 0.05) -> BuySignal | None:
     """Heikin Ashi + SMA50 + Stokastik: kapanış SMA(50) üzerindeyken (trend),
-    Stokastik(14, 3, 3) %K 30'un altında ve %D'yi yukarı kesmiş durumdayken
-    (aşırı satımdan dönüş), kırmızı bir HA mumundan sonra gelen alt fitilsiz
+    Stokastik %K 30'un altında ve %D'yi bu mumda yukarı kestiğinde (aşırı
+    satımdan dönüş - %K hızlı %K, %D onun 3'lük ortalaması), kırmızı bir HA mumundan sonra gelen alt fitilsiz
     (fitil HA mum boyunun en fazla %5'i) yeşil HA mumu - bkz. heikin_ashi.py.
     Sinyal barın kapanışında onaylandığından bekleyen limit yerine ANINDA
     alınır ("breakout" stili). Çıkış tarafı için stop_algorithms'teki
