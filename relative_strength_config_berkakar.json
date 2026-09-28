@@ -1,6 +1,6 @@
 {
   "enabled": true,
-  "cash_allocation_pct": 0.0,
+  "cash_allocation_pct": 10.0,
   "include_nasdaq": true,
   "include_nyse": true,
   "include_russell": false,
