@@ -307,20 +307,43 @@ class AlpacaClient:
         r.raise_for_status()
         return [o for o in r.json() if o["type"] in ("stop", "stop_limit")]
 
-    def get_recent_orders(self, days: int = 30, limit: int = 500, nested: bool = False) -> list[dict]:
+    def get_recent_orders(self, days: int = 30, limit: int = 500, nested: bool = False,
+                          symbols: str | None = None, max_pages: int = 40) -> list[dict]:
         """Every order (any symbol, any status - open, filled, replaced,
         canceled) submitted in the last `days` days, across the whole
         account. Unlike get_stop_order_history this isn't scoped to
-        currently-open positions, so closed-out trades still show up."""
+        currently-open positions, so closed-out trades still show up.
+
+        Alpaca tek istekte en fazla 500 emir döndürür; trailing stop her
+        güncellemede yeni emir ürettiği için 90 günde bu sınır kolayca aşılır
+        ve eski işlemler sessizce kaybolurdu. Bu yüzden sayfa sayfa geriye
+        gidilir: her sayfadan sonra `until` son emrin submitted_at'ine
+        (+1 ms, aynı ana düşen emirler kaçmasın diye) çekilir, tekrar gelen
+        emirler id ile elenir."""
         after = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         params = {"status": "all", "after": after, "direction": "desc", "limit": limit}
         if nested:
             # [2026-09-28 · Öneri 6] OTO/bracket bacaklarını ana emrin "legs"
             # alanında döndürür - İşlem Günlüğü ilk stopu (1R) buradan bulur.
             params["nested"] = "true"
-        r = self._get("/orders", params=params)
-        r.raise_for_status()
-        return r.json()
+        if symbols:
+            params["symbols"] = symbols
+        result: list[dict] = []
+        seen: set[str] = set()
+        for _ in range(max_pages):
+            r = self._get("/orders", params=params)
+            r.raise_for_status()
+            page = r.json()
+            new = [o for o in page if o.get("id") not in seen]
+            for o in new:
+                seen.add(o.get("id"))
+            result.extend(new)
+            if len(page) < limit or not new:
+                break
+            oldest = min(o["submitted_at"] for o in page if o.get("submitted_at"))
+            until = datetime.fromisoformat(oldest.replace("Z", "+00:00")) + timedelta(milliseconds=1)
+            params["until"] = until.isoformat()
+        return result
 
     def get_symbol_fills_since(self, symbol: str, after_iso: str) -> list[dict]:
         """get_symbol_fills'in mutlak bir 'after' zaman damgası alan hali -

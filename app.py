@@ -1532,6 +1532,8 @@ elif module == "📒 İşlem Günlüğü":
     st.caption(
         "Tüm modüllerin (Premium Buy Point, ORB, Relative Strength, Heikin Ashi) kapanmış işlemleri: R çarpanı, "
         "çıkış sebebi, açılış/seans dışı dağılımı ve mevcut kural sürümüyle kaç işlem biriktiği. "
+        "'İşlem Günlüğü Analizi' sekmesi kapanmış işlemleri Alpaca canlı pozisyonlarıyla birleştirip hangi hissenin "
+        "hangi algoritmayla ne kadar kazandırdığını/kaybettirdiğini gösterir. "
         "'Değişiklik Günlüğü' sekmesi sistemde yapılan değişikliklerin gerekçesini ve nasıl takip edileceğini anlatır."
     )
     render_trade_journal(username)
