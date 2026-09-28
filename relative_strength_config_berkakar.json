@@ -9,5 +9,43 @@
   "top_n": 10,
   "lookback_weeks": 8,
   "min_score_pct": 0.0,
-  "stop_algorithm": "breakeven_atr_structure"
+  "stop_algorithm": "breakeven_atr_structure",
+  "last_run_at": "2026-09-28T15:28:31+00:00",
+  "last_run_summary": {
+    "run_at": "2026-09-28T15:28:31+00:00",
+    "skipped": false,
+    "universe_size": 139,
+    "target_symbols": [
+      "MRNA",
+      "TEM",
+      "CRWD",
+      "PAYC",
+      "MRVL",
+      "ZS",
+      "META",
+      "SPCX",
+      "ILMN",
+      "BE"
+    ],
+    "held": [],
+    "sold": [],
+    "bought": [
+      "BE",
+      "CRWD",
+      "ILMN",
+      "MRNA",
+      "MRVL",
+      "PAYC",
+      "SPCX",
+      "TEM",
+      "ZS"
+    ],
+    "sell_errors": [],
+    "buy_errors": [
+      "META: hedef tutar ($662.08) ya da risk tavanı 1 adet için yetersiz"
+    ],
+    "risk_notes": [],
+    "cash_allocation_pct": 10.0,
+    "top_n": 10
+  }
 }
