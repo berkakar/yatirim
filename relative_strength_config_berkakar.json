@@ -9,7 +9,7 @@
   "top_n": 10,
   "lookback_weeks": 8,
   "min_score_pct": 0.0,
-  "stop_algorithm": "breakeven_atr_structure",
+  "stop_algorithm": "atr_volatility",
   "last_run_at": "2026-09-28T15:28:31+00:00",
   "last_run_summary": {
     "run_at": "2026-09-28T15:28:31+00:00",

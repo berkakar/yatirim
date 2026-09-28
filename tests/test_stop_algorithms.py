@@ -9,11 +9,11 @@ from tests.helpers import make_bars
 
 
 class AtrVolatilityInitialStopTest(unittest.TestCase):
-    def test_stop_is_two_atr_below_entry(self):
+    def test_stop_is_one_and_half_atr_below_entry(self):
         bars = make_bars([100.0] * 20, spread=2.0)
         self.assertAlmostEqual(atr(bars, 14), 2.0)
-        self.assertAlmostEqual(atr_volatility_initial_stop(100.0, "long", bars=bars), 96.0)
-        self.assertAlmostEqual(atr_volatility_initial_stop(100.0, "short", bars=bars), 104.0)
+        self.assertAlmostEqual(atr_volatility_initial_stop(100.0, "long", bars=bars), 97.0)
+        self.assertAlmostEqual(atr_volatility_initial_stop(100.0, "short", bars=bars), 103.0)
 
     def test_distance_is_capped_by_max_stop_pct(self):
         bars = make_bars([100.0] * 20, spread=10.0)  # 2xATR = 20 > %12

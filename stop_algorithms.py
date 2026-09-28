@@ -586,13 +586,18 @@ def heikin_ashi_trail(
 # Pozisyon büyüklüğü bu stopa göre risk_sizing.py'de hesaplanır (Öneri 5) -
 # geniş stop ancak küçülen pozisyonla güvenli.
 #
-# DURUM: Seçenek olarak mevcut, hiçbir hissenin VARSAYILANI DEĞİL. 2026-09-28
+# [2026-09-28 · TEM/INTC stop incelemesi] İlk stop ATR çarpanı varsayılanı
+# 2.0 -> 1.5. Premium Buy Point ve Relative Strength Rotasyonu bu algoritmaya
+# geçirildi: sabit %1.5 ilk stop, INTC'nin saatlik ATR'sinden (≈%1.9) bile
+# kısaydı. Çarpan Stop Loss Ayarları'ndan değiştirilebilir.
+#
+# Önceki DURUM: Seçenek olarak mevcut, hiçbir hissenin VARSAYILANI DEĞİL. 2026-09-28
 # doğrulama backtestinde (scripts/compare_stop_algorithms.py, 11 hisse, günlük)
 # breakeven_atr_structure'ın günlük barlarda izlenen hali +237R, bu algoritma
 # -0.7R (8xATR trail ile +8.7R) verdi - chandelier büyük trendlerden erken
 # çıkıyor. Ayrıntı: İşlem Günlüğü > Değişiklik Günlüğü > Test sonuçları.
 
-ATR_VOL_INITIAL_ATR_MULT = 2.0
+ATR_VOL_INITIAL_ATR_MULT = 1.5
 ATR_VOL_MAX_STOP_PCT = 0.12
 ATR_VOL_FALLBACK_PCT = 0.03
 ATR_VOL_BREAKEVEN_R = 1.0

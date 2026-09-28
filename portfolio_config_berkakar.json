@@ -20,82 +20,82 @@
     "UROY": 2.05
   },
   "algorithm": "demand_zone",
-  "stop_algorithm": "breakeven_atr_structure",
+  "stop_algorithm": "atr_volatility",
   "symbol_settings": {
     "ACAD": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "AAON": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "AAT": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "MSFT": {
       "algorithm": "demand_zone",
       "timeframe": "1Day",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "AMZN": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "NVDA": {
       "algorithm": "demand_zone",
       "timeframe": "30Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "INTC": {
       "algorithm": "demand_zone",
       "timeframe": "1Hour",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "AMAT": {
       "algorithm": "bicak_kanali",
       "timeframe": "1Day",
-      "stop_algorithm": "wait_then_trail"
+      "stop_algorithm": "atr_volatility"
     },
     "MU": {
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "PAYX": {
       "algorithm": "demand_zone",
       "timeframe": "1Day",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "NXPI": {
       "algorithm": "volatility_support",
       "timeframe": "1Hour",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "NOW": {
       "algorithm": "trend_pullback",
       "timeframe": "15Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "MDB": {
       "algorithm": "demand_zone",
       "timeframe": "1Day",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "TTWO": {
       "algorithm": "demand_zone",
       "timeframe": "30Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "VEEV": {
       "algorithm": "demand_zone",
       "timeframe": "30Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "SKHY": {
       "algorithm": "breakout_volume",
       "timeframe": "15Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     },
     "UROY": {
       "algorithm": "demand_zone",
       "timeframe": "30Min",
-      "stop_algorithm": "breakeven_atr_structure"
+      "stop_algorithm": "atr_volatility"
     }
   },
   "stop_loss_enabled": true,
@@ -114,6 +114,6 @@
     "entry_guard_minutes": 15
   },
   "stop_timeframe_mode": "entry",
-  "rules_fingerprint": "bd88bdd64369",
-  "rules_version_since": "2026-09-28T11:17:00+00:00"
+  "rules_fingerprint": "d661831accb6",
+  "rules_version_since": "2026-09-28T19:04:44+00:00"
 }

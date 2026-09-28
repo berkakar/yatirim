@@ -129,6 +129,28 @@ def get_cash_allocation_pct(username: str) -> float:
     return float(cfg.get("cash_allocation_pct") or 0.0)
 
 
+# [2026-09-28 · TEM/INTC stop incelemesi] "Oynaklık (ATR) Stop" seçiliyse ilk
+# stop GÜNLÜK ATR'den hesaplanır: rotasyon pozisyonları haftalarca tutulur,
+# gün içi ATR bu tutma süresinin gürültüsünü ölçmez. Barlar sadece bu algoritma
+# için verilir - "Açılış Aralığı (ORB) Stop" gibi bars'ı başka anlamda kullanan
+# algoritmalar eskisi gibi bars'sız (sabit yüzde yedeğiyle) çalışır.
+ATR_STOP_ALGORITHM = "atr_volatility"
+ATR_STOP_TIMEFRAME = "1Day"
+ATR_STOP_LOOKBACK_DAYS = 60
+
+
+def _stop_bars(client: AlpacaClient, symbol: str, stop_algorithm: str):
+    if stop_algorithm != ATR_STOP_ALGORITHM:
+        return None
+    from alpaca_bars_cache import DAILY_BARS_CACHE_PATH
+    from alpaca_trailing_stop import get_bars_for_timeframe
+    start = datetime.now(timezone.utc) - timedelta(days=ATR_STOP_LOOKBACK_DAYS)
+    try:
+        return get_bars_for_timeframe(client, symbol, ATR_STOP_TIMEFRAME, start, cache_file=DAILY_BARS_CACHE_PATH) or None
+    except Exception:
+        return None  # ATR hesaplanamazsa initial_stop kendi yedek yüzdesine düşer
+
+
 def resolve_stop_algorithm(cfg: dict) -> str:
     """Kaydedilmiş bir seçim yoksa ya da geçersizse ROTATION_DEFAULT_STOP_ALGORITHM'a
     (breakeven_atr_structure) düşer - bkz. o sabitin üstündeki not."""
@@ -328,11 +350,13 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
                 buy_errors.append(f"{symbol}: güncel fiyat alınamadı")
                 continue
             qty = math.floor(dollar_amount / live_price)
+            stop_bars = _stop_bars(client, symbol, stop_algorithm)
             if risk is not None and qty > 0:
                 # RS stopu bar kullanmıyor (sabit yüzde) - tahmin, gerçek dolumdan
                 # kurulacak stopla aynı formül.
                 estimated_stop = stop_algo.initial_stop(
-                    live_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                    live_price, "long", bars=stop_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
                 )
                 qty, note = apply_risk_cap(risk, qty, live_price, estimated_stop)
                 if note:
@@ -349,7 +373,8 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
             available_cash -= filled_qty * fill_price
 
             stop_price = round(stop_algo.initial_stop(
-                fill_price, "long", **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                fill_price, "long", bars=stop_bars,
+                **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
                 client.place_stop_order(symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", symbol))

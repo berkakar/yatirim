@@ -278,7 +278,7 @@ def render_stop_loss_settings(username: str):
         "İlk Stop ATR Çarpanı", min_value=0.5, max_value=10.0,
         value=float(algo5.get("initial_atr_mult", ATR_VOL_INITIAL_ATR_MULT)), step=0.25, format="%.2f",
         key="sls_algo5_initial_atr_mult",
-        help="İlk stop = giriş − bu çarpan × ATR. Günlük sinyaller için 2, gün içi için 1.5-2 önerilir.",
+        help="İlk stop = giriş − bu çarpan × ATR. Varsayılan 1.5. Premium Buy Point'te ATR, hissenin giriş periyodundan; Relative Strength Rotasyonu'nda günlük barlardan hesaplanır.",
     )
     algo5_max_stop_pct = a5c2.number_input(
         "Maksimum Stop Mesafesi %", min_value=1.0, max_value=50.0,

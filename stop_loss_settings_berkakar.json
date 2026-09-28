@@ -26,7 +26,7 @@
     "breakeven_buffer_pct": 0.2
   },
   "atr_volatility": {
-    "initial_atr_mult": 2.0,
+    "initial_atr_mult": 1.5,
     "max_stop_pct": 12.0,
     "fallback_pct": 3.0,
     "breakeven_r": 1.0,
