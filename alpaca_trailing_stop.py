@@ -61,8 +61,10 @@ execute outside regular hours - and sends a Telegram alert. If that emergency
 order itself expires unfilled at the session's end - leaving the position
 with nothing resting at all - the guard's own next run (its normal ~10min
 cadence, not the next regular session) notices via last_trailed_stop_price
-and re-establishes protection at the same level right away, marketable if
-price is still through it or passive (like a stand-in stop) if not. Only if
+and re-establishes protection at the same level right away: a marketable
+limit if price is still through it, otherwise a regular GTC stop (Alpaca
+queues it outside regular hours; the guard then watches it like any resting
+stop - a sell limit below market would fill immediately, not wait). Only if
 that history isn't recent enough to trust either (see its own docstring)
 does the gap actually widen to the next regular session, where point 1
 above restores the same way.
@@ -677,10 +679,11 @@ def guard_position(
        bir sonraki normal seans açılışına (manage_position'ın
        last_trailed_stop_price ile geri yüklemesine) bırakmak yerine,
        last_trailed_stop_price'tan (yeterince yakın zamanlıysa) aynı
-       seviyeyi hemen geri kurar: fiyat o seviyeyi henüz kırmamışsa sadece
-       normal bir stop'un yerini tutacak pasif bir limit (tam o seviyeden,
-       kayma payı gerekmiyor - zaten tetiklenmiş bir kırılma yok); zaten
-       kırmışsa aynı 1. durumdaki gibi marketable bir limit. Böylece kör
+       seviyeyi hemen geri kurar: fiyat o seviyeyi henüz kırmamışsa normal
+       bir GTC stop emri (Alpaca seans dışında kabul edip sıraya alır; bu
+       guard onu bir sonraki çalışmasında resting stop olarak izler -
+       piyasanın altındaki bir limit-sell ise beklemez, anında dolardı);
+       zaten kırmışsa aynı 1. durumdaki gibi marketable bir limit. Böylece kör
        bölge, bir sonraki iş gününü değil, bir sonraki guard çalışmasını
        (mevcut cron ile ~10 dk) bekliyor.
 
@@ -723,10 +726,31 @@ def guard_position(
                 client, symbol, side, entry_price, reference_price, resting_order_id, stop_algorithm, stop_settings,
             )
             return
-        # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, sadece normal
-        # stop'un yerini tutacak pasif bir limit koyuyoruz - tam referans
-        # seviyesinden (bir stop da zaten tam o fiyattan tetiklenirdi).
-        limit_price = round(reference_price, 2)
+        # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, seviyeyi normal
+        # bir GTC stop emri olarak geri kuruyoruz. Burada BİLEREK referans
+        # seviyesinde bir limit-sell kullanılmıyor: piyasanın altındaki bir
+        # limit-sell beklemez, anında en iyi alış fiyatından dolar - pozisyonu
+        # korumak yerine hemen kapatırdı (bkz. AMAT, 2026-09-24,
+        # alpaca_buy_points.run_extended_hours_entry_scan'daki aynı not).
+        # Alpaca seans dışında gönderilen stop'u kabul edip sıraya alıyor;
+        # bir sonraki guard çalışması onu resting stop olarak görür (kırılırsa
+        # marketable limite çevirir), normal seans açılınca da kendisi çalışır.
+        try:
+            client.place_stop_order(symbol, qty, side, reference_price)
+        except requests.HTTPError as e:
+            msg = (f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
+                   f"seviyesinden yeniden kurulamadı, pozisyon şu an KORUMASIZ olabilir: {e}")
+        else:
+            msg = (f"⚠️ {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
+                   f"Son fiyat {last_price:.2f} son bilinen seviyeyi ({reference_price:.2f}) henüz aşmamış - "
+                   f"aynı seviyeden GTC stop yeniden kuruldu (seans dışında bu guard izliyor).")
+        log(msg)
+        if bot_token and chat_id:
+            try:
+                send_telegram_message(bot_token, chat_id, msg)
+            except TelegramError as e:
+                log(f"Telegram bildirimi gönderilemedi: {e}")
+        return
     elif side == "long":
         limit_price = round(min(reference_price, last_price) * (1 - EXTENDED_HOURS_SLIPPAGE_PCT), 2)
     else:
@@ -762,17 +786,11 @@ def guard_position(
             f"dolmadan seans biterse emir düşer ve pozisyon tekrar korumasız kalır (bir sonraki guard "
             f"çalışması bunu last_trailed_stop_price ile yeniden kurmayı dener)."
         )
-    elif breached:
+    else:
         msg = (
             f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
             f"Son fiyat {last_price:.2f}, son bilinen seviyeyi ({reference_price:.2f}) hâlâ aşmış "
             f"durumda - yerine day+extended-hours limit emri {limit_price:.2f} seviyesinden gönderildi."
-        )
-    else:
-        msg = (
-            f"⚠️ {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
-            f"Son fiyat {last_price:.2f} son bilinen seviyeyi ({reference_price:.2f}) henüz aşmamış - "
-            f"yerine (stop'un yerini tutacak) day+extended-hours limit emri aynı seviyeden yeniden kuruldu."
         )
     log(msg)
     if bot_token and chat_id:
