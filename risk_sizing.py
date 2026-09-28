@@ -98,3 +98,24 @@ def top_up_qty_cap(
     if remaining_risk is not None:
         room = min(room, remaining_risk)
     return max(0, math.floor(room / per_share))
+
+
+def apply_risk_cap(risk: dict | None, qty: int, entry_price: float, stop_price: float) -> tuple[int, str | None]:
+    """Modüllerin (ORB, RS, Heikin Ashi) market girişleri için ortak tavan:
+    kendi nakit payına göre hesaplanmış `qty`'yi risk bazlı adetle sınırlar
+    ve kullanılan riski risk["remaining"]'den düşer. risk None ise (risk
+    bazlı büyüklük kapalı ya da bağlam alınamadı) qty aynen döner.
+    Dönüş: (adet, adet kısıldıysa açıklama yoksa None)."""
+    if risk is None or qty <= 0:
+        return qty, None
+    sizing = risk_based_qty(
+        risk["equity"], entry_price, stop_price, risk["risk_per_trade_pct"],
+        risk["max_position_pct"], risk["remaining"],
+    )
+    note = None
+    if sizing.qty < qty:
+        note = f"risk tavanı {qty} -> {sizing.qty} adet ({sizing.explanation})"
+        qty = sizing.qty
+    if qty > 0:
+        risk["remaining"] -= qty * sizing.risk_per_share
+    return qty, note

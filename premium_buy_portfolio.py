@@ -453,7 +453,8 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "yakın da olsa uzak da olsa her kayıp yaklaşık aynı dolar tutarında olur; oynak hisse küçük, sakin "
         "hisse büyük pozisyon alır. Yukarıdaki ağırlık bütçesi ve nakit artık sadece TAVAN. Analizde "
         "işlem başına risk 14$ ile 282$ arasında değişiyordu (20 kat) - en iyi işlemler en küçük riskle "
-        "açıldığı için hesaba yansımadı. Aynı ayarlar ORB modülünün girişlerine de tavan olarak uygulanır."
+        "açıldığı için hesaba yansımadı. Aynı ayarlar ORB, Relative Strength ve Heikin Ashi modüllerinin "
+        "girişlerine de tavan olarak uygulanır; toplam açık risk tavanı tüm modüllerle ortaktır."
     )
     risk_settings = load_risk_settings(config)
     rs1, rs2, rs3, rs4 = st.columns(4)

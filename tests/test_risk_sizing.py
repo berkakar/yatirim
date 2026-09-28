@@ -54,3 +54,19 @@ class HeatAndTopUpTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ApplyRiskCapTest(unittest.TestCase):
+    def test_none_context_keeps_qty(self):
+        from risk_sizing import apply_risk_cap
+        self.assertEqual(apply_risk_cap(None, 50, 100, 98), (50, None))
+
+    def test_caps_and_consumes_heat(self):
+        from risk_sizing import apply_risk_cap
+        risk = {"equity": 100_000, "risk_per_trade_pct": 0.5, "max_position_pct": 100.0, "remaining": 5_000}
+        qty, note = apply_risk_cap(risk, 500, 100, 98.5)   # 500$ / 1.5$ = 333
+        self.assertEqual(qty, 333)
+        self.assertIn("risk tavanı 500 -> 333", note)
+        self.assertAlmostEqual(risk["remaining"], 5_000 - 333 * 1.5)
+        qty, note = apply_risk_cap(risk, 10, 100, 98.5)    # tavanın altında - dokunulmaz
+        self.assertEqual((qty, note), (10, None))

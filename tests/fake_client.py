@@ -83,6 +83,21 @@ class FakeClient:
         self.calls.append(("market_exit", symbol, qty, client_order_id))
         return self._new(symbol=symbol, qty=str(qty), side="sell", type="market", client_order_id=client_order_id)
 
+    def place_market_entry(self, symbol, qty, side, client_order_id=None):
+        self.calls.append(("market_entry", symbol, qty, client_order_id))
+        return self._new(symbol=symbol, qty=str(qty), side="buy", type="market", client_order_id=client_order_id)
+
+    def wait_for_fill(self, order_id, timeout=30):
+        order = next(o for o in self.orders if o["id"] == order_id)
+        order.update(status="filled", filled_qty=order["qty"], filled_avg_price=f"{self.last_price:.2f}")
+        return order
+
+    def get_clock(self):
+        return getattr(self, "clock", {"is_open": True})
+
+    def get_watchlist_by_name(self, name):
+        return None
+
     def place_extended_hours_limit(self, symbol, qty, side, limit_price):
         self.calls.append(("ext_limit", symbol, round(limit_price, 2)))
         return self._new(symbol=symbol, qty=str(qty), side="sell", type="limit",

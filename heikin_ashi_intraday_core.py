@@ -48,7 +48,9 @@ from alpaca_trailing_stop import get_bars_for_timeframe
 from buy_algorithms import heikin_ashi_stoch_signal
 from heikin_ashi import SMA_PERIOD, long_exit_reason, stochastic_series
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
+from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
+from stop_tags import stop_tag
 
 TIMEFRAME = "30Min"
 # SMA(50) 30 dakikalık barda ~4 işlem günü (günde 13 bar) - hafta sonu/tatil
@@ -263,12 +265,36 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
     used = sum(float(i.get("qty", 0)) * float(i.get("entry_price", 0)) for i in holdings.values())
     available_cash = max(0.0, min(account_cash, account_cash * cash_allocation_pct / 100 - used))
 
+    # [2026-09-28 · Öneri 5] Premium Buy Point'in risk ayarları (portfolio_config
+    # "risk_sizing") bu modülün girişlerine de TAVAN olarak uygulanır. Stop,
+    # sinyal barının dibine kurulduğu için dar olabilir - o durumda asıl
+    # sınırlayıcı yine nakit payı ve tek pozisyon tavanı olur.
+    # Fonksiyon içi import: döngüsel import (alpaca_buy_points -> bu modül).
+    from alpaca_buy_points import load_module_risk_context
+    risk = load_module_risk_context(client)
+    summary["risk_notes"] = []
+
     for cand in selected:
         try:
             dollar_amount = min(target_per_position, available_cash)
             qty = math.floor(dollar_amount / cand.price) if cand.price > 0 else 0
+
+            # Stop barları alımdan ÖNCE çekiliyor ki risk bazlı adet aynı stopla
+            # hesaplanabilsin (eskiden dolumdan sonra çekiliyordu).
+            try:
+                stop_bars = _fetch_bars(client, cand.symbol)
+            except Exception:
+                stop_bars = None
+            if risk is not None and qty > 0:
+                estimated_stop = stop_algo.initial_stop(
+                    cand.price, "long", bars=stop_bars,
+                    **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
+                )
+                qty, note = apply_risk_cap(risk, qty, cand.price, estimated_stop)
+                if note:
+                    summary["risk_notes"].append(f"{cand.symbol}: {note}")
             if qty <= 0:
-                summary["errors"].append(f"{cand.symbol}: hedef tutar (${dollar_amount:.2f}) 1 adet için yetersiz")
+                summary["errors"].append(f"{cand.symbol}: hedef tutar (${dollar_amount:.2f}) ya da risk tavanı 1 adet için yetersiz")
                 continue
             tag = f"{ORDER_TAG_PREFIX}-buy-{cand.symbol}-{int(datetime.now(timezone.utc).timestamp())}"
             order = client.place_market_entry(cand.symbol, qty, "long", client_order_id=tag)
@@ -277,16 +303,12 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
             filled_qty = float(filled["filled_qty"])
             available_cash -= filled_qty * fill_price
 
-            try:
-                stop_bars = _fetch_bars(client, cand.symbol)
-            except Exception:
-                stop_bars = None
             stop_price = round(stop_algo.initial_stop(
                 fill_price, "long", bars=stop_bars,
                 **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
-                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price)
+                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", cand.symbol))
             except Exception as e:
                 summary["errors"].append(f"{cand.symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
 

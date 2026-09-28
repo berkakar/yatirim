@@ -49,7 +49,7 @@ from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from buy_algorithms import orb_signal
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
-from risk_sizing import risk_based_qty
+from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
 from stop_tags import stop_tag
 
@@ -264,11 +264,9 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
     # açılış aralığının dibine kurulan stopa kadar olan risk, işlem başına
     # risk$'ı ve kalan portföy ısısını aşamaz. Fonksiyon içi import: döngüsel
     # import (alpaca_buy_points -> orb_core) nedeniyle.
-    try:
-        from alpaca_buy_points import build_risk_context, load_local_config
-        risk = build_risk_context(client, load_local_config())
-    except Exception:
-        risk = None
+    from alpaca_buy_points import load_module_risk_context
+    risk = load_module_risk_context(client)
+    risk_notes: list[str] = []
 
     bought: list[str] = []
     buy_errors: list[str] = []
@@ -296,13 +294,9 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
                     cand.price, "long", bars=stop_bars,
                     **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
                 )
-                sizing = risk_based_qty(
-                    risk["equity"], cand.price, estimated_stop, risk["risk_per_trade_pct"],
-                    risk["max_position_pct"], risk["remaining"],
-                )
-                qty = min(qty, sizing.qty)
-                if qty > 0:
-                    risk["remaining"] -= qty * sizing.risk_per_share
+                qty, note = apply_risk_cap(risk, qty, cand.price, estimated_stop)
+                if note:
+                    risk_notes.append(f"{cand.symbol}: {note}")
             if qty <= 0:
                 buy_errors.append(f"{cand.symbol}: hedef tutar (${dollar_amount:.2f}) ya da risk tavanı 1 adet için yetersiz")
                 continue
@@ -342,6 +336,7 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
         "selected_symbols": [c.symbol for c in selected],
         "bought": bought,
         "buy_errors": buy_errors,
+        "risk_notes": risk_notes,
         "cash_allocation_pct": cash_allocation_pct,
         "top_n": top_n,
     }

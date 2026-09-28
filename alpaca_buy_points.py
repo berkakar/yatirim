@@ -916,6 +916,18 @@ def build_risk_context(client: AlpacaClient, config: dict) -> dict | None:
     }
 
 
+def load_module_risk_context(client: AlpacaClient) -> dict | None:
+    """ORB / Relative Strength / Heikin Ashi modüllerinin kendi taramalarında
+    kullandığı risk bağlamı - Premium Buy Point'in risk ayarlarıyla
+    (portfolio_config "risk_sizing") aynı. Hata olursa None: modül eski
+    davranışla (sadece nakit payı) devam eder, alım durmaz."""
+    try:
+        return build_risk_context(client, load_local_config())
+    except Exception as e:
+        log(f"risk bağlamı alınamadı, bu taramada risk tavanı uygulanmıyor: {e}")
+        return None
+
+
 def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     """Alpaca'daki gerçek nakit bakiyesinden (marjin/kaldıraç değil), bu
     sistemin hâlâ açık/bekleyen ("algo-" etiketli) buy-limit emirlerinin
