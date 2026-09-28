@@ -49,7 +49,7 @@ from buy_algorithms import heikin_ashi_stoch_signal
 from heikin_ashi import SMA_PERIOD, long_exit_reason, stochastic_series
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
-from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
+from stop_algorithms import HEIKIN_ASHI_EXIT_RED_CANDLES, STOP_ALGORITHMS, resolve_kwargs
 from stop_tags import stop_tag
 
 TIMEFRAME = "30Min"
@@ -220,10 +220,14 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
         save_holdings_local(username, holdings)
         return {**summary, "skipped": True, "reason": "devre dışı ya da nakit payı 0"}
 
-    # 2. Strateji çıkış kuralı (kapanmış son bar).
+    # 2. Strateji çıkış kuralı (kapanmış son bar). Kırmızı mum sayısı stopun
+    # trail'iyle AYNI ayardan okunur (heikin_ashi_exit.exit_red_candles) - aksi
+    # halde stop N mum beklerken bu adım ilk kırmızı mumda satardı.
+    exit_red_candles = int(((stop_settings or {}).get("heikin_ashi_exit") or {}).get(
+        "exit_red_candles", HEIKIN_ASHI_EXIT_RED_CANDLES))
     for symbol in list(holdings):
         try:
-            reason = long_exit_reason(_fetch_bars(client, symbol))
+            reason = long_exit_reason(_fetch_bars(client, symbol), red_candles=exit_red_candles)
         except Exception as e:
             summary["errors"].append(f"{symbol}: çıkış kontrolü başarısız: {e}")
             continue

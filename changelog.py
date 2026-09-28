@@ -30,7 +30,7 @@ CHANGES = [
     {
         "id": "7",
         "date": "2026-09-28",
-        "title": "Heikin Ashi Çıkışı: ilk stopa oynaklık (ATR) tabanı",
+        "title": "Heikin Ashi Çıkışı: ilk stopa oynaklık (ATR) tabanı; kırmızı mum çıkışı test edildi",
         "problem": (
             "Heikin Ashi ilk stopu sinyal barının low'unun %0.2 altına kuruluyordu. Sinyal mumu alt fitilsiz "
             "yeşil bir mum ve giriş onun kapanışında yapıldığından stop girişin sentler altında kalıyordu: "
@@ -43,13 +43,17 @@ CHANGES = [
             "- Çıkış kuralı (ilk kırmızı HA mumu / Stokastik kesişimi -> stop son kapanışın %0.1 altına) "
             "DEĞİŞMEDİ.\n"
             "- Sadece yeni girişleri etkiler; açık pozisyonların stopu gevşetilmez.\n"
-            "- **Backtest sonucu iyileşme GÖSTERMEDİ** (30dk önbellek, 12 hisse, 9 işlem): taban ilk stopa "
-            "takılan işlemleri 4'ten 1'e indirdi ama bu işlemler hemen ardından kırmızı HA mumu çıkışıyla "
-            "benzer ya da biraz daha kötü fiyattan kapandı. Toplam getiri eski +%5.3, 1 x ATR +%4.9; kazanan "
-            "işlemler değişmedi. 9 işlem iki yönde de karar vermeye yetmez - taban ayardan 0'a çekilerek "
-            "eski davranışa dönülebilir."
+            "- **Doğrulama (canlı modülün kurallarıyla simülasyon, 30dk önbellek, 12 hisse, 6 işlem):** taban "
+            "sonucu DEĞİŞTİRMEDİ - her varyantta aynı 6 işlem, toplam −%0.5. Bu örneklemde işlemleri kapatan "
+            "stop değil, HA çıkışı ve gün sonu kapanışı. (İlk karşılaştırma backtest motoruyla yapılmıştı ve "
+            "yanıltıcıydı: motor pozisyonu geceye taşıyor, modülün kendi market çıkışını ve 'kapanışa 60 dk "
+            "kala giriş yok' kuralını görmüyordu.) Taban ayardan 0'a çekilerek eski davranışa dönülebilir.\n"
+            "- **Çıkış kuralı testi:** 'art arda 2 / 3 kırmızı mumda çık' da denendi (exit_red_candles). Aynı "
+            "simülasyonda 1 mum −%0.5, 2 mum −%1.8, 3 mum −%0.9 - beklemek kaybı büyüttü; varsayılan 1 kaldı. "
+            "Ayar hem stopun trail'inde hem HA Gün İçi modülünün kendi çıkış kontrolünde aynı değeri kullanır."
         ),
-        "where": "stop_algorithms.py (heikin_ashi_initial_stop, HEIKIN_ASHI_MIN_ATR_MULT), "
+        "where": "stop_algorithms.py (heikin_ashi_initial_stop, HEIKIN_ASHI_MIN_ATR_MULT, "
+                 "HEIKIN_ASHI_EXIT_RED_CANDLES), heikin_ashi.py (long_exit_reason), heikin_ashi_intraday_core.py, "
                  "scripts/compare_heikin_ashi_stop.py",
         "settings": "🛡️ Stop Loss Ayarları > Heikin Ashi Çıkışı > İlk Stop Oynaklık Tabanı (0 = kapalı).",
         "track": "İşlem Günlüğü'nde Heikin Ashi Gün İçi işlemlerinde 'Stop: İlk stop' ile kapanan işlemlerin "

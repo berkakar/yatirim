@@ -55,6 +55,17 @@ class HeikinAshiInitialStopTest(unittest.TestCase):
         self.assertEqual(kwargs["atr_period"], 10)
 
 
+class HeikinAshiExitRedCandlesTest(unittest.TestCase):
+    def test_requires_consecutive_red_candles(self):
+        from heikin_ashi import long_exit_reason
+        # Yükselişten sonra iki sert düşüş barı: ikisi de HA kırmızı.
+        bars = make_bars([100 + i for i in range(10)] + [104.0, 101.0], spread=1.0)
+        one_red = make_bars([100 + i for i in range(10)] + [104.0], spread=1.0)
+        self.assertIsNotNone(long_exit_reason(one_red, red_candles=1))
+        self.assertIsNone(long_exit_reason(one_red, red_candles=2))
+        self.assertIn("2 kırmızı", long_exit_reason(bars, red_candles=2))
+
+
 class AtrVolatilityTrailTest(unittest.TestCase):
     def setUp(self):
         self.history = make_bars([100.0] * 20, spread=2.0)  # ATR = 2 -> 1R = 4

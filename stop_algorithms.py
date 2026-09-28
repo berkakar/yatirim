@@ -102,7 +102,7 @@ class StopAlgorithm:
 
 
 _CTX_PARAM_NAMES = frozenset({"ctx", "entry_price", "side", "bars"})
-_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order", "stoch_k_period", "stoch_d_period"})
+_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order", "stoch_k_period", "stoch_d_period", "exit_red_candles"})
 
 
 def resolve_kwargs(fn: Callable, settings_for_algo: dict, shared_settings: dict) -> dict:
@@ -474,6 +474,9 @@ HEIKIN_ASHI_EXIT_BUFFER_PCT = 0.001
 # giriş 37.58, stop 37.47, mesafe %0.29) - sıradan bir 30dk dalgalanması
 # pozisyonu kapatıyordu. 0 = taban kapalı (eski davranış).
 HEIKIN_ASHI_MIN_ATR_MULT = 1.0
+# Kırmızı HA çıkışı için art arda gereken kırmızı mum sayısı - 1 = ilk
+# kırmızı mumda çık (orijinal kural). Bkz. scripts/compare_heikin_ashi_stop.py.
+HEIKIN_ASHI_EXIT_RED_CANDLES = 1
 
 
 def heikin_ashi_initial_stop(
@@ -528,6 +531,7 @@ def heikin_ashi_trail(
     stoch_k_period: int = 14,
     stoch_d_period: int = 3,
     stoch_overbought: float = 80.0,
+    exit_red_candles: int = HEIKIN_ASHI_EXIT_RED_CANDLES,
     initial_stop_pct: float = INITIAL_STOP_PCT,
     atr_period: int = ATR_PERIOD,
     atr_multiplier: float = ATR_MULTIPLIER,
@@ -549,7 +553,7 @@ def heikin_ashi_trail(
     if ctx.side != "long" or not ctx.bars:
         return base
     closed = _closed_bars(ctx.bars)
-    reason = heikin_ashi_long_exit_reason(closed, stoch_k_period, stoch_d_period, stoch_overbought)
+    reason = heikin_ashi_long_exit_reason(closed, stoch_k_period, stoch_d_period, stoch_overbought, exit_red_candles)
     if reason is None:
         return base
     # Güncel fiyat (oluşmakta olan bar) kapanışın da altına indiyse stop onun
