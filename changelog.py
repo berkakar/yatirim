@@ -28,6 +28,39 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "8",
+        "date": "2026-09-28",
+        "title": "Heikin Ashi alışı: bayat mum koruması, gerçek Stokastik kesişimi, eksik mum ve likidite filtresi",
+        "problem": (
+            "Kapsamlı denetimde (HA ve Stokastik bağımsız pandas uygulamasıyla birebir tuttu, 5.996 mumda karar "
+            "uyuşmazlığı 0) hesaplama hatası çıkmadı ama dört davranış hatası bulundu:\n"
+            "- 09:32 ET taraması: 09:30 mumu henüz kapanmadığından 'son kapanmış mum' DÜNKÜ 15:30 mumuydu - "
+            "dünün sinyaliyle bugünün boşluklu açılış fiyatından alım yapılabiliyordu. Sinyal mumunun yaşı hiç "
+            "kontrol edilmiyordu.\n"
+            "- Stokastik şartı kesişim değil durumdu (sadece %K > %D) - kesişim mumlar önce olmuş olsa da "
+            "sinyal veriyordu.\n"
+            "- Mumlar IEX akışından geliyor; küçük hisselerde işlem olmayan yarım saatlerde mum oluşmuyor "
+            "(AAT: 44 günün 27'si eksik). Eksik mumla HA/SMA50/Stokastik yanlış zaman ölçeğinde hesaplanıyordu.\n"
+            "- Likidite filtresi: ayarlar sayfası kayıtlı 0'ı boş sayıp 5M $ gösteriyordu, canlı tarama 0'ı "
+            "olduğu gibi kullanıyordu - ekranda filtre açık görünürken ~1.660 hisselik evrende filtre yoktu."
+        ),
+        "change": (
+            "- Sinyal mumu bugünün seansına ait ve en fazla 35 dk önce kapanmış olmalı; değilse sembol taranmaz.\n"
+            "- Penceredeki her seans 09:30 mumuyla başlamalı (lookback yüzünden kırpılan ilk gün hariç), mumlar "
+            "arasında boşluk olmamalı, geçmiş seanslar en az 12:30 mumuna kadar gitmeli (yarım gün uyumlu). "
+            "Önbellekte büyük hisselerde hiçbir pencere engellenmiyor; AAT'de %95, VEEV/ACAD'da %11.\n"
+            "- Stokastik: önceki mumda %K <= %D, bu mumda %K > %D (ve %K < 30). Önbellekte 9 sinyal 5'e indi.\n"
+            "- Canlı tarama da 0'ı varsayılan (5M $) sayıyor; ha_intraday_config'e 5.000.000 açıkça yazıldı.\n"
+            "- Stokastik hâlâ HIZLI %K (Stokastik 14,1,3) - 'Stokastik(14,3,3)' ile değiştirmek strateji "
+            "kararı olduğundan dokunulmadı."
+        ),
+        "where": "heikin_ashi.py (long_entry), heikin_ashi_intraday_core.py (signal_bars_problem, scan_candidates, "
+                 "run_pass), ha_intraday_config_berkakar.json, tests/test_heikin_ashi_entry.py",
+        "settings": "📊 Heikin Ashi Gün İçi > Min. ortalama dolar cirosu.",
+        "track": "Heikin Ashi Gün İçi işlemlerinde giriş saati 09:30-10:00 ET olan işlem kalmamalı; giriş "
+                 "fiyatı ile sinyal fiyatı arasındaki fark küçülmeli.",
+    },
+    {
         "id": "7",
         "date": "2026-09-28",
         "title": "Heikin Ashi Çıkışı: ilk stopa oynaklık (ATR) tabanı; kırmızı mum çıkışı test edildi",

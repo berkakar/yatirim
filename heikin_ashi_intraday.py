@@ -242,7 +242,9 @@ def render_heikin_ashi_intraday(username: str):
             st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         else:
             st.info("Son kapanmış 30 dakikalık barda alım şartlarını sağlayan hisse yok - bu strateji "
-                    "sıkı şartlara sahip olduğundan sık görülen bir durumdur.")
+                    "sıkı şartlara sahip olduğundan sık görülen bir durumdur. Canlı taramayla aynı kural: "
+                    "son mumu bugünün seansına ait olmayan ya da 35 dakikadan eski olan (piyasa kapalıyken "
+                    "ve açılışın ilk yarım saatinde hepsi) veya eksik mumu olan hisseler taranmaz.")
 
     st.divider()
     st.subheader("📦 Şu Anki Pozisyonlar")
