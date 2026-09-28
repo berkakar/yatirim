@@ -188,8 +188,8 @@ class AlpacaClient:
         emirlere (time_in_force="day" + extended_hours=True).
         alpaca_buy_points.run_extended_hours_entry_scan, normal seanstaki
         gibi bracket'la stop'u anında iliştiremediği için, dolduğunu (poll
-        ile) tespit edip korumayı place_extended_hours_limit ile ayrı bir
-        adımda kuruyor."""
+        ile) tespit edip korumayı place_stop_order ile (normal GTC stop -
+        seans dışında sıraya alınır) ayrı bir adımda kuruyor."""
         payload = {
             "symbol": symbol,
             "qty": qty,
@@ -252,7 +252,9 @@ class AlpacaClient:
         veriyor; stop/stop_limit emirler bu pencerede hiç tetiklenemiyor.
         alpaca_trailing_stop's extended-hours guard, stopu zaten kırılmış bir
         pozisyon için bunu, normal stopun yerine geçecek tek seçenek olarak
-        kullanır."""
+        kullanır. DİKKAT: long için piyasanın altındaki bir limit-sell stop
+        gibi beklemez, anında dolar - bunu sadece gerçekten satmak
+        istendiğinde (stop kırılmışken) kullan, "koruma" olarak değil."""
         return self._post("/orders", {
             "symbol": symbol,
             "qty": qty,

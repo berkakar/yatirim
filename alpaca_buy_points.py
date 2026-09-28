@@ -111,11 +111,15 @@ fresh entry's signal fill during pre-market/after-hours too, not just
 regular hours: Alpaca doesn't support bracket/OTO orders in extended hours
 (only plain limit), so the entry goes out unbracketed and the script polls
 for its own fill in a tight internal loop (its own GitHub Actions workflow,
-independent of this one), arming a naive protective extended-hours limit-sell
-(the symbol's selected stop algorithm's initial_stop()) the moment it
-detects a fill - not instantly like
-a bracket, but within its poll interval rather than waiting on the next
-regular session. check_symbol's own existing-order check (see
+independent of this one), arming a naive protective stop (the symbol's
+selected stop algorithm's initial_stop()) the moment it detects a fill - not
+instantly like a bracket, but within its poll interval rather than waiting on
+the next regular session. That protection is a regular GTC stop order, not an
+extended-hours limit-sell: a sell limit below market fills immediately
+instead of waiting (see the AMAT note in run_extended_hours_entry_scan).
+Alpaca queues the stop outside regular hours; alpaca_trailing_stop's
+extended-hours guard watches it and converts it to a marketable limit if
+price breaks it before the open. check_symbol's own existing-order check (see
 already_bracketed) upgrades that plain order to a proper bracket the moment
 regular hours see it still unfilled, so it's never left permanently
 unprotected. Top-up during extended hours isn't supported yet - its market
@@ -576,7 +580,8 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
     EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS'de bir bu emirlerin dolup
     dolmadığını kontrol eder - dolduğu anda (bir sonraki ~10dk'lık GitHub
     Actions tetiklemesini beklemeden) hemen sembolün seçili stop algoritmasının
-    naif ilk stop'uyla bir koruma (day+extended-hours limit-sell) kurar ve
+    naif ilk stop'uyla bir koruma (normal GTC stop - seans dışında
+    extended-hours guard izler) kurar ve
     Telegram'dan bildirir.
 
     Poll penceresi bitene kadar dolmayan emirler olduğu gibi resting kalır -
@@ -657,10 +662,21 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                 )
                 stop_price = round(naive_stop, 2)
                 try:
-                    client.place_extended_hours_limit(symbol, qty, "long", stop_price)
+                    # Koruma BİLEREK normal bir GTC stop emri, extended-hours
+                    # limit-sell DEĞİL: piyasanın altındaki bir limit-sell
+                    # "stop" gibi beklemez, anında en iyi alış fiyatından
+                    # dolar (gözlemlenen gerçek örnek: AMAT, 2026-09-24 -
+                    # 464.93'ten alınıp 446.33 limitli "koruma" 6 saniye sonra
+                    # 462.11'den doldu). Alpaca seans dışında gönderilen stop
+                    # emrini kabul edip sıraya alıyor: seviye Alpaca'da
+                    # saklanıyor, extended-hours guard (guard_position) onu
+                    # resting stop olarak görüp kırılırsa marketable limite
+                    # çeviriyor, normal seans açılınca da kendisi devreye giriyor.
+                    client.place_stop_order(symbol, qty, "long", stop_price)
                     msg = (
                         f"✅ {symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
-                        f"koruma stopu hemen {stop_price:.2f} seviyesinden (day+extended-hours limit) kuruldu."
+                        f"koruma stopu {stop_price:.2f} seviyesinden (GTC stop - seans dışında "
+                        f"extended-hours guard izliyor) kuruldu."
                     )
                 except Exception as e:
                     msg = (
