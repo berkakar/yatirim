@@ -118,13 +118,18 @@ def long_entry(
 
 def long_exit_reason(
     bars: list[Bar], k_period: int = STOCH_K_PERIOD, d_period: int = STOCH_D_PERIOD,
-    overbought: float = STOCH_OVERBOUGHT,
+    overbought: float = STOCH_OVERBOUGHT, red_candles: int = 1,
 ) -> str | None:
-    """Son bar bir çıkış sinyali üretiyorsa sebebi, yoksa None."""
+    """Son bar bir çıkış sinyali üretiyorsa sebebi, yoksa None.
+
+    red_candles: kırmızı HA çıkışı için art arda gereken kırmızı mum sayısı
+    (1 = ilk kırmızı mumda çık, orijinal kural)."""
     if not bars:
         return None
-    if heikin_ashi(bars)[-1].red:
-        return "HA kırmızı mum"
+    red_candles = max(1, red_candles)
+    ha = heikin_ashi(bars)
+    if len(ha) >= red_candles and all(b.red for b in ha[-red_candles:]):
+        return "HA kırmızı mum" if red_candles == 1 else f"HA art arda {red_candles} kırmızı mum"
     stoch = _last_stoch(bars, k_period, d_period) if len(bars) >= k_period + d_period - 1 else None
     if stoch is not None:
         k, d = stoch
