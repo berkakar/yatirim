@@ -28,6 +28,34 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "7",
+        "date": "2026-09-28",
+        "title": "Heikin Ashi Çıkışı: ilk stopa oynaklık (ATR) tabanı",
+        "problem": (
+            "Heikin Ashi ilk stopu sinyal barının low'unun %0.2 altına kuruluyordu. Sinyal mumu alt fitilsiz "
+            "yeşil bir mum ve giriş onun kapanışında yapıldığından stop girişin sentler altında kalıyordu: "
+            "LAUR (25.09) giriş 37.58 / stop 37.47 = %0.29, LQDA 68.79 / 68.25 = %0.78. Backtestte eski "
+            "kuralla medyan ilk stop mesafesi %0.26 - sıradan bir 30 dakikalık dalgalanma pozisyonu kapatıyor."
+        ),
+        "change": (
+            "- İlk stop artık girişten en az 1 x ATR (sinyalin kendi periyodu, HA Gün İçi için 30dk) uzakta: "
+            "stop = min(sinyal barı low − %0.2, giriş − 1 x ATR). Taban sadece genişletir.\n"
+            "- Çıkış kuralı (ilk kırmızı HA mumu / Stokastik kesişimi -> stop son kapanışın %0.1 altına) "
+            "DEĞİŞMEDİ.\n"
+            "- Sadece yeni girişleri etkiler; açık pozisyonların stopu gevşetilmez.\n"
+            "- **Backtest sonucu iyileşme GÖSTERMEDİ** (30dk önbellek, 12 hisse, 9 işlem): taban ilk stopa "
+            "takılan işlemleri 4'ten 1'e indirdi ama bu işlemler hemen ardından kırmızı HA mumu çıkışıyla "
+            "benzer ya da biraz daha kötü fiyattan kapandı. Toplam getiri eski +%5.3, 1 x ATR +%4.9; kazanan "
+            "işlemler değişmedi. 9 işlem iki yönde de karar vermeye yetmez - taban ayardan 0'a çekilerek "
+            "eski davranışa dönülebilir."
+        ),
+        "where": "stop_algorithms.py (heikin_ashi_initial_stop, HEIKIN_ASHI_MIN_ATR_MULT), "
+                 "scripts/compare_heikin_ashi_stop.py",
+        "settings": "🛡️ Stop Loss Ayarları > Heikin Ashi Çıkışı > İlk Stop Oynaklık Tabanı (0 = kapalı).",
+        "track": "İşlem Günlüğü'nde Heikin Ashi Gün İçi işlemlerinde 'Stop: İlk stop' ile kapanan işlemlerin "
+                 "payı düşmeli; ortalama kayıp (R değil $) risk bazlı adetle sabit kalmalı.",
+    },
+    {
         "id": "1",
         "date": "2026-09-28",
         "title": "Stop, girişin zaman diliminde izleniyor; oynaklık (ATR) stopu seçenek olarak eklendi",

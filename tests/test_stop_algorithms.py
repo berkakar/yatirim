@@ -2,7 +2,7 @@ import unittest
 
 from stop_algorithms import (
     STOP_ALGORITHMS, StopContext, atr_volatility_initial_stop, atr_volatility_trail,
-    breakeven_atr_structure_trail, resolve_kwargs,
+    breakeven_atr_structure_trail, heikin_ashi_initial_stop, resolve_kwargs,
 )
 from indicators import atr
 from tests.helpers import make_bars
@@ -27,6 +27,32 @@ class AtrVolatilityInitialStopTest(unittest.TestCase):
         algo = STOP_ALGORITHMS["atr_volatility"]
         kwargs = resolve_kwargs(algo.initial_stop, {"initial_atr_mult": 1.5, "max_stop_pct": 8.0}, {"atr_period": 10})
         self.assertEqual(kwargs, {"initial_atr_mult": 1.5, "atr_period": 10, "max_stop_pct": 0.08})
+
+
+class HeikinAshiInitialStopTest(unittest.TestCase):
+    def test_atr_floor_widens_tight_signal_bar_stop(self):
+        # Son barın low'u 99.5 -> yapısal stop ~99.30, girişe çok yakın; ATR ~1.9
+        # olduğundan taban stopu girişin 1 x ATR altına genişletir.
+        bars = make_bars([100.0] * 20, spread=2.0)
+        bars[-1] = bars[-1].__class__(t=bars[-1].t, o=99.9, h=100.2, l=99.5, c=100.0, v=1000)
+        self.assertAlmostEqual(heikin_ashi_initial_stop(100.0, "long", bars=bars), 100.0 - atr(bars, 14))
+        self.assertLess(heikin_ashi_initial_stop(100.0, "long", bars=bars), 98.5)
+        self.assertAlmostEqual(heikin_ashi_initial_stop(100.0, "long", bars=bars, min_atr_mult=0.0), 99.5 * 0.998)
+
+    def test_floor_never_tightens_a_wider_structural_stop(self):
+        bars = make_bars([100.0] * 20, spread=2.0)
+        bars[-1] = bars[-1].__class__(t=bars[-1].t, o=99.0, h=100.5, l=95.0, c=100.0, v=1000)
+        self.assertAlmostEqual(heikin_ashi_initial_stop(100.0, "long", bars=bars), 95.0 * 0.998)
+
+    def test_no_atr_keeps_structural_stop(self):
+        bars = make_bars([100.0] * 5, spread=2.0)
+        self.assertAlmostEqual(heikin_ashi_initial_stop(100.0, "long", bars=bars), bars[-1].l * 0.998)
+
+    def test_settings_resolve(self):
+        algo = STOP_ALGORITHMS["heikin_ashi_exit"]
+        kwargs = resolve_kwargs(algo.initial_stop, {"min_atr_mult": 0.5}, {"atr_period": 10})
+        self.assertEqual(kwargs["min_atr_mult"], 0.5)
+        self.assertEqual(kwargs["atr_period"], 10)
 
 
 class AtrVolatilityTrailTest(unittest.TestCase):

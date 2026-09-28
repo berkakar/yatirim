@@ -114,6 +114,6 @@
     "entry_guard_minutes": 15
   },
   "stop_timeframe_mode": "entry",
-  "rules_fingerprint": "954265c8691d",
-  "rules_version_since": "2026-09-28T08:21:21+00:00"
+  "rules_fingerprint": "bd88bdd64369",
+  "rules_version_since": "2026-09-28T11:17:00+00:00"
 }

@@ -21,7 +21,7 @@ from stop_algorithms import (
     ATR_MULTIPLIER, ATR_PERIOD, ATR_VOL_BREAKEVEN_BUFFER_ATR, ATR_VOL_BREAKEVEN_R, ATR_VOL_FALLBACK_PCT,
     ATR_VOL_INITIAL_ATR_MULT, ATR_VOL_MAX_STOP_PCT, ATR_VOL_TRAIL_ATR_MULT, ATR_VOL_TRAIL_START_R,
     BREAKEVEN_BUFFER_PCT, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
-    HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
+    HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_MIN_ATR_MULT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
     STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
     WAIT_THEN_TRAIL_BREAKEVEN_TRIGGER_PCT, WAIT_THEN_TRAIL_INITIAL_STOP_PCT,
     WAIT_THEN_TRAIL_PROFIT_LOCK_PCT, WAIT_THEN_TRAIL_PROFIT_LOCK_TRIGGER_PCT,
@@ -253,6 +253,14 @@ def render_stop_loss_settings(username: str):
         value=float(algo4.get("fallback_pct", INITIAL_STOP_PCT * 100)), step=0.1, format="%.2f",
         key="sls_algo4_fallback_pct",
     )
+    algo4_min_atr_mult = st.number_input(
+        "İlk Stop Oynaklık Tabanı (ATR çarpanı)", min_value=0.0, max_value=5.0,
+        value=float(algo4.get("min_atr_mult", HEIKIN_ASHI_MIN_ATR_MULT)), step=0.25, format="%.2f",
+        key="sls_algo4_min_atr_mult",
+        help="İlk stop girişten en az bu kadar ATR uzakta olur (ATR, sinyalin kendi mum periyodundan ve "
+             "yukarıdaki paylaşılan ATR Periyodu ile hesaplanır). Sinyal barının low'u bundan daha uzaksa "
+             "o kullanılır - taban sadece genişletir. 0 = kapalı (sadece sinyal barının low'u; eski davranış).",
+    )
 
     st.divider()
     st.subheader(f"📏 {STOP_ALGORITHMS['atr_volatility'].label}")
@@ -368,6 +376,7 @@ def render_stop_loss_settings(username: str):
                 "buffer_pct": float(algo4_buffer_pct),
                 "exit_buffer_pct": float(algo4_exit_buffer_pct),
                 "fallback_pct": float(algo4_fallback_pct),
+                "min_atr_mult": float(algo4_min_atr_mult),
                 "breakeven_buffer_pct": float(algo1_breakeven_buffer_pct),
             },
             "atr_volatility": {

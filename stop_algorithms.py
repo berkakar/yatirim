@@ -467,23 +467,45 @@ def opening_range_initial_stop(
 
 HEIKIN_ASHI_STOP_BUFFER_PCT = 0.002
 HEIKIN_ASHI_EXIT_BUFFER_PCT = 0.001
+# [2026-09-28] İlk stop için oynaklık tabanı: stop girişten en az bu kadar
+# ATR uzakta olur. Sinyal mumu alt fitilsiz yeşil bir mum ve giriş onun
+# kapanışında yapıldığından, "sinyal barının low'u" çoğu zaman girişin
+# sentler altında kalıyordu (gözlemlenen gerçek örnek: LAUR, 2026-09-25 -
+# giriş 37.58, stop 37.47, mesafe %0.29) - sıradan bir 30dk dalgalanması
+# pozisyonu kapatıyordu. 0 = taban kapalı (eski davranış).
+HEIKIN_ASHI_MIN_ATR_MULT = 1.0
 
 
 def heikin_ashi_initial_stop(
     entry_price: float, side: str, bars: list[Bar] | None = None,
     buffer_pct: float = HEIKIN_ASHI_STOP_BUFFER_PCT, fallback_pct: float = INITIAL_STOP_PCT,
+    min_atr_mult: float = HEIKIN_ASHI_MIN_ATR_MULT, atr_period: int = ATR_PERIOD,
 ) -> float:
     """Sinyal barının (bars[-1]) low'unun buffer_pct altı (short için high'ın
     üstü). `bars` yoksa ya da seviye girişin yanlış tarafında kalırsa
-    fallback_pct'lik sabit-% stopa düşülür."""
+    fallback_pct'lik sabit-% stopa düşülür.
+
+    Oynaklık tabanı: bars'tan ATR(atr_period) hesaplanabiliyorsa stop,
+    girişten en az min_atr_mult x ATR uzakta olacak şekilde genişletilir -
+    yapısal seviye bundan daha uzaksa olduğu gibi kalır (taban sadece
+    GENİŞLETİR, asla daraltmaz). ATR, sinyalin kendi mum periyodundaki
+    barlardan hesaplanır (HA Gün İçi için 30dk)."""
     naive_stop = entry_price * (1 - fallback_pct) if side == "long" else entry_price * (1 + fallback_pct)
     if not bars:
         return naive_stop
     if side == "long":
         structural_stop = bars[-1].l * (1 - buffer_pct)
-        return structural_stop if structural_stop < entry_price else naive_stop
-    structural_stop = bars[-1].h * (1 + buffer_pct)
-    return structural_stop if structural_stop > entry_price else naive_stop
+        stop = structural_stop if structural_stop < entry_price else naive_stop
+    else:
+        structural_stop = bars[-1].h * (1 + buffer_pct)
+        stop = structural_stop if structural_stop > entry_price else naive_stop
+
+    atr_value = atr(bars, atr_period) if min_atr_mult > 0 else None
+    if atr_value is None:
+        return stop
+    if side == "long":
+        return min(stop, entry_price - min_atr_mult * atr_value)
+    return max(stop, entry_price + min_atr_mult * atr_value)
 
 
 def _closed_bars(bars: list[Bar]) -> list[Bar]:
