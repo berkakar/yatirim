@@ -19,17 +19,17 @@
     "SKHY": 1.36,
     "UROY": 2.05
   },
-  "algorithm": "orb",
+  "algorithm": "demand_zone",
   "stop_algorithm": "breakeven_atr_structure",
   "symbol_settings": {
     "ACAD": {
-      "stop_algorithm": "opening_range"
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "AAON": {
-      "stop_algorithm": "opening_range"
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "AAT": {
-      "stop_algorithm": "opening_range"
+      "stop_algorithm": "breakeven_atr_structure"
     },
     "MSFT": {
       "algorithm": "demand_zone",
