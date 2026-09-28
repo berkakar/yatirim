@@ -180,6 +180,40 @@ EXTENDED_HOURS_ENTRY_POLL_WINDOW_SECONDS = int(os.environ.get("BUY_EXTENDED_HOUR
 EXTENDED_HOURS_ENTRY_POLL_INTERVAL_SECONDS = int(os.environ.get("BUY_EXTENDED_HOURS_POLL_INTERVAL_SECONDS", "15"))
 
 
+# Premium Buy Point'in hiçbir alış algoritmasıyla eşleşmeyen stop
+# algoritmaları: "opening_range", pozisyonun açıldığı seansın AÇILIŞ barının
+# dibine kurulur ve sadece aynı seansın açılış kırılımıyla (orb_signal)
+# anlamlı - ORB artık kendi modülünde (orb_core.py), buy_algorithms.
+# ALGORITHMS'te değil. Günlerce bekleyebilen bir pullback limitinde bu
+# seviye, emrin dolacağı günle ilgisiz, emrin konduğu günün açılış dibine
+# kayar (gözlemlenen gerçek örnek: AAON, 2026-09-24/25 - talep bölgesi
+# emrinin stop'u her yeni seansta açılış mumuna göre oynuyordu).
+PBP_INCOMPATIBLE_STOP_ALGORITHMS = frozenset({"opening_range"})
+
+
+def resolve_default_algorithm(config: dict) -> str:
+    """Portföy geneli varsayılan alış algoritması - kayıtlı değer artık
+    ALGORITHMS'te yoksa (ör. kendi modülüne taşınan "orb") DEFAULT_ALGORITHM'a
+    düşülür, ama bu artık SESSİZ değil: her pass'te log'a yazılır. Aksi halde
+    kullanıcı, hisselerin config'te görünen algoritmayla alındığını sanıyordu
+    (AAON/ACAD/AAT/AMZN/MU "orb" diye kayıtlıyken aslında demand_zone ile
+    alınıyordu)."""
+    configured = config.get("algorithm") or DEFAULT_ALGORITHM
+    if configured in ALGORITHMS:
+        return configured
+    log(f"⚠️ Portföy varsayılan alış algoritması '{configured}' artık Premium Buy Point'te geçerli değil "
+        f"(kaldırılmış ya da kendi modülüne taşınmış) - '{DEFAULT_ALGORITHM}' kullanılıyor. Premium Buy "
+        f"Point sayfasında varsayılan algoritmayı seçip portföyü kaydedin.")
+    return DEFAULT_ALGORITHM
+
+
+def warn_if_incompatible_stop_algorithm(symbol: str, algorithm: str, stop_algorithm: str) -> None:
+    if stop_algorithm in PBP_INCOMPATIBLE_STOP_ALGORITHMS:
+        log(f"⚠️ {symbol}: stop algoritması '{stop_algorithm}' alış algoritması '{algorithm}' ile uyumlu "
+            f"değil (sadece ORB kırılımıyla anlamlı) - Premium Buy Point sayfasında başka bir stop "
+            f"algoritması seçin.")
+
+
 def load_local_config() -> dict:
     if not os.path.exists(CONFIG_PATH):
         return {"budget": 0, "weights": {}}
@@ -602,9 +636,7 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
     config = load_local_config()
     budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
-    default_algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
-    if default_algorithm not in ALGORITHMS:
-        default_algorithm = DEFAULT_ALGORITHM
+    default_algorithm = resolve_default_algorithm(config)
     symbol_settings = config.get("symbol_settings") or {}
     max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
     stop_settings = load_stop_loss_settings()
@@ -779,9 +811,7 @@ def run_once(client: AlpacaClient) -> None:
     config = load_local_config()
     budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
-    default_algorithm = config.get("algorithm") or DEFAULT_ALGORITHM
-    if default_algorithm not in ALGORITHMS:
-        default_algorithm = DEFAULT_ALGORITHM
+    default_algorithm = resolve_default_algorithm(config)
     symbol_settings = config.get("symbol_settings") or {}
     max_loss_pct = float(config["max_loss_pct"]) if config.get("stop_loss_enabled") and config.get("max_loss_pct") else None
     top_up_stop_mode = load_top_up_stop_mode(config)
@@ -800,6 +830,7 @@ def run_once(client: AlpacaClient) -> None:
             algorithm = default_algorithm
         timeframe = settings.get("timeframe") or TIMEFRAME
         stop_algorithm = resolve_stop_algorithm(config, symbol)
+        warn_if_incompatible_stop_algorithm(symbol, algorithm, stop_algorithm)
         try:
             spent = check_symbol(
                 client, symbol, float(weights.get(symbol, 0)), budget, algorithm, timeframe, max_loss_pct,

@@ -12,6 +12,7 @@ from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
 from github_config import read_portfolio_config, write_portfolio_config
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
+from alpaca_buy_points import PBP_INCOMPATIBLE_STOP_ALGORITHMS
 from ui_style import zebra_style, freshness_caption
 
 GITHUB_REPO = "berkakar/yatirim"
@@ -152,7 +153,12 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # Hisse bazlı seçim (aşağıda) ve portföy geneli varsayılan (Risk Yönetimi
     # bölümündeki selectbox) aynı kaydedilmiş değeri paylaşır - burada bir kez
     # okunur.
-    stop_algorithm_ids = list(STOP_ALGORITHMS.keys())
+    # "opening_range" (ORB stop) Premium Buy Point'in hiçbir alış algoritmasıyla
+    # eşleşmiyor - bkz. alpaca_buy_points.PBP_INCOMPATIBLE_STOP_ALGORITHMS.
+    # Seçenek olarak sunulmaz; eskiden kaydedilmiş bir değer aşağıdaki
+    # "not in stop_algorithm_ids" guard'larıyla varsayılana düşer ve bir
+    # sonraki kaydetmede düzelir.
+    stop_algorithm_ids = [k for k in STOP_ALGORITHMS if k not in PBP_INCOMPATIBLE_STOP_ALGORITHMS]
     current_stop_algorithm = config.get("stop_algorithm", DEFAULT_STOP_ALGORITHM)
     if current_stop_algorithm not in stop_algorithm_ids:
         current_stop_algorithm = DEFAULT_STOP_ALGORITHM
@@ -400,6 +406,10 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     algorithm_ids = list(ALGORITHMS.keys())
     current_algorithm = config.get("algorithm", DEFAULT_ALGORITHM)
     if current_algorithm not in algorithm_ids:
+        st.warning(
+            f"Kayıtlı varsayılan algoritma ('{current_algorithm}') artık bu modülde geçerli değil - canlı "
+            f"tarama şu an '{ALGORITHMS[DEFAULT_ALGORITHM][0]}' kullanıyor. Aşağıdan seçip portföyü kaydedin."
+        )
         current_algorithm = DEFAULT_ALGORITHM
     selected_algorithm = st.selectbox(
         "Varsayılan algoritma:",
