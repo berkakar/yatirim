@@ -1,0 +1,14 @@
+[Unit]
+Description=Alpaca extended hours guard (pre-market + after-hours, 10 dk)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 04..09:00/10:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 16..19:00/10:00 America/New_York
+Unit=yatirim-job@ext-hours-guard.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

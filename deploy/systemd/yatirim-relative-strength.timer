@@ -1,0 +1,13 @@
+[Unit]
+Description=Relative Strength Rotasyonu (haftalık, Pazartesi)
+
+[Timer]
+OnCalendar=Mon *-*-* 03:15:00 America/New_York
+Unit=yatirim-job@relative-strength.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

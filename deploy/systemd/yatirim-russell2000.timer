@@ -1,0 +1,13 @@
+[Unit]
+Description=Russell 2000 listesini güncelle (ayda 1)
+
+[Timer]
+OnCalendar=*-*-01 06:00:00 UTC
+Unit=yatirim-job@russell2000.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

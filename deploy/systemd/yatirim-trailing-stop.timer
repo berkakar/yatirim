@@ -1,0 +1,13 @@
+[Unit]
+Description=Alpaca trailing stop + alım noktaları (seans içi, 5 dk)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..16:00/5:00 America/New_York
+Unit=yatirim-job@trailing-stop.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

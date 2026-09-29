@@ -1,0 +1,13 @@
+[Unit]
+Description=Fonlarım hisse düşüş uyarısı (BIST seansı, 5 dk)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 10..17:00/5:00 Europe/Istanbul
+Unit=yatirim-job@fon-hisse-uyari.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target
