@@ -5923,5 +5923,80 @@
       "_most_recent_quarter": "2026-06-30"
     },
     "cached_at": "2026-09-22"
+  },
+  "NOK": {
+    "raw": {
+      "Hisse": "NOK",
+      "Alt Sektör (İş Modeli)": "Communication Equipment",
+      "Ana Sektör": "Technology",
+      "F/K": 72.29,
+      "PD/DD": 2.32,
+      "FD/FAVÖK": 21.11,
+      "PEG": 0.89,
+      "EPS Büyümesi %": -97.9,
+      "Gelir Büyümesi %": 8.4,
+      "Öz Sermaye Getirisi (ROE) %": 3.45,
+      "Net Kar Marjı %": 3.47,
+      "Brüt Kar Marjı %": 45.5,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": 3.12,
+      "Borç / Özsermaye": 0.16,
+      "Borç / Varlık %": null,
+      "Cari Oran": 1.5,
+      "Likidite Oranı": 1.22,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-29"
+  },
+  "BWXT": {
+    "raw": {
+      "Hisse": "BWXT",
+      "Alt Sektör (İş Modeli)": "Aerospace & Defense",
+      "Ana Sektör": "Industrials",
+      "F/K": 34.81,
+      "PD/DD": 9.22,
+      "FD/FAVÖK": 28.8,
+      "PEG": 1.67,
+      "EPS Büyümesi %": 14.1,
+      "Gelir Büyümesi %": 18.0,
+      "Öz Sermaye Getirisi (ROE) %": 28.29,
+      "Net Kar Marjı %": 10.11,
+      "Brüt Kar Marjı %": 22.08,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": 5.53,
+      "Borç / Özsermaye": 1.51,
+      "Borç / Varlık %": null,
+      "Cari Oran": 2.4,
+      "Likidite Oranı": 2.26,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-29"
+  },
+  "AAOI": {
+    "raw": {
+      "Hisse": "AAOI",
+      "Alt Sektör (İş Modeli)": "Communication Equipment",
+      "Ana Sektör": "Technology",
+      "F/K": null,
+      "PD/DD": 4.9,
+      "FD/FAVÖK": null,
+      "PEG": 0.78,
+      "EPS Büyümesi %": null,
+      "Gelir Büyümesi %": 86.4,
+      "Öz Sermaye Getirisi (ROE) %": -5.45,
+      "Net Kar Marjı %": -9.57,
+      "Brüt Kar Marjı %": 28.92,
+      "Faiz Karşılama Oranı": null,
+      "Varlık Getirisi (ROA) %": -2.72,
+      "Borç / Özsermaye": 0.18,
+      "Borç / Varlık %": null,
+      "Cari Oran": 2.78,
+      "Likidite Oranı": 1.9,
+      "Varlık Devir Hızı": null,
+      "_most_recent_quarter": "2026-06-30"
+    },
+    "cached_at": "2026-09-29"
   }
 }
