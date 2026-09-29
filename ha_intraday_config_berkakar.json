@@ -8,13 +8,17 @@
   "custom_groups": [],
   "min_avg_dollar_volume": 5000000.0,
   "stop_algorithm": "heikin_ashi_exit",
-  "last_run_at": "2026-09-28T19:58:19+00:00",
+  "last_run_at": "2026-09-29T18:26:38+00:00",
   "last_run_summary": {
-    "run_at": "2026-09-28T19:58:19+00:00",
+    "run_at": "2026-09-29T18:26:38+00:00",
     "skipped": false,
     "sold": [],
     "bought": [],
     "errors": [],
-    "phase": "eod_flatten"
+    "risk_notes": [],
+    "phase": "full",
+    "universe_size": 499,
+    "candidate_count": 0,
+    "selected_symbols": []
   }
 }
