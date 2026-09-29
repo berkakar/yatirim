@@ -20,7 +20,8 @@
     "initial_stop_price": 266.51
   },
   "MDB": {
-    "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00"
+    "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00",
+    "initial_stop_price": 368.41
   },
   "MRNA": {
     "earliest_stop_at": "2026-09-28T15:28:55.189784+00:00",
