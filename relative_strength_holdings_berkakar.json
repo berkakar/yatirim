@@ -28,17 +28,5 @@
     "entry_price": 250.27,
     "entered_at": "2026-09-28T15:28:56+00:00",
     "score_pct": 36.66
-  },
-  "PAYC": {
-    "qty": 2.0,
-    "entry_price": 222.22,
-    "entered_at": "2026-09-28T15:28:58+00:00",
-    "score_pct": 36.87
-  },
-  "ZS": {
-    "qty": 3.0,
-    "entry_price": 199.75,
-    "entered_at": "2026-09-28T15:29:04+00:00",
-    "score_pct": 34.51
   }
 }

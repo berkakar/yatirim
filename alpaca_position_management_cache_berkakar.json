@@ -33,17 +33,5 @@
   "MSFT": {
     "earliest_stop_at": "2026-09-17T17:21:23.167930+00:00",
     "initial_stop_price": 487.04
-  },
-  "PAYC": {
-    "earliest_stop_at": "2026-09-28T15:28:58.916482+00:00",
-    "initial_stop_price": 218.89
-  },
-  "UROY": {
-    "earliest_stop_at": "2026-09-17T17:21:26.185756+00:00",
-    "initial_stop_price": 4.37
-  },
-  "ZS": {
-    "earliest_stop_at": "2026-09-28T15:29:04.857136+00:00",
-    "initial_stop_price": 196.75
   }
 }
