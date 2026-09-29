@@ -14,8 +14,8 @@ name: Russell 2000 Listesini Güncelle
 # özel bir gerekçesi yok).
 
 on:
-  schedule:
-    - cron: "0 6 1 * *"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

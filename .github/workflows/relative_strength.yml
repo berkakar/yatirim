@@ -11,8 +11,8 @@ name: Relative Strength Rotasyonu
 # Cron saati UTC'dir; her Pazartesi (haftalık yeniden dengeleme).
 
 on:
-  schedule:
-    - cron: "15 7 * * 1"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

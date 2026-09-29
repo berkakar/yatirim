@@ -16,9 +16,8 @@ name: Heikin Ashi Gün İçi
 # kapanışa EOD_FLATTEN_MINUTES=20 dakikadan az kaldığını görünce her şeyi satar).
 
 on:
-  schedule:
-    - cron: "2,32 13-20 * * 1-5"
-    - cron: "45 19,20 * * 1-5"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

@@ -23,9 +23,8 @@ name: Açılış Aralığı Kırılımı (ORB)
 # ihtimaline karşı bir yedek.
 
 on:
-  schedule:
-    - cron: "30,45 14 * * 1-5"
-    - cron: "30,45 15 * * 1-5"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch:
     inputs:
       reconcile_symbols:

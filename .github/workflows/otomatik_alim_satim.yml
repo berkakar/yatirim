@@ -15,8 +15,8 @@ name: Otomatik Alım/Satım
 # olsun diye seçildi.
 
 on:
-  schedule:
-    - cron: "0 7 * * 1-5"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

@@ -45,6 +45,9 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
    git clone https://github.com/berkakar/yatirim.git /root/yatirim
    cd /root/yatirim && sudo bash deploy/install.sh --with-playwright
    ```
+   Bu değişiklik henüz main'e alınmadıysa `deploy/` klasörü main'de yoktur. O durumda
+   klonlarken `-b ccr-8b6d1873-uh480v` ekleyin. İşlerin kendisi her zaman main'deki
+   kodla çalışır.
    İlk çalıştırmada bir **deploy key** yazdırılıp durulur. Bu anahtarı GitHub'da
    *Settings → Deploy keys → Add deploy key* ekranına yapıştırın,
    **"Allow write access"** kutusunu işaretleyin ve script'i tekrar çalıştırın.
