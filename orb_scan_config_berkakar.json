@@ -11,27 +11,31 @@
   "volume_mult": 1.5,
   "max_bars_after_open": 4,
   "stop_algorithm": "opening_range",
-  "last_run_at": "2026-09-25T18:48:24+00:00",
+  "last_run_at": "2026-09-29T19:34:30+00:00",
   "last_run_summary": {
-    "run_at": "2026-09-25T18:48:24+00:00",
+    "run_at": "2026-09-29T19:34:30+00:00",
     "skipped": false,
-    "universe_size": 702,
-    "candidate_count": 7,
+    "universe_size": 1932,
+    "candidate_count": 25,
     "selected_symbols": [
-      "BHRB",
-      "BFC",
-      "AIN",
-      "MHO",
-      "ARMP"
+      "CMDB",
+      "MPTI",
+      "HVT",
+      "KRUS",
+      "EIG"
     ],
     "bought": [
-      "BHRB",
-      "BFC",
-      "AIN",
-      "MHO",
-      "ARMP"
+      "CMDB",
+      "MPTI",
+      "HVT",
+      "KRUS",
+      "EIG"
     ],
-    "buy_errors": [],
+    "buy_errors": [
+      "HVT: alındı (@ 27.54) ama stop kurulamadı, KORUMASIZ: 422 Unprocessable Entity for url https://paper-api.alpaca.markets/v2/orders: {\"code\":42210000,\"market_price\":\"27.45\",\"message\":\"stop price must be less than current price\",\"stop_price\":\"27.46\"}",
+      "KRUS: alındı (@ 39.52) ama stop kurulamadı, KORUMASIZ: 422 Unprocessable Entity for url https://paper-api.alpaca.markets/v2/orders: {\"code\":42210000,\"market_price\":\"39.08\",\"message\":\"stop price must be less than current price\",\"stop_price\":\"39.22\"}"
+    ],
+    "risk_notes": [],
     "cash_allocation_pct": 10.0,
     "top_n": 5
   }
