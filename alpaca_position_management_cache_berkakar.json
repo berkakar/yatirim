@@ -23,10 +23,6 @@
     "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00",
     "initial_stop_price": 368.41
   },
-  "MRNA": {
-    "earliest_stop_at": "2026-09-28T15:28:55.189784+00:00",
-    "initial_stop_price": 192.15
-  },
   "MRVL": {
     "earliest_stop_at": "2026-09-28T15:28:56.429416+00:00",
     "initial_stop_price": 246.52
@@ -34,5 +30,25 @@
   "MSFT": {
     "earliest_stop_at": "2026-09-17T17:21:23.167930+00:00",
     "initial_stop_price": 487.04
+  },
+  "CMDB": {
+    "earliest_stop_at": "2026-09-29T19:52:06.708811+00:00",
+    "initial_stop_price": 21.9
+  },
+  "EIG": {
+    "earliest_stop_at": "2026-09-29T19:52:16.774078+00:00",
+    "initial_stop_price": 47.27
+  },
+  "HVT": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 27.13
+  },
+  "KRUS": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 39.31
+  },
+  "MPTI": {
+    "earliest_stop_at": "2026-09-29T19:52:08.953437+00:00",
+    "initial_stop_price": 74.28
   }
 }
