@@ -1,0 +1,43 @@
+name: Hisse Emir Geçmişi (Teşhis)
+
+# Verilen hisselerin Alpaca emir ve hesap hareketi geçmişini loglayan
+# salt-okunur teşhis workflow'u - hiçbir emir vermez/değiştirmez/iptal etmez,
+# hiçbir dosya commit'lemez (bkz. symbol_order_history.py). Sadece elle
+# tetiklenir.
+
+on:
+  workflow_dispatch:
+    inputs:
+      symbols:
+        description: "Virgülle ayrılmış semboller (ör. MRVL,MDB)"
+        required: true
+        default: "MRVL,MDB"
+      days:
+        description: "Kaç günlük geçmiş"
+        required: true
+        default: "7"
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - run: pip install requests python-dotenv
+
+      - run: python symbol_order_history.py --symbols "$SYMBOLS" --days "$DAYS"
+        env:
+          SYMBOLS: ${{ inputs.symbols }}
+          DAYS: ${{ inputs.days }}
+          APCA_API_KEY_ID: ${{ secrets.APCA_API_KEY_ID }}
+          APCA_API_SECRET_KEY: ${{ secrets.APCA_API_SECRET_KEY }}
+          APCA_API_BASE_URL: https://paper-api.alpaca.markets/v2
+          APCA_API_DATA_URL: https://data.alpaca.markets/v2
