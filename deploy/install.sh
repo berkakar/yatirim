@@ -17,6 +17,11 @@ REPO_URL=git@github.com:berkakar/yatirim.git
 WITH_PLAYWRIGHT=0
 [ "${1:-}" = "--with-playwright" ] && WITH_PLAYWRIGHT=1
 
+# Aşağıdaki `sudo -u yatirim ...` komutları, script'in çalıştırıldığı klasörde
+# (örn. /root/yatirim) başlar; yatirim kullanıcısı /root'a erişemediği için git
+# orada "Permission denied" ile düşer. Erişilebilir bir klasöre geç.
+cd /
+
 if [ "$(id -u)" -ne 0 ]; then
   echo "root olarak çalıştırın: sudo bash $0" >&2
   exit 1
@@ -77,11 +82,14 @@ if ! grep -q "^github.com " "$BASE/.ssh/known_hosts" 2>/dev/null; then
   chown yatirim:yatirim "$BASE/.ssh/known_hosts"
 fi
 
-if ! sudo -u yatirim GIT_SSH_COMMAND="ssh -i $BASE/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$BASE/.ssh/known_hosts" \
-    git ls-remote "$REPO_URL" HEAD >/dev/null 2>&1; then
+if ! check_out="$(sudo -u yatirim GIT_SSH_COMMAND="ssh -i $BASE/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$BASE/.ssh/known_hosts" \
+    git ls-remote "$REPO_URL" HEAD 2>&1)"; then
   cat <<EOF
 
-!!! Deploy key henüz GitHub'a eklenmemiş. Aşağıdaki anahtarı
+!!! GitHub'a deploy key ile bağlanılamadı. Hata:
+$check_out
+
+    "Permission denied (publickey)" ise anahtar GitHub'a eklenmemiş ya da farklı. Aşağıdaki anahtarı
     github.com/berkakar/yatirim → Settings → Deploy keys → Add deploy key
     ekranına yapıştırın ve "Allow write access" kutusunu İŞARETLEYİN:
 
