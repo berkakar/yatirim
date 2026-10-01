@@ -95,3 +95,42 @@ sudo systemctl start yatirim-job@orb-scan            # bir işi elle çalıştı
   çalışan tek seferlik bir iş.
 - Sunucu kapalıyken kaçırılan tetiklemeler açılışta telafi edilmez
   (`Persistent=false`). Alım/satım işlerinin geç çalışmaması için bu bilinçli.
+
+## İsteğe bağlı: Streamlit arayüzünü de Droplet'e taşıma
+
+`deploy/web/` altındaki dosyalar arayüzü Nginx arkasında yayına alır. Önce
+`deploy/install.sh` çalıştırılmış olmalı.
+
+1. **(Önerilen) Alan adı:** DNS'te alan adınız için bu Droplet'in IP'sini gösteren
+   bir **A kaydı** ekleyin. Alan adı olmadan da çalışır ama bağlantı şifrelenmez,
+   giriş şifresi açık metin olarak gider.
+2. **Kurulum:**
+   ```bash
+   cd /root/yatirim && git pull
+   sudo bash deploy/web/install_web.sh borsa.ornek.com ben@ornek.com   # alan adıyla
+   sudo bash deploy/web/install_web.sh                                  # alan adı olmadan
+   ```
+   Script Nginx'i (WebSocket başlıklarıyla), Let's Encrypt sertifikasını, güvenlik
+   duvarını (sadece 22/80/443) ve 2 GB swap'i kurar. Arayüz `/opt/yatirim/app`
+   kopyasından çalışır ve bu kopya dakikada bir `main` ile eşitlenir.
+3. **Secrets:** Streamlit Cloud → uygulama → *Settings → Secrets* içeriğini aynen
+   `/opt/yatirim/.streamlit/secrets.toml` dosyasına yapıştırın, sonra
+   `sudo systemctl restart yatirim-streamlit` çalıştırın.
+4. Yeni adreste her şey çalışıyorsa Streamlit Cloud'daki uygulamayı kapatabilirsiniz.
+
+Nginx ayarının kritik kısmı (`deploy/web/nginx-yatirim.conf`):
+```nginx
+proxy_http_version 1.1;
+proxy_set_header Upgrade $http_upgrade;
+proxy_set_header Connection $connection_upgrade;   # map ile: upgrade / close
+proxy_read_timeout 86400s;                         # açık sekme 60 sn'de kopmasın
+```
+Bu başlıklar olmadan sayfa açılır ama Streamlit'in `/_stcore/stream` WebSocket
+bağlantısı kurulamaz ve ekran "Please wait..." durumunda kalır.
+
+Sorun giderme:
+```bash
+journalctl -u yatirim-streamlit -f        # uygulama logları
+sudo nginx -t && sudo systemctl reload nginx
+sudo tail -f /var/log/nginx/error.log
+```
