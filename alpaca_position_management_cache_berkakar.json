@@ -1,23 +1,7 @@
 {
-  "NHI": {
-    "earliest_stop_at": "2026-09-25T15:03:12.596840+00:00",
-    "initial_stop_price": 65.99
-  },
-  "AAON": {
-    "earliest_stop_at": "2026-09-24T17:38:13.874879+00:00",
-    "initial_stop_price": 80.64
-  },
-  "BE": {
-    "earliest_stop_at": "2026-09-28T15:28:49.343137+00:00",
-    "initial_stop_price": 257.45
-  },
   "CRWD": {
     "earliest_stop_at": "2026-09-28T15:28:51.595702+00:00",
     "initial_stop_price": 254.24
-  },
-  "ILMN": {
-    "earliest_stop_at": "2026-09-28T15:28:53.861546+00:00",
-    "initial_stop_price": 266.51
   },
   "MDB": {
     "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00",
@@ -31,10 +15,6 @@
     "earliest_stop_at": "2026-09-17T17:21:23.167930+00:00",
     "initial_stop_price": 487.04
   },
-  "CMDB": {
-    "earliest_stop_at": "2026-09-29T19:52:06.708811+00:00",
-    "initial_stop_price": 21.9
-  },
   "EIG": {
     "earliest_stop_at": "2026-09-29T19:52:16.774078+00:00",
     "initial_stop_price": 47.27
@@ -47,8 +27,24 @@
     "earliest_stop_at": null,
     "initial_stop_price": 39.31
   },
-  "MPTI": {
-    "earliest_stop_at": "2026-09-29T19:52:08.953437+00:00",
-    "initial_stop_price": 74.28
+  "ACAD": {
+    "earliest_stop_at": "2026-09-29T14:55:00.939621+00:00",
+    "initial_stop_price": 19.55
+  },
+  "FBIZ": {
+    "earliest_stop_at": "2026-09-30T19:48:20.042118+00:00",
+    "initial_stop_price": 67.75
+  },
+  "NECB": {
+    "earliest_stop_at": "2026-09-30T19:48:21.938255+00:00",
+    "initial_stop_price": 25.69
+  },
+  "NUTX": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 209.01
+  },
+  "UFPT": {
+    "earliest_stop_at": "2026-09-30T19:48:15.727657+00:00",
+    "initial_stop_price": 294.74
   }
 }
