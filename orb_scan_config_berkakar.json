@@ -11,27 +11,19 @@
   "volume_mult": 1.5,
   "max_bars_after_open": 4,
   "stop_algorithm": "opening_range",
-  "last_run_at": "2026-09-30T19:34:03+00:00",
+  "last_run_at": "2026-10-01T19:40:57+00:00",
   "last_run_summary": {
-    "run_at": "2026-09-30T19:34:03+00:00",
+    "run_at": "2026-10-01T19:40:57+00:00",
     "skipped": false,
-    "universe_size": 1617,
-    "candidate_count": 4,
+    "universe_size": 696,
+    "candidate_count": 1,
     "selected_symbols": [
-      "UFPT",
-      "FBIZ",
-      "NECB",
-      "NUTX"
+      "KRT"
     ],
     "bought": [
-      "UFPT",
-      "FBIZ",
-      "NECB",
-      "NUTX"
+      "KRT"
     ],
-    "buy_errors": [
-      "NUTX: alındı (@ 212.19) ama stop kurulamadı, KORUMASIZ: 422 Unprocessable Entity for url https://paper-api.alpaca.markets/v2/orders: {\"code\":42210000,\"market_price\":\"211.16\",\"message\":\"stop price must be less than current price\",\"stop_price\":\"212.02\"}"
-    ],
+    "buy_errors": [],
     "risk_notes": [],
     "cash_allocation_pct": 10.0,
     "top_n": 5
