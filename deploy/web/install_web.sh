@@ -82,7 +82,14 @@ sed "s/__SERVER_NAME__/${DOMAIN:-_}/" "$SRC/nginx-yatirim.conf" > /etc/nginx/sit
 ln -sf /etc/nginx/sites-available/yatirim /etc/nginx/sites-enabled/yatirim
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
-systemctl reload nginx
+# Nginx hiç çalışmıyorsa (örn. daha önce durdurulmuş ya da başlatılamamış) reload
+# başarısız olur - gerekirse başlat, çalışıyorsa sadece ayarı yeniden yükle.
+systemctl enable nginx >/dev/null 2>&1
+if ! systemctl reload-or-restart nginx; then
+  echo "!!! Nginx başlatılamadı. Sebebi için: journalctl -u nginx -n 30 --no-pager" >&2
+  echo "    80/443 portunu başka bir program kullanıyor olabilir: ss -ltnp | grep -E ':(80|443) '" >&2
+  exit 1
+fi
 
 echo "==> Güvenlik duvarı (ufw): sadece SSH, 80, 443"
 ufw allow OpenSSH >/dev/null
