@@ -106,11 +106,18 @@ if [ -n "$DOMAIN" ]; then
 fi
 
 IP="$(curl -fsS -4 -m 5 https://ifconfig.me 2>/dev/null || hostname -I | cut -d' ' -f1)"
+if [ -n "$DOMAIN" ] && grep -q "listen 443" /etc/nginx/sites-available/yatirim; then
+  URL="https://$DOMAIN"
+elif [ -n "$DOMAIN" ]; then
+  URL="http://$DOMAIN  (HTTPS henüz YOK - sertifika alınamadı; şimdilik: http://$IP)"
+else
+  URL="http://$IP  (alan adı olmadan şifreli DEĞİL)"
+fi
 cat <<EOF
 
 Kurulum tamam.
   1. Secrets'ı doldurun:      sudo nano $SECRETS
      Sonra:                   sudo systemctl restart yatirim-streamlit
-  2. Adres:                   ${DOMAIN:+https://$DOMAIN}${DOMAIN:-http://$IP  (alan adı olmadan şifreli DEĞİL)}
+  2. Adres:                   $URL
   3. Loglar:                  journalctl -u yatirim-streamlit -f
 EOF
