@@ -1,0 +1,8 @@
+[Unit]
+Description=yatirim arayüz kopyasını main ile eşitle
+After=network-online.target
+
+[Service]
+Type=oneshot
+# root olarak çalışır (servisi yeniden başlatabilmek için); git/pip yatirim kullanıcısıyla.
+ExecStart=/opt/yatirim/bin/app_sync.sh

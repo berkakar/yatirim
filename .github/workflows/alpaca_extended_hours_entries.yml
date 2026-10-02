@@ -17,9 +17,8 @@ name: Alpaca Extended Hours Entries
 # kayar, script kendi içinde extended_hours_session ile bunu takvimden
 # doğrulayıp gerekirse no-op yapar.
 on:
-  schedule:
-    - cron: "*/10 8-13 * * 1-5"   # ~04:00-09:59 ET pre-market
-    - cron: "*/10 20-23 * * 1-5"  # ~16:00-19:59 ET after-hours
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

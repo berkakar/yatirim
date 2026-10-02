@@ -1,0 +1,20 @@
+[Unit]
+Description=yatirim Streamlit arayüzü
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=yatirim
+Group=yatirim
+WorkingDirectory=/opt/yatirim/app
+# Sadece 127.0.0.1'i dinler; dışarıya Nginx üzerinden açılır.
+ExecStart=/opt/yatirim/venv/bin/streamlit run app.py \
+  --server.address 127.0.0.1 --server.port 8501 \
+  --server.headless true --browser.gatherUsageStats false
+Restart=always
+RestartSec=5
+# Bellek yetmezse çekirdek önce arayüzü öldürsün, alım/satım işlerini değil.
+OOMScoreAdjust=500
+
+[Install]
+WantedBy=multi-user.target

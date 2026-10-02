@@ -1,0 +1,14 @@
+[Unit]
+Description=yatirim zamanlanmış işi: %i
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yatirim
+Group=yatirim
+EnvironmentFile=/etc/yatirim/env
+ExecStart=/opt/yatirim/bin/run_job.sh %i
+# İş bazındaki asıl sınır jobs.sh'daki JOB_TIMEOUT; bu sadece son emniyet.
+TimeoutStartSec=2h
+Nice=5

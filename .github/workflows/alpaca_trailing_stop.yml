@@ -1,8 +1,8 @@
 name: Alpaca Trailing Stop
 
 on:
-  schedule:
-    - cron: "*/5 13-21 * * 1-5"
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

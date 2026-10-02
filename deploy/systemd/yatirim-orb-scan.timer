@@ -1,0 +1,13 @@
+[Unit]
+Description=Açılış Aralığı Kırılımı (açılıştan 60 dk sonra + 75 dk'da yedek)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 10:30,45:00 America/New_York
+Unit=yatirim-job@orb-scan.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target
