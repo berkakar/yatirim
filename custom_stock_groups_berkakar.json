@@ -1,9 +1,4 @@
 {
-  "Yeni": [
-    "GOOGL",
-    "META",
-    "GOOG"
-  ],
   "Bist favori": [
     "ASELS.IS",
     "KCHOL.IS"
@@ -12,5 +7,10 @@
     "AKBNK.IS",
     "ASELS.IS",
     "SISE.IS"
+  ],
+  "ILAVE": [
+    "NOK",
+    "BWXT",
+    "AAOI"
   ]
 }

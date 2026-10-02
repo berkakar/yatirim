@@ -1,30 +1,11 @@
 {
-  "NHI": {
-    "earliest_stop_at": "2026-09-25T15:03:12.596840+00:00",
-    "initial_stop_price": 65.99
-  },
-  "AAON": {
-    "earliest_stop_at": "2026-09-24T17:38:13.874879+00:00",
-    "initial_stop_price": 80.64
-  },
-  "BE": {
-    "earliest_stop_at": "2026-09-28T15:28:49.343137+00:00",
-    "initial_stop_price": 257.45
-  },
   "CRWD": {
     "earliest_stop_at": "2026-09-28T15:28:51.595702+00:00",
     "initial_stop_price": 254.24
   },
-  "ILMN": {
-    "earliest_stop_at": "2026-09-28T15:28:53.861546+00:00",
-    "initial_stop_price": 266.51
-  },
   "MDB": {
-    "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00"
-  },
-  "MRNA": {
-    "earliest_stop_at": "2026-09-28T15:28:55.189784+00:00",
-    "initial_stop_price": 192.15
+    "earliest_stop_at": "2026-09-17T17:21:22.847167+00:00",
+    "initial_stop_price": 368.41
   },
   "MRVL": {
     "earliest_stop_at": "2026-09-28T15:28:56.429416+00:00",
@@ -34,16 +15,36 @@
     "earliest_stop_at": "2026-09-17T17:21:23.167930+00:00",
     "initial_stop_price": 487.04
   },
-  "PAYC": {
-    "earliest_stop_at": "2026-09-28T15:28:58.916482+00:00",
-    "initial_stop_price": 218.89
+  "EIG": {
+    "earliest_stop_at": "2026-09-29T19:52:16.774078+00:00",
+    "initial_stop_price": 47.27
   },
-  "UROY": {
-    "earliest_stop_at": "2026-09-17T17:21:26.185756+00:00",
-    "initial_stop_price": 4.37
+  "HVT": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 27.13
   },
-  "ZS": {
-    "earliest_stop_at": "2026-09-28T15:29:04.857136+00:00",
-    "initial_stop_price": 196.75
+  "KRUS": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 39.31
+  },
+  "ACAD": {
+    "earliest_stop_at": "2026-09-29T14:55:00.939621+00:00",
+    "initial_stop_price": 19.55
+  },
+  "FBIZ": {
+    "earliest_stop_at": "2026-09-30T19:48:20.042118+00:00",
+    "initial_stop_price": 67.75
+  },
+  "NECB": {
+    "earliest_stop_at": "2026-09-30T19:48:21.938255+00:00",
+    "initial_stop_price": 25.69
+  },
+  "NUTX": {
+    "earliest_stop_at": null,
+    "initial_stop_price": 209.01
+  },
+  "UFPT": {
+    "earliest_stop_at": "2026-09-30T19:48:15.727657+00:00",
+    "initial_stop_price": 294.74
   }
 }

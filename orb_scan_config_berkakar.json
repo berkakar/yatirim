@@ -11,27 +11,20 @@
   "volume_mult": 1.5,
   "max_bars_after_open": 4,
   "stop_algorithm": "opening_range",
-  "last_run_at": "2026-09-25T18:48:24+00:00",
+  "last_run_at": "2026-10-01T19:40:57+00:00",
   "last_run_summary": {
-    "run_at": "2026-09-25T18:48:24+00:00",
+    "run_at": "2026-10-01T19:40:57+00:00",
     "skipped": false,
-    "universe_size": 702,
-    "candidate_count": 7,
+    "universe_size": 696,
+    "candidate_count": 1,
     "selected_symbols": [
-      "BHRB",
-      "BFC",
-      "AIN",
-      "MHO",
-      "ARMP"
+      "KRT"
     ],
     "bought": [
-      "BHRB",
-      "BFC",
-      "AIN",
-      "MHO",
-      "ARMP"
+      "KRT"
     ],
     "buy_errors": [],
+    "risk_notes": [],
     "cash_allocation_pct": 10.0,
     "top_n": 5
   }

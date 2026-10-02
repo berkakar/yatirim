@@ -1,8 +1,44 @@
 {
-  "NHI": {
+  "HVT": {
+    "qty": 48.0,
+    "entry_price": 27.54,
+    "entered_at": "2026-09-29T19:52:12+00:00",
+    "score": 8.7266
+  },
+  "KRUS": {
+    "qty": 33.0,
+    "entry_price": 39.52,
+    "entered_at": "2026-09-29T19:52:15+00:00",
+    "score": 7.0055
+  },
+  "EIG": {
     "qty": 28.0,
-    "entry_price": 66.99,
-    "entered_at": "2026-09-25T15:01:49+00:00",
-    "score": null
+    "entry_price": 48.03,
+    "entered_at": "2026-09-29T19:52:16+00:00",
+    "score": 6.4616
+  },
+  "UFPT": {
+    "qty": 4.0,
+    "entry_price": 299.82,
+    "entered_at": "2026-09-30T19:48:15+00:00",
+    "score": 5.4908
+  },
+  "FBIZ": {
+    "qty": 18.0,
+    "entry_price": 68.78,
+    "entered_at": "2026-09-30T19:48:20+00:00",
+    "score": 2.9409
+  },
+  "NECB": {
+    "qty": 49.0,
+    "entry_price": 26.08,
+    "entered_at": "2026-09-30T19:48:21+00:00",
+    "score": 2.879
+  },
+  "KRT": {
+    "qty": 23.0,
+    "entry_price": 53.81,
+    "entered_at": "2026-10-01T19:44:34+00:00",
+    "score": 5.5023
   }
 }
