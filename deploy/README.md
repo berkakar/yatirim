@@ -60,11 +60,15 @@ Alan adını sonradan eklerseniz betiği alan adıyla tekrar çalıştırmanız 
 ## Günlük kullanım
 
 ```bash
-sudo bash /opt/yatirim/deploy/update.sh      # yeni kodu yayınla (main dalı)
+sudo bash /root/yatirim/deploy/update.sh     # yeni kodu yayınla (main dalı)
 systemctl status yatirim                     # çalışıyor mu?
 journalctl -u yatirim -f                     # canlı loglar
 sudo systemctl restart yatirim               # yeniden başlat
 ```
+
+`update.sh` varsayılan olarak `/root/yatirim` klasörünü ve root kullanıcısını kullanır (Droplet'teki
+mevcut kurulum). Farklıysa `APP_DIR`, `APP_USER` ve arayüz servisi için `SERVICE` ile değiştirin:
+`sudo APP_DIR=/opt/yatirim APP_USER=yatirim SERVICE=yatirim bash .../deploy/update.sh`.
 
 `update.sh` hiçbir yerel değişikliği silmez:
 - Bir iş o an state dosyası yazıyorsa (commit'lenmemiş değişiklik) 2 dakikaya kadar bekler.

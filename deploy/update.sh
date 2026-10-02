@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # GitHub'daki son kodu Droplet'e alır.
-#   sudo bash /opt/yatirim/deploy/update.sh          # main dalı
-#   sudo bash /opt/yatirim/deploy/update.sh <dal>
+#   sudo bash /root/yatirim/deploy/update.sh          # main dalı
+#   sudo bash /root/yatirim/deploy/update.sh <dal>
+#   sudo SERVICE=<arayüz-servisi> bash /root/yatirim/deploy/update.sh   # servis adı "yatirim" değilse
 #
 # Zamanlanmış işler de bu klasörde çalışıp state/önbellek JSON'larını yazıyor,
 # commit'leyip push ediyor. Bu yüzden betik hiçbir yerel değişikliği SİLMEZ:
@@ -14,8 +15,9 @@
 #   için onlara ayrıca bir şey yapmak gerekmez.
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-/opt/yatirim}"
-APP_USER="${APP_USER:-yatirim}"
+# Droplet'teki asıl kurulum: repo /root/yatirim'de, işler ve arayüz root olarak çalışıyor.
+APP_DIR="${APP_DIR:-/root/yatirim}"
+APP_USER="${APP_USER:-root}"
 SERVICE="${SERVICE:-yatirim}"
 WAIT_SECONDS="${WAIT_SECONDS:-120}"
 BRANCH="${1:-main}"
