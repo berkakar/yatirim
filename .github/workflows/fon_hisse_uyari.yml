@@ -11,9 +11,8 @@ name: Fonlarım Hisse Düşüş Uyarısı
 # davranışı GitHub'ın schedule event'ine değil, job içindeki sleep
 # döngüsüne dayanıyor.
 on:
-  schedule:
-    - cron: "5 7 * * 1-5"   # 10:05 TRT (BIST açılışı) - ilk ~4 saatlik pencere
-    - cron: "5 11 * * 1-5"  # 14:05 TRT - ikinci ~4 saatlik pencere
+  # Zamanlama DigitalOcean Droplet'e taşındı (bkz. deploy/README.md) - bu
+  # workflow artık sadece elle tetiklenen bir yedek.
   workflow_dispatch: {}
 
 permissions:

@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Tüm yatirim timer'larını topluca yönetir.
+#   yatirim-timers enable   # aç ve başlat
+#   yatirim-timers disable  # durdur ve kapat (GitHub Actions'a geri dönüş için)
+#   yatirim-timers status   # sonraki/önceki tetiklenme saatleri
+set -euo pipefail
+
+# shellcheck source=deploy/jobs.sh
+source /opt/yatirim/bin/jobs.sh
+timers=()
+for j in "${ALL_JOBS[@]}"; do timers+=("yatirim-$j.timer"); done
+
+case "${1:-status}" in
+  enable)  systemctl enable --now "${timers[@]}" ;;
+  disable) systemctl disable --now "${timers[@]}" ;;
+  status)  systemctl list-timers --all --no-pager 'yatirim-*' ;;
+  *) echo "kullanım: $0 {enable|disable|status}" >&2; exit 2 ;;
+esac

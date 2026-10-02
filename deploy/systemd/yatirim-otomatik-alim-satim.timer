@@ -1,0 +1,13 @@
+[Unit]
+Description=Otomatik Alım/Satım (pre-market öncesi, günde 1)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 03:00:00 America/New_York
+Unit=yatirim-job@otomatik-alim-satim.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

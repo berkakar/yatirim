@@ -7,12 +7,14 @@ ortak alana (storage.SHARED) yazılır:
     selected_tickers_berkakar.json  ->  ("berkakar", "selected_tickers")
     tefas_fonlari_cache.json        ->  ("_shared",  "tefas_fonlari_cache")
 
-Kullanıcı listesi --users ile verilir; verilmezse .streamlit/secrets.toml
-içindeki [credentials.usernames] bölümünden okunur.
+Kullanıcı listesi --users ile verilir; verilmezse secrets.toml içindeki
+[credentials.usernames] bölümünden okunur. secrets.toml önce kaynak klasörün
+.streamlit/ altında, yoksa çalıştıran kullanıcının ~/.streamlit/ altında aranır
+(Streamlit de ikisini okur; Droplet'te /opt/yatirim/.streamlit/secrets.toml).
 
-Kullanım (Droplet'te, repo klasöründe):
-    YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run
-    YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py
+Kullanım (Droplet'te, arayüz kopyasında - bkz. deploy/README.md):
+    cd /opt/yatirim/app
+    sudo -u yatirim -H YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db /opt/yatirim/venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run
 
 Veritabanında zaten olan kayıtlara dokunmaz; --overwrite ile üzerine yazar.
 Tekrar çalıştırmak güvenlidir. Kaynak JSON dosyalarını değiştirmez veya silmez.
@@ -110,9 +112,11 @@ def main(argv=None) -> int:
     if args.users:
         users = [u.strip() for u in args.users.split(",") if u.strip()]
     else:
-        users = users_from_secrets(os.path.join(args.source_dir, ".streamlit", "secrets.toml"))
+        users = users_from_secrets(os.path.join(args.source_dir, ".streamlit", "secrets.toml")) \
+            or users_from_secrets(os.path.expanduser(os.path.join("~", ".streamlit", "secrets.toml")))
     if not users:
-        print("Kullanıcı listesi bulunamadı: --users verin veya .streamlit/secrets.toml ekleyin.", file=sys.stderr)
+        print("Kullanıcı listesi bulunamadı: --users verin veya secrets.toml'u kaynak klasörün ya da "
+              "~/.streamlit/ altına koyun.", file=sys.stderr)
         return 2
 
     print(f"Veritabanı : {storage.db_path()}")

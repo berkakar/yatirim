@@ -1,0 +1,14 @@
+[Unit]
+Description=Türk Fonları (TEFAS) önbelleği
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09,13:00:00 Europe/Istanbul
+OnCalendar=Mon..Fri *-*-* 19:10:00 Europe/Istanbul
+Unit=yatirim-job@tefas.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target

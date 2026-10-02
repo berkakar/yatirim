@@ -12,7 +12,7 @@ Değer, JSON dosyasının içeriğiyle aynıdır (json.dumps ile metin olarak sa
 yani çağıran kod yine dict/list ile çalışır.
 
 Veritabanı dosyasının yeri YATIRIM_DB_PATH ortam değişkeniyle belirlenir
-(Droplet'te /var/lib/yatirim/yatirim.db - bkz. deploy/yatirim.service). Değişken
+(Droplet'te /var/lib/yatirim/yatirim.db, /etc/yatirim/env içinde - bkz. deploy/README.md). Değişken
 yoksa repo içindeki data/yatirim.db kullanılır (data/ .gitignore'da).
 
 Arayüz (Streamlit) ve zamanlanmış işler aynı dosyaya aynı anda yazabilir:

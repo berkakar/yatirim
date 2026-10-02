@@ -234,8 +234,19 @@ class MigrationTest(StorageTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(storage.read("selected_tickers", "umuts"), ["AAPL"])
 
+    def test_main_reads_users_from_home_secrets(self):
+        home = os.path.join(self._tmp.name, "home")
+        os.makedirs(os.path.join(home, ".streamlit"))
+        with open(os.path.join(home, ".streamlit", "secrets.toml"), "w") as f:
+            f.write('[credentials.usernames.umuts]\nname = "U"\npassword = "x"\n')
+        self._put("selected_tickers_umuts.json", ["AAPL"])
+        with mock.patch.dict(os.environ, {"HOME": home}), mock.patch("sys.stdout"):
+            self.assertEqual(migration.main(["--source-dir", self.src]), 0)
+        self.assertEqual(storage.read("selected_tickers", "umuts"), ["AAPL"])
+
     def test_main_without_users_fails(self):
-        with mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+        with mock.patch.dict(os.environ, {"HOME": self._tmp.name}), \
+                mock.patch("sys.stdout"), mock.patch("sys.stderr"):
             self.assertEqual(migration.main(["--source-dir", self.src]), 2)
 
 

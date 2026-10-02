@@ -1,0 +1,14 @@
+[Unit]
+Description=Heikin Ashi Gün İçi (30 dk bar kapanışından 2 dk sonra + 15:45 gün sonu kapatma)
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 09..15:02,32:00 America/New_York
+OnCalendar=Mon..Fri *-*-* 15:45:00 America/New_York
+Unit=yatirim-job@heikin-ashi.service
+# Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
+AccuracySec=1s
+# Sunucu kapalıyken kaçan tetiklemeler açılışta telafi EDİLMEZ (alım/satım işleri için bilinçli).
+Persistent=false
+
+[Install]
+WantedBy=timers.target
