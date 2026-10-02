@@ -5,6 +5,7 @@ import numpy as np
 import plotly.graph_objects as go
 import json
 import os
+import storage
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -89,7 +90,11 @@ def get_user_alpaca_creds(username):
 
 def save_selections(tickers, username):
     """Seçili hisseleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
-    ayrıca yerel dosyaya da yazar - bkz. config.save_ticker_lists için aynı gerekçe."""
+    ayrıca yerel dosyaya da yazar - bkz. config.save_ticker_lists için aynı gerekçe.
+    SQLite açıksa (bkz. storage.enabled) yalnızca oraya yazar."""
+    if storage.enabled():
+        storage.write("selected_tickers", username, list(tickers))
+        return
     save_file = _save_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
@@ -102,6 +107,8 @@ def save_selections(tickers, username):
         json.dump(list(tickers), f)
 
 def load_selections(username):
+    if storage.enabled():
+        return set(storage.read("selected_tickers", username, []))
     save_file = _save_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:

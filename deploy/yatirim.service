@@ -1,0 +1,31 @@
+# systemd servisi: Streamlit uygulamasını arka planda sürekli çalıştırır.
+# setup.sh bu dosyayı /etc/systemd/system/yatirim.service olarak kopyalar.
+# Yollar setup.sh'deki APP_DIR ve APP_USER ile aynı olmalı.
+[Unit]
+Description=Yatirim Streamlit uygulamasi
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=yatirim
+Group=yatirim
+WorkingDirectory=/opt/yatirim
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Europe/Istanbul
+# Arayüz ve zamanlanmış işlerin ORTAK ayarları (örn. YATIRIM_DB_PATH - bkz.
+# deploy/README.md "SQLite'ı devreye alma"). Dosya yoksa yok sayılır ("-").
+# İş servisleri de aynı satırı içermeli; yoksa arayüz ile işler farklı yerden okur.
+EnvironmentFile=-/etc/yatirim/yatirim.env
+# Sadece 127.0.0.1'i dinler; dışarıya Nginx açılır (bkz. nginx-yatirim.conf).
+ExecStart=/opt/yatirim/venv/bin/streamlit run app.py \
+    --server.address 127.0.0.1 \
+    --server.port 8501 \
+    --server.headless true \
+    --browser.gatherUsageStats false
+# Çökerse (örn. bellek yetmezliği) 5 sn sonra yeniden başlat.
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

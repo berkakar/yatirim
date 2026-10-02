@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 
 import yfinance as yf
 
+import storage
 from tefas_client import fetch_fund_daily_change_pct
 from telegram_notify import TelegramError, send_telegram_message
 
@@ -69,7 +70,18 @@ def _load_json(path: str, default):
         return default
 
 
+def _load_setting(name: str, username: str | None, default):
+    """Arayüzün yazdığı kayıt: SQLite açıksa (bkz. storage.enabled) oradan,
+    değilse repo checkout'undaki JSON dosyasından okunur."""
+    if storage.enabled():
+        return storage.read(name, username or storage.SHARED, default)
+    path = f"{name}_{username}.json" if username else f"{name}.json"
+    return _load_json(path, default)
+
+
 def _discover_users() -> list[str]:
+    if storage.enabled():
+        return storage.users_with("takip_fonlari")
     users = []
     for path in glob.glob("takip_fonlari_*.json"):
         m = _USER_RE.match(os.path.basename(path))
@@ -142,7 +154,7 @@ def run_once() -> None:
         log("Takip edilen fon bulunan kullanıcı yok, çıkılıyor.")
         return
 
-    portfolio_cache = _load_json("kap_portfoy_cache.json", {})
+    portfolio_cache = _load_setting("kap_portfoy_cache", None, {})
     state = _load_state()
 
     # username -> {ticker: [(fund_code, weight_pct), ...]}
@@ -150,13 +162,13 @@ def run_once() -> None:
     user_settings: dict[str, dict] = {}
 
     for username in users:
-        settings = _load_json(f"bildirim_ayarlari_{username}.json", {})
+        settings = _load_setting("bildirim_ayarlari", username, {})
         chat_id = (settings.get("telegram_chat_id") or "").strip()
         if not chat_id:
             continue
         user_settings[username] = settings
 
-        tracked = _load_json(f"takip_fonlari_{username}.json", [])
+        tracked = _load_setting("takip_fonlari", username, [])
         ticker_funds: dict[str, list[tuple[str, float]]] = {}
         for fund in tracked:
             for ticker, weight in _latest_holdings(portfolio_cache, fund["code"]):

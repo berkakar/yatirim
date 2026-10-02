@@ -15,6 +15,7 @@ import os
 
 import streamlit as st
 
+import storage
 from config import GITHUB_REPO
 from github_config import read_json_from_github, write_json_to_github
 
@@ -28,6 +29,8 @@ def _tracked_file(username: str) -> str:
 def load_tracked_funds(username: str) -> list[dict]:
     """[{"code": "THF", "name": "TERA PORTFÖY ..."}, ...] döner, hiç
     kaydedilmemişse boş liste."""
+    if storage.enabled():
+        return storage.read("takip_fonlari", username) or []
     tracked_file = _tracked_file(username)
     data = None
     token = st.secrets.get("GITHUB_TOKEN")
@@ -48,6 +51,9 @@ def load_tracked_funds(username: str) -> list[dict]:
 
 
 def save_tracked_funds(funds: list[dict], username: str) -> None:
+    if storage.enabled():
+        storage.write("takip_fonlari", username, funds)
+        return
     tracked_file = _tracked_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
@@ -64,6 +70,8 @@ def load_portfolio_cache() -> dict:
     """{fund_code: {"fund_name": ..., "reports": [{"report_date",
     "report_date_sort", "period_label", "disclosure_index", "holdings":
     [[kod, yüzde], ...]}, ...]}} - tüm kullanıcılar arasında paylaşılır."""
+    if storage.enabled():
+        return storage.read("kap_portfoy_cache") or {}
     data = None
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
@@ -83,6 +91,9 @@ def load_portfolio_cache() -> dict:
 
 
 def save_portfolio_cache(cache: dict) -> None:
+    if storage.enabled():
+        storage.write("kap_portfoy_cache", storage.SHARED, cache)
+        return
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:

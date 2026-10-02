@@ -7,6 +7,7 @@ import os
 import streamlit as st
 from datetime import date, datetime, timedelta, timezone
 
+import storage
 from github_config import read_json_from_github, update_json_on_github
 from theme import negative_color
 from ui_style import zebra_style
@@ -146,7 +147,10 @@ def fetch_single_ticker_raw(ticker):
 
 def _load_valuation_cache():
     """Paylaşımlı değerleme önbelleğini yükler - önce GitHub'daki (kalıcı, tüm
-    kullanıcıların paylaştığı) kopyayı, yoksa yerel dosyayı dener."""
+    kullanıcıların paylaştığı) kopyayı, yoksa yerel dosyayı dener. SQLite açıksa
+    (bkz. storage.enabled) yalnızca oradan okur."""
+    if storage.enabled():
+        return storage.read("valuation_cache") or {}
     data = None
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
@@ -175,7 +179,11 @@ def _save_valuation_cache_updates(updates):
     güncellemesinin diğerininki tarafından sessizce ezilmesini (lost update) önler:
     eskiden her iki kullanıcı da kendi bayat kopyasını temel alıp dosyanın tamamını
     yeniden yazdığından, ikinci yazan birincinin az önce eklediği taze verileri
-    farkında olmadan siliyordu."""
+    farkında olmadan siliyordu. SQLite açıksa aynı birleştirme storage.update ile
+    kilitli tek bir işlemde yapılır."""
+    if storage.enabled():
+        storage.update("valuation_cache", storage.SHARED, lambda current: {**(current or {}), **updates}, {})
+        return
     token = st.secrets.get("GITHUB_TOKEN")
     merged = None
     if token:

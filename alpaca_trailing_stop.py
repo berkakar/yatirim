@@ -111,6 +111,7 @@ from dotenv import load_dotenv
 
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+import storage
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
 from stop_tags import parse_shield_real_stop, reason_code, shield_exit_tag, shield_tag, stop_tag
@@ -231,7 +232,10 @@ def load_stop_loss_settings() -> dict:
     ettiği, kullanıcının her stop-loss algoritması için kaydettiği parametre
     override'ları - {"shared": {...}, "<algo_id>": {...}, ...}. Dosya yoksa
     boş dict döner (stop_algorithms.resolve_kwargs bunu "hiç override yok,
-    her şey kod-varsayılanı" olarak yorumlar)."""
+    her şey kod-varsayılanı" olarak yorumlar). SQLite açıksa (bkz.
+    storage.enabled) arayüzün yazdığı kayıt oradan okunur."""
+    if storage.enabled():
+        return storage.read("stop_loss_settings", "berkakar", {})
     if not os.path.exists(STOP_LOSS_SETTINGS_PATH):
         return {}
     with open(STOP_LOSS_SETTINGS_PATH, encoding="utf-8") as f:
@@ -844,7 +848,10 @@ def extended_hours_session(client: AlpacaClient) -> str | None:
 def load_telegram_settings() -> tuple[str | None, str | None]:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
     chat_id = None
-    if os.path.exists(NOTIFICATION_SETTINGS_PATH):
+    if storage.enabled():
+        settings = storage.read("bildirim_ayarlari", "berkakar", {})
+        chat_id = (settings.get("telegram_chat_id") or "").strip() or None
+    elif os.path.exists(NOTIFICATION_SETTINGS_PATH):
         with open(NOTIFICATION_SETTINGS_PATH, encoding="utf-8") as f:
             chat_id = (json.load(f).get("telegram_chat_id") or "").strip() or None
     return bot_token, chat_id

@@ -12,6 +12,7 @@ import os
 
 import streamlit as st
 
+import storage
 from config import GITHUB_REPO
 from github_config import read_json_from_github, write_json_to_github
 
@@ -22,7 +23,9 @@ def _settings_file(username: str) -> str:
     return f"bildirim_ayarlari_{username}.json"
 
 
-def load_notification_settings(username: str) -> dict:
+def _read_settings(username: str):
+    if storage.enabled():
+        return storage.read("bildirim_ayarlari", username)
     settings_file = _settings_file(username)
     data = None
     token = st.secrets.get("GITHUB_TOKEN")
@@ -38,8 +41,11 @@ def load_notification_settings(username: str) -> dict:
                 data = json.load(f)
         except Exception:
             data = None
+    return data
 
-    data = data or {}
+
+def load_notification_settings(username: str) -> dict:
+    data = _read_settings(username) or {}
     return {
         "telegram_chat_id": data.get("telegram_chat_id", ""),
         "loss_threshold_pct": data.get("loss_threshold_pct", DEFAULT_LOSS_THRESHOLD_PCT),
@@ -47,6 +53,9 @@ def load_notification_settings(username: str) -> dict:
 
 
 def save_notification_settings(settings: dict, username: str) -> None:
+    if storage.enabled():
+        storage.write("bildirim_ayarlari", username, settings)
+        return
     settings_file = _settings_file(username)
     token = st.secrets.get("GITHUB_TOKEN")
     if token:

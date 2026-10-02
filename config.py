@@ -5,6 +5,7 @@ import os
 import streamlit as st
 import yfinance as yf
 
+import storage
 from github_config import read_json_from_github, write_json_to_github
 
 GITHUB_REPO = "berkakar/yatirim"
@@ -98,8 +99,51 @@ DEFAULT_BIST_100 = [
     "KERVT.IS", "KONYA.IS", "KRONT.IS"
 ]
 
-def _custom_file(username):
-    return f"custom_tickers_{username}.json"
+def _read_user_setting(name, username):
+    """Kullanıcı ayarını okur. SQLite açıksa (bkz. storage.enabled) oradan; değilse
+    önce GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı dener. Hiçbiri yoksa None.
+
+    Streamlit Cloud her yeniden başlatmada repoyu sıfırdan klonladığı için orada
+    sadece diske yazmak kalıcı olmuyor - bu yüzden eski düzende asıl kaynak
+    GitHub'daki dosya."""
+    if storage.enabled():
+        return storage.read(name, username)
+
+    path = f"{name}_{username}.json"
+    data = None
+    token = _get_github_token()
+    if token:
+        try:
+            data = read_json_from_github(GITHUB_REPO, token, path, None)
+        except Exception:
+            data = None
+
+    if not data and os.path.exists(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception:
+            data = None
+    return data
+
+
+def _write_user_setting(name, username, value, commit_message, label):
+    """Kullanıcı ayarını yazar. SQLite açıksa oraya; değilse kalıcı olması için
+    GitHub'a commit'ler (mümkün olduğunda), ayrıca yerel dosyaya da yazar."""
+    if storage.enabled():
+        storage.write(name, username, value)
+        return
+
+    path = f"{name}_{username}.json"
+    token = _get_github_token()
+    if token:
+        try:
+            write_json_to_github(GITHUB_REPO, token, path, value, commit_message)
+        except Exception as e:
+            st.warning(f"⚠️ {label} GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+
+    with open(path, 'w', encoding='utf-8') as f:
+        json.dump(value, f, ensure_ascii=False, indent=4)
 
 
 def _defaults():
@@ -112,27 +156,8 @@ def _defaults():
 
 
 def load_ticker_lists(username):
-    """Kullanıcıya özel listeleri yükler. Önce GitHub'daki (kalıcı) kopyayı, yoksa yerel
-    dosyayı, o da yoksa varsayılanları döner.
-
-    Streamlit Cloud her yeniden başlatmada repoyu sıfırdan klonladığı için sadece
-    diske yazmak kalıcı olmuyor - bu yüzden asıl kaynak GitHub'daki dosya."""
-    custom_file = _custom_file(username)
-    data = None
-    token = _get_github_token()
-    if token:
-        try:
-            data = read_json_from_github(GITHUB_REPO, token, custom_file, {})
-        except Exception:
-            data = None
-
-    if not data and os.path.exists(custom_file):
-        try:
-            with open(custom_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            data = None
-
+    """Kullanıcıya özel listeleri (custom_tickers) yükler; kayıt yoksa varsayılanları döner."""
+    data = _read_user_setting("custom_tickers", username)
     if not data:
         return _defaults()
 
@@ -145,44 +170,13 @@ def load_ticker_lists(username):
 
 
 def save_ticker_lists(ticker_dict, username):
-    """Kullanıcıya özel listeleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
-    ayrıca yerel dosyaya da yazar."""
-    custom_file = _custom_file(username)
-    token = _get_github_token()
-    if token:
-        try:
-            write_json_to_github(GITHUB_REPO, token, custom_file, ticker_dict, f"Update custom ticker lists ({username})")
-        except Exception as e:
-            st.warning(f"⚠️ Liste GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
-
-    with open(custom_file, 'w', encoding='utf-8') as f:
-        json.dump(ticker_dict, f, ensure_ascii=False, indent=4)
-
-
-def _group_file(username):
-    return f"custom_stock_groups_{username}.json"
+    _write_user_setting("custom_tickers", username, ticker_dict, f"Update custom ticker lists ({username})", "Liste")
 
 
 def load_stock_groups(username):
     """Kullanıcının borsa listelerinden bağımsız, serbestçe adlandırıp
-    oluşturduğu hisse gruplarını yükler. Önce GitHub'daki (kalıcı) kopyayı,
-    yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
-    group_file = _group_file(username)
-    data = None
-    token = _get_github_token()
-    if token:
-        try:
-            data = read_json_from_github(GITHUB_REPO, token, group_file, {})
-        except Exception:
-            data = None
-
-    if not data and os.path.exists(group_file):
-        try:
-            with open(group_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            data = None
-
+    oluşturduğu hisse gruplarını yükler; kayıt yoksa boş bir sözlük döner."""
+    data = _read_user_setting("custom_stock_groups", username)
     if not data:
         return {}
 
@@ -190,67 +184,23 @@ def load_stock_groups(username):
 
 
 def save_stock_groups(groups_dict, username):
-    """Kullanıcının hisse gruplarını kalıcı olması için GitHub'a commit'ler (mümkün
-    olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
-    group_file = _group_file(username)
-    token = _get_github_token()
-    if token:
-        try:
-            write_json_to_github(GITHUB_REPO, token, group_file, groups_dict, f"Update stock groups ({username})")
-        except Exception as e:
-            st.warning(f"⚠️ Hisse grupları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
-
-    with open(group_file, 'w', encoding='utf-8') as f:
-        json.dump(groups_dict, f, ensure_ascii=False, indent=4)
-
-
-def _group_market_file(username):
-    return f"custom_stock_group_markets_{username}.json"
+    _write_user_setting("custom_stock_groups", username, groups_dict, f"Update stock groups ({username})", "Hisse grupları")
 
 
 def load_group_markets(username):
     """Kullanıcının hisse gruplarının hangi piyasayla (NASDAQ 100 / NYSE / BIST 100)
     ilişkilendirildiğini tutan eşlemeyi (grup adı -> piyasa adı) yükler. Bu, hisse
     gruplarının piyasadan bağımsız serbestçe oluşturulmasının önüne geçip, gruplar
-    arasında anlamlı (aynı piyasaya ait) analizler yapılabilmesini sağlar. Önce
-    GitHub'daki (kalıcı) kopyayı, yoksa yerel dosyayı, o da yoksa boş bir sözlük döner."""
-    market_file = _group_market_file(username)
-    data = None
-    token = _get_github_token()
-    if token:
-        try:
-            data = read_json_from_github(GITHUB_REPO, token, market_file, {})
-        except Exception:
-            data = None
-
-    if not data and os.path.exists(market_file):
-        try:
-            with open(market_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            data = None
-
-    return data or {}
+    arasında anlamlı (aynı piyasaya ait) analizler yapılabilmesini sağlar. Kayıt
+    yoksa boş bir sözlük döner."""
+    return _read_user_setting("custom_stock_group_markets", username) or {}
 
 
 def save_group_markets(group_markets, username):
-    """Hisse grubu -> piyasa eşlemesini kalıcı olması için GitHub'a commit'ler
-    (mümkün olduğunda), ayrıca yerel dosyaya da yazar - bkz. save_stock_groups
-    için aynı gerekçe."""
-    market_file = _group_market_file(username)
-    token = _get_github_token()
-    if token:
-        try:
-            write_json_to_github(GITHUB_REPO, token, market_file, group_markets, f"Update stock group markets ({username})")
-        except Exception as e:
-            st.warning(f"⚠️ Hisse grubu-piyasa eşlemesi GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
-
-    with open(market_file, 'w', encoding='utf-8') as f:
-        json.dump(group_markets, f, ensure_ascii=False, indent=4)
-
-
-def _capital_file(username):
-    return f"initial_capital_{username}.json"
+    _write_user_setting(
+        "custom_stock_group_markets", username, group_markets,
+        f"Update stock group markets ({username})", "Hisse grubu-piyasa eşlemesi",
+    )
 
 
 def load_initial_capital(username):
@@ -258,41 +208,17 @@ def load_initial_capital(username):
     Bakış'taki portföyün anlık kârlılığını (nakit + pozisyon değeri, bu
     sermayeye göre) hesaplamak için referans değer. Kayıtlı değer yoksa
     None döner."""
-    capital_file = _capital_file(username)
-    data = None
-    token = _get_github_token()
-    if token:
-        try:
-            data = read_json_from_github(GITHUB_REPO, token, capital_file, None)
-        except Exception:
-            data = None
-
-    if not data and os.path.exists(capital_file):
-        try:
-            with open(capital_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            data = None
-
+    data = _read_user_setting("initial_capital", username)
     if not data:
         return None
     return data.get("initial_capital")
 
 
 def save_initial_capital(amount, username):
-    """İlk sermayeyi kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
-    ayrıca yerel dosyaya da yazar - bkz. save_ticker_lists için aynı gerekçe."""
-    capital_file = _capital_file(username)
-    payload = {"initial_capital": amount}
-    token = _get_github_token()
-    if token:
-        try:
-            write_json_to_github(GITHUB_REPO, token, capital_file, payload, f"Update initial capital ({username})")
-        except Exception as e:
-            st.warning(f"⚠️ İlk sermaye GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
-
-    with open(capital_file, 'w', encoding='utf-8') as f:
-        json.dump(payload, f, ensure_ascii=False, indent=4)
+    _write_user_setting(
+        "initial_capital", username, {"initial_capital": amount},
+        f"Update initial capital ({username})", "İlk sermaye",
+    )
 
 
 def search_tickers(query, max_results=8):
