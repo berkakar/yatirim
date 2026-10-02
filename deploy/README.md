@@ -155,7 +155,22 @@ Değişken tanımlı değilse eski düzen (GitHub API + JSON dosyaları + push) 
 > `yatirim-streamlit.service` okumuyor; aşağıdaki 6. adım bunu ekler. Yalnızca bir tarafta
 > tanımlıysa arayüz ile işler farklı veri görür.
 
-Adımlar (piyasa kapalıyken, hafta sonu önerilir, root olarak):
+**Tek komutla** (piyasa kapalıyken, hafta sonu önerilir):
+
+```bash
+cd /root/yatirim && git pull --ff-only origin main
+sudo bash deploy/enable_sqlite.sh
+```
+
+`enable_sqlite.sh` aşağıdaki adımların hepsini sırayla yapar:
+- İşlerin çalıştığı saatlerdeyse durur (`--force` ile atlanır).
+- Çalışan iş varsa bitmesini bekler.
+- Push edilmemiş state varsa hiçbir şeye dokunmadan durur.
+- Sonunda arayüzün değişkeni gördüğünü doğrular.
+- Bir adım başarısız olursa ayar değişikliklerini geri alır; servisleri ve timer'ları başladığı
+  hâline döndürür.
+
+Elle yapmak isterseniz adımlar (root olarak):
 
 1. İşleri ve arayüzü durdurun:
    ```bash
