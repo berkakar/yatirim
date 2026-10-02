@@ -22,6 +22,7 @@ import os
 import re
 from datetime import datetime
 
+import storage
 from kap_client import KapFetchError, get_latest_top_holdings
 
 CACHE_FILE = "kap_portfoy_cache.json"
@@ -44,9 +45,23 @@ def _load_json(path: str, default):
         return default
 
 
+def _load_setting(name: str, username: str | None, default):
+    """Arayüzün yazdığı kayıt: SQLite açıksa (bkz. storage.enabled) oradan,
+    değilse repo checkout'undaki JSON dosyasından okunur."""
+    if storage.enabled():
+        return storage.read(name, username or storage.SHARED, default)
+    path = f"{name}_{username}.json" if username else f"{name}.json"
+    return _load_json(path, default)
+
+
 def _discover_funds() -> dict[str, str]:
     """Tüm kullanıcıların takip listelerinden benzersiz {kod: unvan} döner."""
     funds: dict[str, str] = {}
+    if storage.enabled():
+        for username in storage.users_with("takip_fonlari"):
+            for fund in storage.read("takip_fonlari", username, []):
+                funds[fund["code"]] = fund["name"]
+        return funds
     for path in glob.glob("takip_fonlari_*.json"):
         if not _USER_RE.match(os.path.basename(path)):
             continue
@@ -77,7 +92,7 @@ def run_once() -> None:
         log("Takip edilen fon yok, çıkılıyor.")
         return
 
-    cache = _load_json(CACHE_FILE, {})
+    cache = _load_setting("kap_portfoy_cache", None, {})
     changed = False
 
     for code, name in sorted(funds.items()):
@@ -91,7 +106,10 @@ def run_once() -> None:
         changed = True
         log(f"{code}: {report['report_date']} raporu {len(report['holdings'])} yatırım aracıyla güncellendi.")
 
-    if changed:
+    if changed and storage.enabled():
+        storage.write("kap_portfoy_cache", storage.SHARED, cache)
+        log("Önbellek kaydedildi.")
+    elif changed:
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(cache, f, ensure_ascii=False, indent=2)
         log("Önbellek kaydedildi.")

@@ -68,6 +68,14 @@ _initialized_paths = set()
 _init_lock = threading.Lock()
 
 
+def enabled() -> bool:
+    """Uygulama verisi SQLite'tan mı okunup yazılsın? Yalnızca YATIRIM_DB_PATH
+    tanımlıysa evet. Tanımlı değilse eski düzen (GitHub API + repo içindeki JSON
+    dosyaları) aynen geçerlidir; böylece bu kod main'e alındığında, Droplet'teki
+    servislere ortam değişkeni eklenene kadar hiçbir davranış değişmez."""
+    return bool(os.environ.get("YATIRIM_DB_PATH"))
+
+
 def db_path() -> str:
     return os.environ.get("YATIRIM_DB_PATH") or DEFAULT_DB_PATH
 
@@ -237,6 +245,16 @@ def list_users() -> list:
     with _connect() as conn:
         rows = conn.execute(
             "SELECT DISTINCT username FROM settings WHERE username != ? ORDER BY username", (SHARED,)
+        ).fetchall()
+    return [r[0] for r in rows]
+
+
+def users_with(name: str) -> list:
+    """`name` kaydı olan kullanıcılar (ortak alan hariç), alfabetik - örn.
+    users_with("takip_fonlari") fon takip listesi olan kullanıcıları verir."""
+    with _connect() as conn:
+        rows = conn.execute(
+            "SELECT username FROM settings WHERE name = ? AND username != ? ORDER BY username", (name, SHARED)
         ).fetchall()
     return [r[0] for r in rows]
 

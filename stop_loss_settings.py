@@ -15,6 +15,7 @@ değerleri, doğrudan stop_algorithms.py'den okunur) geçerli olur.
 """
 import streamlit as st
 
+import storage
 from github_config import read_json_from_github, write_json_to_github
 from alpaca_trailing_stop import EXECUTION_DEFAULTS
 from stop_algorithms import (
@@ -38,6 +39,8 @@ def load_stop_loss_settings(username: str) -> dict:
     """Kullanıcının kaydettiği stop-loss parametre override'ları - GitHub'da
     yoksa (ya da GITHUB_TOKEN tanımlı değilse) boş dict döner, bu durumda
     tüm alanlar kod-varsayılanına düşer."""
+    if storage.enabled():
+        return storage.read("stop_loss_settings", username, {})
     token = st.secrets.get("GITHUB_TOKEN")
     if not token:
         return {}
@@ -48,6 +51,9 @@ def load_stop_loss_settings(username: str) -> dict:
 
 
 def save_stop_loss_settings(username: str, settings: dict) -> None:
+    if storage.enabled():
+        storage.write("stop_loss_settings", username, settings)
+        return
     token = st.secrets["GITHUB_TOKEN"]
     write_json_to_github(
         GITHUB_REPO, token, _settings_path(username), settings, f"Update stop-loss settings ({username})",
@@ -63,7 +69,7 @@ def render_stop_loss_settings(username: str):
         "yukarıdaki varsayılana geri yazmanız yeterli."
     )
 
-    if not st.secrets.get("GITHUB_TOKEN"):
+    if not storage.enabled() and not st.secrets.get("GITHUB_TOKEN"):
         st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - ayarlar kaydedilemez.")
         return
 

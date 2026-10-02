@@ -71,25 +71,57 @@ sudo systemctl restart yatirim               # yeniden başlat
 
 ## Notlar
 
-- `.github/workflows` altındaki zamanlanmış işler (trailing stop, ORB tarama vb.) GitHub
-  Actions'ta çalışmaya devam eder. Droplet yalnızca arayüzü barındırır.
+- Zamanlanmış işler (trailing stop, ORB tarama vb.) Droplet'te systemd servisi olarak
+  çalışıyor. `.github/workflows` altındaki eşlerinin zamanlamaları kapatılmalı; aksi halde
+  aynı iş iki yerde çalışır (çift emir riski).
 - Streamlit sadece `127.0.0.1:8501`'i dinler. Dışarıya yalnızca SSH, 80 ve 443 portları açıktır (`ufw`).
 - Let's Encrypt sertifikası `certbot` tarafından otomatik yenilenir.
 
-## SQLite veritabanı (storage.py)
+## SQLite'ı devreye alma (storage.py)
 
-Uygulama verisi JSON dosyaları yerine `/var/lib/yatirim/yatirim.db` dosyasına taşınıyor
-(yol `yatirim.service` içindeki `YATIRIM_DB_PATH` ile belirlenir). Mevcut JSON'ları
-bir kez aktarmak için, repo klasöründe:
+Arayüzün yazdığı ayarlar SQLite veritabanına bağlandı: seçili hisseler, hisse listeleri ve
+grupları, ilk sermaye, stop loss ayarları, bildirim ayarları, takip edilen fonlar, KAP portföy
+önbelleği ve değerleme önbelleği. Bu ayarları okuyan işler de (trailing stop, alım noktaları,
+ORB / RS / Heikin Ashi, fon uyarısı, KAP yenileme, Russell 2000) aynı yerden okuyacak şekilde
+bağlandı.
 
-```bash
-cd /opt/yatirim
-sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run   # önce dene
-sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py
-```
+Hepsi **yalnızca `YATIRIM_DB_PATH` tanımlıysa** SQLite kullanır. Tanımlı değilse eski düzen
+(GitHub API + JSON dosyaları) aynen çalışır.
 
-Kullanıcı listesi `.streamlit/secrets.toml` içinden okunur. Betik kaynak JSON'lara dokunmaz,
-veritabanında olan kayıtları atlar (`--overwrite` ile üzerine yazar); tekrar çalıştırmak güvenlidir.
+> **Önemli:** Değişken arayüz servisinde **ve bütün iş servislerinde** aynı anda tanımlı olmalı.
+> Yalnızca arayüzde tanımlıysa, örneğin stop loss ayarlarını arayüzde değiştirdiğinizde
+> trailing stop işi eski ayarla çalışmaya devam eder.
 
-Veritabanının içine bakmak için: `sudo apt install sqlite3`, sonra
-`sqlite3 /var/lib/yatirim/yatirim.db "SELECT username, name, updated_at FROM settings;"`.
+Adımlar (piyasa kapalıyken):
+
+1. Kodu güncelleyin: `cd /opt/yatirim && sudo -u yatirim git pull`
+2. Arayüzü ve iş timer'larını durdurun:
+   `sudo systemctl stop yatirim` ve her iş için `sudo systemctl stop <iş>.timer`.
+3. Ortak ortam dosyasını oluşturun:
+   ```bash
+   sudo install -d -o yatirim -g yatirim -m 750 /var/lib/yatirim
+   sudo mkdir -p /etc/yatirim
+   echo 'YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db' | sudo tee /etc/yatirim/yatirim.env
+   ```
+4. Her iş servisinin `[Service]` bölümüne `yatirim.service`'teki satırın aynısını ekleyin:
+   `EnvironmentFile=-/etc/yatirim/yatirim.env`
+   (`sudo systemctl edit <iş>.service` ile). Ardından `sudo systemctl daemon-reload`.
+   Tüm servisler, `/var/lib/yatirim` klasörüne **yazabilen** aynı kullanıcıyla çalışmalı.
+   SQLite sadece okuyan süreçlerin de bu klasöre yazabilmesini ister.
+5. Güncel JSON'ları veritabanına aktarın (daha önce denediyseniz `--overwrite` ile güncellenir):
+   ```bash
+   cd /opt/yatirim
+   sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run
+   sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py --overwrite
+   ```
+   Kullanıcı listesi `.streamlit/secrets.toml` içinden okunur.
+6. Servisleri başlatın: `sudo systemctl start yatirim` ve iş timer'ları.
+7. Kontrol: arayüzde bir ayarı değiştirip kaydedin, sonra
+   `sqlite3 /var/lib/yatirim/yatirim.db "SELECT username, name, updated_at FROM settings ORDER BY updated_at DESC LIMIT 5;"`
+   (`sudo apt install sqlite3`). Bu ayarlar artık GitHub'a commit'lenmez.
+
+**Geri dönmek için** `/etc/yatirim/yatirim.env` dosyasından satırı silip servisleri yeniden başlatın.
+SQLite'tayken yapılan ayar değişiklikleri JSON dosyalarına geri yazılmaz.
+
+Strateji state ve config dosyaları (`*_holdings`, `orb_scan_config`, `portfolio_config` vb.) ve
+fiyat önbellekleri henüz JSON + git ile çalışıyor; bunlar sonraki adımda taşınacak.

@@ -17,6 +17,7 @@ import os
 
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_trailing_stop import log
+import storage
 from heikin_ashi_intraday_core import config_path, holdings_path, load_holdings_local, run_pass
 
 USERNAME = "berkakar"
@@ -38,6 +39,8 @@ def save_local_config(config: dict) -> None:
 
 
 def load_local_stop_settings() -> dict:
+    if storage.enabled():
+        return storage.read("stop_loss_settings", USERNAME, {})
     if not os.path.exists(STOP_LOSS_SETTINGS_PATH):
         return {}
     with open(STOP_LOSS_SETTINGS_PATH, encoding="utf-8") as f:
