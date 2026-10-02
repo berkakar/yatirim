@@ -145,7 +145,7 @@ def _daily_change_pct(ticker: str) -> float | None:
 
 def _load_state() -> dict:
     """{"kullanıcı": {"HİSSE": son_gönderilen_yüzde, ...}, ...}"""
-    return _load_json(STATE_FILE, {})
+    return storage.load_json(STATE_FILE, {}) if storage.db_key(STATE_FILE) else _load_json(STATE_FILE, {})
 
 
 def run_once() -> None:
@@ -239,8 +239,7 @@ def run_once() -> None:
             # çalıştırmada tekrar "değişmiş" sayılıp yeniden denensin.
             new_state[username] = prev_notified
 
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(new_state, f, ensure_ascii=False, indent=2)
+    storage.save_json(STATE_FILE, new_state)
 
 
 if __name__ == "__main__":

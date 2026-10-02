@@ -221,10 +221,7 @@ def load_portfolio_config() -> dict:
     """Premium Buy Point modülünün yazdığı portföy config'i (bkz.
     github_config.py) - top_up_stop_mode, stop_algorithm ve hisse bazlı
     symbol_settings override'ları burada. Dosya yoksa boş dict döner."""
-    if not os.path.exists(CONFIG_PATH):
-        return {}
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CONFIG_PATH, {})
 
 
 def load_stop_loss_settings() -> dict:
@@ -234,12 +231,7 @@ def load_stop_loss_settings() -> dict:
     boş dict döner (stop_algorithms.resolve_kwargs bunu "hiç override yok,
     her şey kod-varsayılanı" olarak yorumlar). SQLite açıksa (bkz.
     storage.enabled) arayüzün yazdığı kayıt oradan okunur."""
-    if storage.enabled():
-        return storage.read("stop_loss_settings", "berkakar", {})
-    if not os.path.exists(STOP_LOSS_SETTINGS_PATH):
-        return {}
-    with open(STOP_LOSS_SETTINGS_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(STOP_LOSS_SETTINGS_PATH, {})
 
 
 def load_top_up_stop_mode(config: dict | None = None) -> str:
@@ -317,6 +309,22 @@ def resolve_stop_timeframe_for_position(
     return resolve_stop_timeframe(pbp_config, symbol)
 
 
+def _prune_holdings(path: str, load, save, live_symbols: set[str]) -> dict:
+    """Bir modülün holdings'inden gerçek pozisyonu kalmamış sembolleri düşürür.
+    SQLite açıksa bu, kilitli tek bir oku-değiştir-yaz işlemidir: aynı anda
+    çalışan modül işi (örn. ORB taraması) arada yeni bir alım kaydettiyse o
+    kayıt ezilmez."""
+    if storage.db_key(path) is not None:
+        return storage.update_json(
+            path, lambda h: {s: info for s, info in (h or {}).items() if s in live_symbols}, {},
+        )
+    holdings = load("berkakar")
+    pruned = {s: info for s, info in holdings.items() if s in live_symbols}
+    if pruned != holdings:
+        save("berkakar", pruned)
+    return pruned
+
+
 def _load_cross_module_holdings_pruned(live_symbols: set[str]):
     """rs_holdings/orb_holdings/ha_holdings state'lerini yükler VE stopu
     tetiklenmiş (artık gerçek pozisyonu olmayan) sembolleri düşürüp diske geri
@@ -330,34 +338,23 @@ def _load_cross_module_holdings_pruned(live_symbols: set[str]):
     o yüzden temizliği en hızlı - ve tüm modüller için TEK yerden - burada
     yapmak mantıklı."""
     from relative_strength_core import (
-        load_config_local, load_holdings_local, save_holdings_local as save_rs_holdings_local,
+        holdings_path as rs_holdings_path, load_config_local, load_holdings_local,
+        save_holdings_local as save_rs_holdings_local,
     )
     from orb_core import (
-        load_config_local as load_orb_config_local, load_holdings_local as load_orb_holdings_local,
-        save_holdings_local as save_orb_holdings_local,
+        holdings_path as orb_holdings_path, load_config_local as load_orb_config_local,
+        load_holdings_local as load_orb_holdings_local, save_holdings_local as save_orb_holdings_local,
     )
     from heikin_ashi_intraday_core import (
-        load_config_local as load_ha_config_local, load_holdings_local as load_ha_holdings_local,
-        save_holdings_local as save_ha_holdings_local,
+        holdings_path as ha_holdings_path, load_config_local as load_ha_config_local,
+        load_holdings_local as load_ha_holdings_local, save_holdings_local as save_ha_holdings_local,
     )
 
-    rs_holdings = load_holdings_local("berkakar")
-    pruned_rs = {s: info for s, info in rs_holdings.items() if s in live_symbols}
-    if pruned_rs != rs_holdings:
-        save_rs_holdings_local("berkakar", pruned_rs)
-        rs_holdings = pruned_rs
+    rs_holdings = _prune_holdings(rs_holdings_path("berkakar"), load_holdings_local, save_rs_holdings_local, live_symbols)
 
-    orb_holdings = load_orb_holdings_local("berkakar")
-    pruned_orb = {s: info for s, info in orb_holdings.items() if s in live_symbols}
-    if pruned_orb != orb_holdings:
-        save_orb_holdings_local("berkakar", pruned_orb)
-        orb_holdings = pruned_orb
+    orb_holdings = _prune_holdings(orb_holdings_path("berkakar"), load_orb_holdings_local, save_orb_holdings_local, live_symbols)
 
-    ha_holdings = load_ha_holdings_local("berkakar")
-    pruned_ha = {s: info for s, info in ha_holdings.items() if s in live_symbols}
-    if pruned_ha != ha_holdings:
-        save_ha_holdings_local("berkakar", pruned_ha)
-        ha_holdings = pruned_ha
+    ha_holdings = _prune_holdings(ha_holdings_path("berkakar"), load_ha_holdings_local, save_ha_holdings_local, live_symbols)
 
     return (
         rs_holdings, load_config_local("berkakar"),
@@ -462,15 +459,11 @@ def get_bars_for_timeframe(
 
 
 def _load_management_start_cache() -> dict:
-    if not os.path.exists(MANAGEMENT_START_CACHE_PATH):
-        return {}
-    with open(MANAGEMENT_START_CACHE_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(MANAGEMENT_START_CACHE_PATH, {})
 
 
 def _save_management_start_cache(cache: dict) -> None:
-    with open(MANAGEMENT_START_CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(MANAGEMENT_START_CACHE_PATH, cache)
 
 
 def prune_management_start_cache(open_symbols: set[str]) -> None:
@@ -847,13 +840,8 @@ def extended_hours_session(client: AlpacaClient) -> str | None:
 
 def load_telegram_settings() -> tuple[str | None, str | None]:
     bot_token = os.environ.get("TELEGRAM_BOT_TOKEN")
-    chat_id = None
-    if storage.enabled():
-        settings = storage.read("bildirim_ayarlari", "berkakar", {})
-        chat_id = (settings.get("telegram_chat_id") or "").strip() or None
-    elif os.path.exists(NOTIFICATION_SETTINGS_PATH):
-        with open(NOTIFICATION_SETTINGS_PATH, encoding="utf-8") as f:
-            chat_id = (json.load(f).get("telegram_chat_id") or "").strip() or None
+    settings = storage.load_json(NOTIFICATION_SETTINGS_PATH, {})
+    chat_id = (settings.get("telegram_chat_id") or "").strip() or None
     return bot_token, chat_id
 
 

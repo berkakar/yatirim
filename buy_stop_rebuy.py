@@ -49,6 +49,7 @@ from datetime import datetime, timezone
 
 from dotenv import load_dotenv
 
+import storage
 from alpaca_bars_cache import INTRADAY_BARS_CACHE_PATH, parse_iso
 from alpaca_buy_points import compute_available_cash_for_buying, load_local_config
 from alpaca_client import AlpacaClient, DEFAULT_DATA_URL, DEFAULT_TRADING_URL
@@ -78,18 +79,14 @@ def window_bar_count(timeframe: str, window_hours: float) -> int:
 
 
 def load_state() -> dict:
-    if not os.path.exists(STATE_PATH):
-        return {"tracked": {}, "pending": {}}
-    with open(STATE_PATH, encoding="utf-8") as f:
-        state = json.load(f)
+    state = storage.load_json(STATE_PATH, {"tracked": {}, "pending": {}})
     state.setdefault("tracked", {})
     state.setdefault("pending", {})
     return state
 
 
 def save_state(state: dict) -> None:
-    with open(STATE_PATH, "w", encoding="utf-8") as f:
-        json.dump(state, f, ensure_ascii=False, indent=2)
+    storage.save_json(STATE_PATH, state)
 
 
 def _update_tracked(

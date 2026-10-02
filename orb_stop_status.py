@@ -11,6 +11,7 @@ satış fiyatını/zamanını görmek için."""
 import json
 import os
 
+import storage
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from orb_core import holdings_path
 
@@ -24,8 +25,7 @@ def build_client() -> AlpacaClient:
 
 
 def report(username: str = "berkakar") -> None:
-    with open(holdings_path(username), encoding="utf-8") as f:
-        holdings = json.load(f)
+    holdings = storage.load_json(holdings_path(username), {})
 
     client = build_client()
     for symbol in holdings:

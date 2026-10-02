@@ -42,13 +42,15 @@ log() { echo "[$JOB] $*"; }
 
 notify() {
   # Hata bildirimi: TELEGRAM_CHAT_ID tanımlı değilse uygulamanın kendi
-  # bildirim ayarındaki chat_id kullanılır (alpaca_trailing_stop.py ile aynı kaynak).
+  # bildirim ayarındaki chat_id kullanılır (alpaca_trailing_stop.py ile aynı kaynak:
+  # storage.load_json, SQLite açıksa veritabanından, değilse repodaki dosyadan).
   local text="⚠️ Droplet işi başarısız: $JOB
 $1"
   local chat_id="${TELEGRAM_CHAT_ID:-}"
-  if [ -z "$chat_id" ] && [ -f "$WORK/bildirim_ayarlari_berkakar.json" ]; then
-    chat_id="$(python3 -c 'import json,sys; print((json.load(open(sys.argv[1])).get("telegram_chat_id") or "").strip())' \
-      "$WORK/bildirim_ayarlari_berkakar.json" 2>/dev/null || true)"
+  if [ -z "$chat_id" ] && [ -f "$WORK/storage.py" ]; then
+    chat_id="$(cd "$WORK" && "$VENV/bin/python" -c \
+      'import storage; print((storage.load_json("bildirim_ayarlari_berkakar.json", {}).get("telegram_chat_id") or "").strip())' \
+      2>/dev/null || true)"
   fi
   if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "$chat_id" ]; then
     curl -fsS -m 15 -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \

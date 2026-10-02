@@ -145,6 +145,7 @@ from datetime import datetime, timedelta, timezone
 
 from dotenv import load_dotenv
 
+import storage
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars, parse_iso
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
@@ -275,10 +276,7 @@ def cancel_pullback_limit_buys(client: AlpacaClient, include_extended_hours_orde
 
 
 def load_local_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
-        return {"budget": 0, "weights": {}}
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CONFIG_PATH, {"budget": 0, "weights": {}})
 
 
 def _get_daily_closes(client: AlpacaClient, symbol: str) -> list[float]:

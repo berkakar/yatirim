@@ -7,6 +7,12 @@ Streamlit is the only caller - it needs a repo-scoped, Contents:
 read-and-write personal access token to write; GitHub Actions never calls
 this module at all, it just reads the same files directly from its own
 fresh checkout of the repo.
+
+When SQLite storage is enabled (YATIRIM_DB_PATH set - see storage.py), the three
+functions below transparently read/write the matching storage record instead of
+calling GitHub for every file storage.py knows about, so the Streamlit pages and
+the Droplet jobs share the same data without a GitHub round trip. Unknown paths
+still go to GitHub.
 """
 
 import base64
@@ -21,6 +27,8 @@ if sys.platform == "win32":
 
 import requests
 
+import storage
+
 CONFIG_PATH = "portfolio_config.json"
 API_URL_TEMPLATE = "https://api.github.com/repos/{repo}/contents/{path}"
 
@@ -30,6 +38,8 @@ DEFAULT_CONFIG = {"budget": 0, "weights": {}}
 def read_json_from_github(repo: str, token: str, path: str, default):
     """Read a JSON file from the repo's default branch. Returns `default` if the file doesn't exist yet.
     `default` can be a dict or a list - whatever shape the stored JSON is."""
+    if storage.db_key(path) is not None:
+        return storage.load_json(path, default)
     url = API_URL_TEMPLATE.format(repo=repo, path=path)
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
     r = requests.get(url, headers=headers)
@@ -43,6 +53,9 @@ def read_json_from_github(repo: str, token: str, path: str, default):
 def write_json_to_github(repo: str, token: str, path: str, config, message: str) -> None:
     """Write a JSON file to the repo as a commit, so it survives a Streamlit Cloud reboot
     (the container re-clones the repo from scratch on every restart)."""
+    if storage.db_key(path) is not None:
+        storage.save_json(path, config)
+        return
     url = API_URL_TEMPLATE.format(repo=repo, path=path)
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 
@@ -75,6 +88,8 @@ def update_json_on_github(repo: str, token: str, path: str, default, merge_fn, m
 
     Returns the content that was actually written.
     """
+    if storage.db_key(path) is not None:
+        return storage.update_json(path, merge_fn, default)
     url = API_URL_TEMPLATE.format(repo=repo, path=path)
     headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github+json"}
 

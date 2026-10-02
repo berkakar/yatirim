@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 import streamlit as st
 
+import storage
 from github_config import read_json_from_github, write_json_to_github
 
 GITHUB_REPO = "berkakar/yatirim"
@@ -27,6 +28,8 @@ def load_results(username: str) -> list[dict]:
     dosyanın bayat kalabileceği ihtimaline karşı, mümkünse yerel dosyaya
     hiç bakmadan doğrudan GitHub'dan okur."""
     save_file = _results_file(username)
+    if storage.db_key(save_file) is not None:
+        return storage.load_json(save_file, [])
     token = st.secrets.get("GITHUB_TOKEN")
     if token:
         try:
@@ -45,7 +48,12 @@ def load_results(username: str) -> list[dict]:
 
 def append_results(username: str, new_runs: list[dict]) -> list[dict]:
     """Mevcut sonuçları okur, new_runs'ı sonuna ekler, hem GitHub'a (kalıcı,
-    mümkünse) hem yerel dosyaya yazar. Güncellenmiş tam listeyi döner."""
+    mümkünse) hem yerel dosyaya yazar. Güncellenmiş tam listeyi döner.
+    SQLite açıksa ekleme storage.update ile kilitli tek işlemde yapılır (aynı
+    anda otomatik_alim_satim_runner'ın eklediği sonuçlar kaybolmaz)."""
+    save_file = _results_file(username)
+    if storage.db_key(save_file) is not None:
+        return storage.update_json(save_file, lambda results: (results or []) + list(new_runs), [])
     results = load_results(username)
     results.extend(new_runs)
 

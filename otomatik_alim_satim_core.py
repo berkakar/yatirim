@@ -13,6 +13,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+import storage
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import new_run_id
@@ -268,11 +269,7 @@ def merge_into_portfolio(username: str, selected_rows: list[dict], client: Alpac
     bütçeye göre yüzde olarak) hesaplanır - premium_buy_portfolio.py'deki
     manuel Aktar akışıyla aynı mantık."""
     config_path = f"portfolio_config_{username}.json"
-    if os.path.exists(config_path):
-        with open(config_path, encoding="utf-8") as f:
-            config = json.load(f)
-    else:
-        config = {"budget": 0, "weights": {}}
+    config = storage.load_json(config_path, {"budget": 0, "weights": {}})
 
     symbols = list(dict.fromkeys(r["symbol"] for r in selected_rows))
     n = len(symbols)
@@ -299,8 +296,7 @@ def merge_into_portfolio(username: str, selected_rows: list[dict], client: Alpac
     config["budget"] = budget
     config["weights"] = weights
     config["symbol_settings"] = symbol_settings
-    with open(config_path, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    storage.save_json(config_path, config)
 
     watchlist_name = f"premium-buy-portfolio-{username}"
     watchlist = client.get_or_create_watchlist(watchlist_name)

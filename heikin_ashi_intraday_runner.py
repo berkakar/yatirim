@@ -27,24 +27,15 @@ MODULE_NAME = "Heikin Ashi Gün İçi"
 
 
 def load_local_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
-        return {"enabled": False}
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CONFIG_PATH, {"enabled": False})
 
 
 def save_local_config(config: dict) -> None:
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    storage.save_json(CONFIG_PATH, config)
 
 
 def load_local_stop_settings() -> dict:
-    if storage.enabled():
-        return storage.read("stop_loss_settings", USERNAME, {})
-    if not os.path.exists(STOP_LOSS_SETTINGS_PATH):
-        return {}
-    with open(STOP_LOSS_SETTINGS_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(STOP_LOSS_SETTINGS_PATH, {})
 
 
 def build_client() -> AlpacaClient:
@@ -58,7 +49,7 @@ def build_client() -> AlpacaClient:
 def run_once() -> None:
     config = load_local_config()
     # Devre dışıyken bile, elde pozisyon kaldıysa gün sonu kapatma çalışmalı.
-    if not config.get("enabled") and not (os.path.exists(holdings_path(USERNAME)) and load_holdings_local(USERNAME)):
+    if not config.get("enabled") and not load_holdings_local(USERNAME):
         log(f"{MODULE_NAME} devre dışı ve elde pozisyon yok, atlanıyor.")
         return
 

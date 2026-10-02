@@ -18,6 +18,7 @@ import argparse
 import json
 import os
 
+import storage
 from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_trailing_stop import log
 from otomatik_alim_satim_core import run_pipeline
@@ -28,27 +29,17 @@ BACKTEST_RESULTS_PATH = f"backtest_results_{USERNAME}.json"
 
 
 def load_local_config() -> dict:
-    if not os.path.exists(CONFIG_PATH):
-        return {"enabled": False}
-    with open(CONFIG_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CONFIG_PATH, {"enabled": False})
 
 
 def save_local_config(config: dict) -> None:
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(config, f, ensure_ascii=False, indent=2)
+    storage.save_json(CONFIG_PATH, config)
 
 
 def append_backtest_results(new_runs: list[dict]) -> None:
     if not new_runs:
         return
-    results = []
-    if os.path.exists(BACKTEST_RESULTS_PATH):
-        with open(BACKTEST_RESULTS_PATH, encoding="utf-8") as f:
-            results = json.load(f)
-    results.extend(new_runs)
-    with open(BACKTEST_RESULTS_PATH, "w", encoding="utf-8") as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    storage.update_json(BACKTEST_RESULTS_PATH, lambda results: (results or []) + list(new_runs), [])
 
 
 def build_client() -> AlpacaClient:

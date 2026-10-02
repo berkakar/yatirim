@@ -12,6 +12,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+import storage
 from alpaca_client import AlpacaClient, _match_fifo_pnl
 
 CACHE_PATH = "alpaca_realized_pnl_cache_berkakar.json"
@@ -24,15 +25,11 @@ def _parse_iso(ts: str) -> datetime:
 
 
 def _load() -> dict:
-    if not os.path.exists(CACHE_PATH):
-        return {"symbols": {}}
-    with open(CACHE_PATH, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CACHE_PATH, {"symbols": {}})
 
 
 def _save(cache: dict) -> None:
-    with open(CACHE_PATH, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(CACHE_PATH, cache)
 
 
 def get_cached_realized_loss(client: AlpacaClient, symbol: str, lookback_days: int = 90) -> float:
