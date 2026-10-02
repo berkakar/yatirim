@@ -66,8 +66,16 @@ journalctl -u yatirim -f                     # canlı loglar
 sudo systemctl restart yatirim               # yeniden başlat
 ```
 
-`update.sh`, izlenen dosyalardaki yerel değişiklikleri siler ve repodaki son hâli esas alır
-(Streamlit Cloud da her deploy'da temiz klon kullanır). `secrets.toml` ve `venv/` korunur.
+`update.sh` hiçbir yerel değişikliği silmez:
+- Bir iş o an state dosyası yazıyorsa (commit'lenmemiş değişiklik) 2 dakikaya kadar bekler.
+  Hâlâ bitmediyse hiçbir şeye dokunmadan durur.
+- İşlerin henüz push edemediği commit'ler varsa onları yeni kodun üzerine taşır. Çakışma
+  olursa işlemi geri alıp durur.
+- Arayüzü yalnızca kod değiştiyse yeniden başlatır, bağımlılıkları yalnızca
+  `requirements.txt` değiştiyse kurar. Zamanlanmış işler bir sonraki çalışmalarında yeni
+  kodu kendiliğinden kullanır.
+- `deploy/` altındaki servis veya Nginx dosyası değiştiyse bunları otomatik uygulamaz,
+  ne yapılacağını yazar.
 
 ## Notlar
 
