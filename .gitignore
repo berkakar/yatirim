@@ -4,3 +4,5 @@
 .env
 __pycache__/
 *.pyc
+# SQLite veritabanı (storage.py) - repoda değil, sunucuda tutulur
+data/

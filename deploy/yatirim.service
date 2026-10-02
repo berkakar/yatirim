@@ -13,6 +13,8 @@ Group=yatirim
 WorkingDirectory=/opt/yatirim
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=Europe/Istanbul
+# storage.py'nin kullandığı SQLite veritabanı (repo klasörünün dışında).
+Environment=YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db
 # Sadece 127.0.0.1'i dinler; dışarıya Nginx açılır (bkz. nginx-yatirim.conf).
 ExecStart=/opt/yatirim/venv/bin/streamlit run app.py \
     --server.address 127.0.0.1 \

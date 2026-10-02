@@ -75,3 +75,21 @@ sudo systemctl restart yatirim               # yeniden başlat
   Actions'ta çalışmaya devam eder. Droplet yalnızca arayüzü barındırır.
 - Streamlit sadece `127.0.0.1:8501`'i dinler. Dışarıya yalnızca SSH, 80 ve 443 portları açıktır (`ufw`).
 - Let's Encrypt sertifikası `certbot` tarafından otomatik yenilenir.
+
+## SQLite veritabanı (storage.py)
+
+Uygulama verisi JSON dosyaları yerine `/var/lib/yatirim/yatirim.db` dosyasına taşınıyor
+(yol `yatirim.service` içindeki `YATIRIM_DB_PATH` ile belirlenir). Mevcut JSON'ları
+bir kez aktarmak için, repo klasöründe:
+
+```bash
+cd /opt/yatirim
+sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run   # önce dene
+sudo -u yatirim YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db venv/bin/python scripts/migrate_json_to_sqlite.py
+```
+
+Kullanıcı listesi `.streamlit/secrets.toml` içinden okunur. Betik kaynak JSON'lara dokunmaz,
+veritabanında olan kayıtları atlar (`--overwrite` ile üzerine yazar); tekrar çalıştırmak güvenlidir.
+
+Veritabanının içine bakmak için: `sudo apt install sqlite3`, sonra
+`sqlite3 /var/lib/yatirim/yatirim.db "SELECT username, name, updated_at FROM settings;"`.

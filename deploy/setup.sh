@@ -40,6 +40,9 @@ chown -R "$APP_USER:$APP_USER" "$APP_DIR"
 # root'un bu dizinde git çalıştırabilmesi için (update.sh).
 git config --system --add safe.directory "$APP_DIR" 2>/dev/null || true
 
+# storage.py'nin SQLite veritabanı için klasör (bkz. yatirim.service YATIRIM_DB_PATH).
+install -d -o "$APP_USER" -g "$APP_USER" -m 750 /var/lib/yatirim
+
 echo "==> Python sanal ortamı ve bağımlılıklar"
 sudo -u "$APP_USER" python3 -m venv "$APP_DIR/venv"
 sudo -u "$APP_USER" "$APP_DIR/venv/bin/pip" install --upgrade pip
