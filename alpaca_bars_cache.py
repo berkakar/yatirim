@@ -24,6 +24,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
+import storage
 from alpaca_client import AlpacaClient
 
 DAILY_BARS_CACHE_PATH = "alpaca_daily_bars_cache_berkakar.json"
@@ -46,15 +47,11 @@ def parse_iso(ts: str) -> datetime:
 
 
 def _load(cache_file: str) -> dict:
-    if not os.path.exists(cache_file):
-        return {"series": {}}
-    with open(cache_file, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(cache_file, {"series": {}})
 
 
 def _save(cache_file: str, cache: dict) -> None:
-    with open(cache_file, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(cache_file, cache)
 
 
 def get_cached_raw_bars(

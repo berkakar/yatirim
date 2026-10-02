@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+import storage
 from dtw_analysis import compute_dtw_similarity
 from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
@@ -82,12 +83,10 @@ def fetch_and_cache_daily_data(ticker_list, max_workers=12):
     hisseleri paralel olarak Yahoo Finance'den çeker ve önbelleğe yazar."""
     today_str = str(date.today())
     cache_data = {}
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                cache_data = json.load(f)
-        except Exception:
-            cache_data = {}
+    try:
+        cache_data = storage.load_json(CACHE_FILE, {})
+    except Exception:
+        cache_data = {}
 
     stocks = cache_data.get("stocks", {}) if cache_data.get("_meta", {}).get("last_update_date") == today_str else {}
     missing = [t for t in ticker_list if t not in stocks]
@@ -100,8 +99,7 @@ def fetch_and_cache_daily_data(ticker_list, max_workers=12):
                 if result is not None:
                     stocks[ticker] = result
 
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
-            json.dump({"_meta": {"last_update_date": today_str}, "stocks": stocks}, f, ensure_ascii=False, indent=2)
+        storage.save_json(CACHE_FILE, {"_meta": {"last_update_date": today_str}, "stocks": stocks})
 
     return {t: stocks[t] for t in ticker_list if t in stocks}
 

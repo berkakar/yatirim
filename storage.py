@@ -284,3 +284,103 @@ def backup(dest_path: str) -> None:
             conn.backup(dest)
         finally:
             dest.close()
+
+
+# --------------------------------------------------------------------------
+# JSON dosya adı <-> kayıt eşlemesi
+#
+# Uygulamanın JSON dosyaları "<ad>_<kullanıcı>.json" ya da ortak veriler için
+# "<ad>.json" adını taşır. Aşağıdaki listedeki adlar SQLite açıkken dosya yerine
+# veritabanından okunup yazılır; listede olmayan bir dosyaya (örn.
+# version_info.json) dokunulmaz, eski davranış sürer.
+# --------------------------------------------------------------------------
+
+KNOWN_NAMES = frozenset({
+    # Arayüzün yazdığı ayarlar
+    "selected_tickers", "custom_tickers", "custom_stock_groups", "custom_stock_group_markets",
+    "initial_capital", "stop_loss_settings", "bildirim_ayarlari", "takip_fonlari",
+    # Strateji config'leri (arayüz + işler)
+    "portfolio_config", "otomatik_alim_satim_config", "orb_scan_config",
+    "relative_strength_config", "ha_intraday_config", "backtest_results",
+    # Strateji state'leri (işler)
+    "orb_scan_holdings", "relative_strength_holdings", "ha_intraday_holdings",
+    "buy_stop_rebuy_state", "bildirim_durumu",
+    # Önbellekler
+    "alpaca_daily_bars_cache", "alpaca_intraday_bars_cache", "alpaca_realized_pnl_cache",
+    "alpaca_position_management_cache", "tefas_fonlari_cache", "kap_portfoy_cache",
+    "valuation_cache", "nasdaq_5m_cache", "dtw_results_cache", "hisse_patern_cache",
+})
+
+# En uzun ad önce denenir: "custom_stock_group_markets_x" -> "custom_stock_group_markets".
+_NAMES_LONGEST_FIRST = sorted(KNOWN_NAMES, key=len, reverse=True)
+
+
+def key_for_path(path: str):
+    """Dosya yolunu (username, name) kaydına çevirir; bilinmeyen dosyalar için None.
+
+        "orb_scan_holdings_berkakar.json" -> ("berkakar", "orb_scan_holdings")
+        "tefas_fonlari_cache.json"         -> ("_shared", "tefas_fonlari_cache")
+    """
+    filename = os.path.basename(path)
+    if not filename.endswith(".json"):
+        return None
+    stem = filename[: -len(".json")]
+    for name in _NAMES_LONGEST_FIRST:
+        if stem == name:
+            return SHARED, name
+        if stem.startswith(name + "_") and len(stem) > len(name) + 1:
+            return stem[len(name) + 1:], name
+    return None
+
+
+def db_key(path: str):
+    """SQLite açıksa ve dosya biliniyorsa kayıt anahtarı, aksi halde None (dosya kullanılır)."""
+    if not enabled():
+        return None
+    return key_for_path(path)
+
+
+def load_json(path: str, default=None):
+    """JSON dosyasını okur: SQLite açıksa ve dosya biliniyorsa veritabanından,
+    değilse diskten. Kayıt/dosya yoksa `default`un bir kopyasını döner.
+    Dosya modunda bozuk JSON eskisi gibi hata fırlatır."""
+    key = db_key(path)
+    if key is not None:
+        username, name = key
+        return read(name, username, default)
+    if not os.path.exists(path):
+        return copy.deepcopy(default)
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path: str, value, indent: int = 2) -> None:
+    """JSON dosyasını yazar: SQLite açıksa ve dosya biliniyorsa veritabanına,
+    değilse diske (dosyanın repodaki biçimiyle: UTF-8, girintili)."""
+    key = db_key(path)
+    if key is not None:
+        username, name = key
+        write(name, username, value)
+        return
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(value, f, ensure_ascii=False, indent=indent)
+
+
+def json_exists(path: str) -> bool:
+    key = db_key(path)
+    if key is not None:
+        username, name = key
+        return exists(name, username)
+    return os.path.exists(path)
+
+
+def update_json(path: str, fn, default=None):
+    """Oku-değiştir-yaz. SQLite açıksa storage.update ile kilitli tek işlemde
+    (eşzamanlı başka bir iş araya giremez), değilse dosyada. Yeni değeri döner."""
+    key = db_key(path)
+    if key is not None:
+        username, name = key
+        return update(name, username, fn, default)
+    new_value = fn(load_json(path, default))
+    save_json(path, new_value)
+    return new_value

@@ -7,6 +7,7 @@ import os
 from datetime import date
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+import storage
 from yf_data_quality import is_ohlc_consistent, is_fresh, has_implausible_daily_move, has_flat_prices
 
 CACHE_FILE = "nasdaq_5m_cache.json"
@@ -126,12 +127,10 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
     today_str = str(date.today())
     cache_data = {}
 
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, 'r', encoding='utf-8') as f:
-                cache_data = json.load(f)
-        except Exception:
-            cache_data = {}
+    try:
+        cache_data = storage.load_json(CACHE_FILE, {})
+    except Exception:
+        cache_data = {}
 
     last_update = cache_data.get("_meta", {}).get("last_update_date", "")
     if last_update == today_str and len(cache_data.get("stocks", {})) > 0:
@@ -152,8 +151,7 @@ def fetch_and_cache_5m_data(ticker_list, max_workers=12):
         "_meta": {"last_update_date": today_str},
         "stocks": updated_stocks
     }
-    with open(CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(full_cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(CACHE_FILE, full_cache)
 
     return updated_stocks
 
@@ -179,17 +177,15 @@ def compute_two_day_trend(day1_prices, day2_prices):
 def load_cached_dtw_results(max_warping_window, time_penalty):
     """Sadece zamansal parametrelere bağlı olarak önbellek sonuçlarını yükler."""
     today_str = str(date.today())
-    if os.path.exists(DTW_RESULTS_CACHE_FILE):
-        try:
-            with open(DTW_RESULTS_CACHE_FILE, 'r', encoding='utf-8') as f:
-                cache = json.load(f)
-                meta = cache.get("_meta", {})
-                if (meta.get("last_update_date") == today_str and
-                    meta.get("max_warping_window") == max_warping_window and
-                    meta.get("time_penalty") == time_penalty):
-                    return cache.get("self_similarity")
-        except Exception:
-            pass
+    try:
+        cache = storage.load_json(DTW_RESULTS_CACHE_FILE, {})
+        meta = cache.get("_meta", {})
+        if (meta.get("last_update_date") == today_str and
+            meta.get("max_warping_window") == max_warping_window and
+            meta.get("time_penalty") == time_penalty):
+            return cache.get("self_similarity")
+    except Exception:
+        pass
     return None
 
 
@@ -197,13 +193,10 @@ def load_cached_dtw_meta():
     """load_cached_dtw_results'ın döndürmediği _meta bloğunu (last_update_date)
     okur - sadece bir tablonun üzerinde güncellik notu göstermek için kullanılır,
     hangi parametrelerle hesaplandığının bir önemi yok."""
-    if os.path.exists(DTW_RESULTS_CACHE_FILE):
-        try:
-            with open(DTW_RESULTS_CACHE_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f).get("_meta", {})
-        except Exception:
-            pass
-    return {}
+    try:
+        return storage.load_json(DTW_RESULTS_CACHE_FILE, {}).get("_meta", {})
+    except Exception:
+        return {}
 
 
 def save_cached_dtw_results(max_warping_window, time_penalty, self_sim):
@@ -217,8 +210,7 @@ def save_cached_dtw_results(max_warping_window, time_penalty, self_sim):
         },
         "self_similarity": self_sim
     }
-    with open(DTW_RESULTS_CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(DTW_RESULTS_CACHE_FILE, cache)
 
 
 def find_local_extremes(times, prices, window=3):

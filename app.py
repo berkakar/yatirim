@@ -1230,10 +1230,9 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
     time_penalty = 0.10
 
     # 1. Ham verileri JSON önbelleğinden yükle
-    if 'dtw_data' not in st.session_state and os.path.exists("nasdaq_5m_cache.json"):
+    if 'dtw_data' not in st.session_state and storage.json_exists("nasdaq_5m_cache.json"):
         try:
-            with open("nasdaq_5m_cache.json", 'r', encoding='utf-8') as f:
-                st.session_state.dtw_data = json.load(f).get("stocks", {})
+            st.session_state.dtw_data = storage.load_json("nasdaq_5m_cache.json", {}).get("stocks", {})
         except Exception:
             st.session_state.dtw_data = {}
 

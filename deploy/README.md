@@ -134,68 +134,101 @@ sudo tail -f /var/log/nginx/error.log
 
 ## SQLite'ı devreye alma (storage.py)
 
-Arayüzün yazdığı ayarlar, ortam değişkeni `YATIRIM_DB_PATH` tanımlıysa GitHub yerine
-Droplet'teki SQLite veritabanında tutulur: seçili hisseler, hisse listeleri ve grupları,
-ilk sermaye, stop loss ayarları, bildirim ayarları, takip edilen fonlar, KAP portföy
-önbelleği ve değerleme önbelleği. Bu ayarları okuyan işler de (trailing stop, alım
-noktaları, ORB / RS / Heikin Ashi, fon uyarısı, KAP yenileme, Russell 2000) aynı
-veritabanından okur. Değişken tanımlı değilse eski düzen (GitHub API + JSON dosyaları)
-aynen çalışır.
+Ortam değişkeni `YATIRIM_DB_PATH` tanımlıysa uygulamanın bütün verisi GitHub ve repodaki
+JSON dosyaları yerine Droplet'teki tek bir SQLite veritabanında tutulur:
+
+- **Arayüz ayarları:** seçili hisseler, hisse listeleri ve grupları, ilk sermaye, stop loss ve
+  bildirim ayarları, takip edilen fonlar.
+- **Strateji config'leri:** `portfolio_config`, `otomatik_alim_satim_config`, `orb_scan_config`,
+  `relative_strength_config`, `ha_intraday_config`, `backtest_results`.
+- **Strateji state'leri:** ORB / RS / Heikin Ashi holdings, `buy_stop_rebuy_state`,
+  `bildirim_durumu`.
+- **Önbellekler:** Alpaca bar / gerçekleşmiş K/Z / yönetim önbellekleri, TEFAS, KAP, değerleme,
+  DTW ve hisse patern önbellekleri.
+
+Arayüz ve işler aynı kayıtları okuyup yazar. İşler bu dosyaları artık değiştirmediği için
+`run_job.sh` commit'leyecek bir şey bulmaz ve GitHub'a state push'u kendiliğinden durur.
+Değişken tanımlı değilse eski düzen (GitHub API + JSON dosyaları + push) aynen çalışır.
 
 > **Önemli:** Değişken arayüzde **ve** işlerde aynı anda tanımlı olmalı. İşler
 > `/etc/yatirim/env` dosyasını zaten okuyor (`yatirim-job@.service`), ama
-> `yatirim-streamlit.service` okumuyor. Aşağıdaki 5. adım bunu ekler. Yalnızca bir
-> tarafta tanımlıysa, örneğin arayüzde değiştirdiğiniz stop ayarını trailing stop görmez.
+> `yatirim-streamlit.service` okumuyor; aşağıdaki 6. adım bunu ekler. Yalnızca bir tarafta
+> tanımlıysa arayüz ile işler farklı veri görür.
 
-Adımlar (piyasa kapalıyken, root olarak):
+Adımlar (piyasa kapalıyken, hafta sonu önerilir, root olarak):
 
 1. İşleri ve arayüzü durdurun:
    ```bash
    /opt/yatirim/bin/yatirim-timers disable
    systemctl stop yatirim-app-sync.timer yatirim-streamlit
    ```
-2. Veritabanı klasörünü oluşturun (işler ve arayüz `yatirim` kullanıcısıyla çalışır):
+2. Push edilemeyip bekleyen state olmadığını kontrol edin. Aşağıdaki komut bir şey
+   listelerse durun ve önce o commit'leri main'e alın:
+   ```bash
+   for d in /opt/yatirim/work/*; do sudo -u yatirim git -C "$d" branch --list 'unpushed/*'; done
+   ```
+3. Güncel `run_job.sh`'yi kurun (hata bildirimi chat ID'yi veritabanından okusun):
+   ```bash
+   cd /root/yatirim && git pull --ff-only origin main
+   install -m 755 -o root -g root deploy/run_job.sh /opt/yatirim/bin/
+   ```
+4. Veritabanı klasörünü oluşturun ve main'deki güncel JSON'ları aktarın. Kullanıcı listesi
+   `/opt/yatirim/.streamlit/secrets.toml` içinden okunur:
    ```bash
    install -d -o yatirim -g yatirim -m 750 /var/lib/yatirim
-   ```
-3. Arayüz kopyasını main ile eşitleyip güncel JSON'ları veritabanına aktarın.
-   Kullanıcı listesi `/opt/yatirim/.streamlit/secrets.toml` içinden okunur:
-   ```bash
    systemctl start yatirim-app-sync.service
    cd /opt/yatirim/app
    sudo -u yatirim -H YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db /opt/yatirim/venv/bin/python scripts/migrate_json_to_sqlite.py --dry-run
    sudo -u yatirim -H YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db /opt/yatirim/venv/bin/python scripts/migrate_json_to_sqlite.py --overwrite
    ```
-4. Değişkeni ortak ortam dosyasına ekleyin:
+5. Değişkeni ortak ortam dosyasına ekleyin:
    ```bash
    echo 'YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db' >> /etc/yatirim/env
    ```
-5. Arayüzün de bu dosyayı okumasını sağlayın:
+6. Arayüzün de bu dosyayı okumasını sağlayın:
    ```bash
    mkdir -p /etc/systemd/system/yatirim-streamlit.service.d
    printf '[Service]\nEnvironmentFile=/etc/yatirim/env\n' > /etc/systemd/system/yatirim-streamlit.service.d/env.conf
    systemctl daemon-reload
    ```
-6. Başlatın:
+7. Başlatın:
    ```bash
    systemctl start yatirim-app-sync.timer yatirim-streamlit
    /opt/yatirim/bin/yatirim-timers enable
    ```
-7. Kontrol: arayüzde bir ayarı değiştirip kaydedin, sonra
+8. Kontrol:
    ```bash
    apt install -y sqlite3
-   sqlite3 /var/lib/yatirim/yatirim.db "SELECT username, name, updated_at FROM settings ORDER BY updated_at DESC LIMIT 5;"
+   sqlite3 /var/lib/yatirim/yatirim.db "SELECT username, name, updated_at FROM settings ORDER BY updated_at DESC LIMIT 10;"
+   journalctl -u 'yatirim-job@*' --since "-30 min" | grep -E "Commit'lenecek|push|HATA"
    ```
-   Bu ayarlar artık GitHub'a commit'lenmez.
+   Arayüzde bir ayarı kaydedince `updated_at` güncellenmeli. İşlerin logunda
+   "Commit'lenecek state değişikliği yok." görünmeli ve GitHub'a yeni state commit'i
+   gelmemeli.
 
-**Geri dönmek için** `/etc/yatirim/env` dosyasından `YATIRIM_DB_PATH` satırını silip
-`systemctl restart yatirim-streamlit` çalıştırın; işler bir sonraki çalışmalarında eski
-düzene döner. SQLite'tayken yapılan ayar değişiklikleri JSON dosyalarına geri yazılmaz.
+### SQLite açıkken dikkat
 
-Bilinen eksikler:
-- `run_job.sh`'nin hata bildirimi Telegram chat ID'sini repodaki
-  `bildirim_ayarlari_berkakar.json` dosyasından okur. SQLite açıkken arayüzden değiştirilen
-  chat ID oraya yansımaz; değiştirirseniz `/etc/yatirim/env` içine `TELEGRAM_CHAT_ID=...`
-  ekleyin.
-- Strateji state/config dosyaları (`*_holdings`, `orb_scan_config`, `portfolio_config` vb.)
-  ve fiyat önbellekleri henüz JSON + git ile çalışıyor; bunlar sonraki adımda taşınacak.
+- **GitHub Actions'taki elle tetiklenen workflow'ları kullanmayın** (`kap_refresh_holdings`,
+  `orb_stop_status`, ORB'nin `reconcile_symbols` girişi). Bunlar repodaki JSON'ları okur;
+  SQLite açıkken o dosyalar güncel değildir. Gerekirse aynı komutu Droplet'te çalıştırın:
+  ```bash
+  sudo -u yatirim -H bash -c 'set -a; . /etc/yatirim/env; set +a; cd /opt/yatirim/app && /opt/yatirim/venv/bin/python orb_stop_status.py'
+  ```
+- **Yedek:** veritabanı tek bir dosya. Çalışırken `cp` ile kopyalamayın, şunu kullanın:
+  `sqlite3 /var/lib/yatirim/yatirim.db ".backup /root/yatirim-$(date +%F).db"`.
+  DigitalOcean'ın haftalık Droplet yedeklerini de açmanız önerilir.
+
+### Geri dönmek
+
+SQLite açıkken holdings ve state yalnızca veritabanında güncellenir. Doğrudan dönerseniz
+işler repodaki eski state ile çalışır. Önce veritabanını JSON'a geri yazın:
+
+1. `/opt/yatirim/bin/yatirim-timers disable` ve `systemctl stop yatirim-streamlit`
+2. Veritabanını repoya aktarıp main'e gönderin:
+   ```bash
+   cd /root/yatirim && git pull --ff-only origin main
+   YATIRIM_DB_PATH=/var/lib/yatirim/yatirim.db /opt/yatirim/venv/bin/python scripts/export_sqlite_to_json.py
+   git add -A '*.json' && git commit -m "SQLite'tan JSON'a geri dönüş" && git push origin main
+   ```
+3. `/etc/yatirim/env` dosyasından `YATIRIM_DB_PATH` satırını silin.
+4. `systemctl start yatirim-streamlit` ve `/opt/yatirim/bin/yatirim-timers enable`

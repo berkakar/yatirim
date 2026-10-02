@@ -45,6 +45,7 @@ import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+import storage
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from buy_algorithms import orb_signal
@@ -82,23 +83,16 @@ def load_config_local(username: str) -> dict:
     load_config_local ile aynı gerekçe (GH Actions her koşuda repoyu
     sıfırdan checkout eder, dosya zaten güncel)."""
     path = config_path(username)
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(path, {})
 
 
 def load_holdings_local(username: str) -> dict:
     path = holdings_path(username)
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(path, {})
 
 
 def save_holdings_local(username: str, holdings: dict) -> None:
-    with open(holdings_path(username), "w", encoding="utf-8") as f:
-        json.dump(holdings, f, ensure_ascii=False, indent=2)
+    storage.save_json(holdings_path(username), holdings)
 
 
 def get_cash_allocation_pct(username: str) -> float:

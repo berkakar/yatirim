@@ -56,6 +56,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
+import storage
 from alpaca_client import AlpacaClient
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
@@ -97,23 +98,16 @@ def load_config_local(username: str) -> dict:
     güncel, GitHub API'sine gerek yok (bkz. alpaca_trailing_stop.
     load_portfolio_config ile aynı desen)."""
     path = config_path(username)
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(path, {})
 
 
 def load_holdings_local(username: str) -> dict:
     path = holdings_path(username)
-    if not os.path.exists(path):
-        return {}
-    with open(path, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(path, {})
 
 
 def save_holdings_local(username: str, holdings: dict) -> None:
-    with open(holdings_path(username), "w", encoding="utf-8") as f:
-        json.dump(holdings, f, ensure_ascii=False, indent=2)
+    storage.save_json(holdings_path(username), holdings)
 
 
 def get_cash_allocation_pct(username: str) -> float:

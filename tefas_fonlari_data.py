@@ -21,6 +21,7 @@ import json
 import os
 from datetime import date, datetime, timedelta
 
+import storage
 from tefas_client import fetch_fund_info
 
 CACHE_FILE = "tefas_fonlari_cache.json"
@@ -53,15 +54,11 @@ def classify_fund(fund_name: str) -> str | None:
 
 
 def load_cache() -> dict:
-    if not os.path.exists(CACHE_FILE):
-        return {"meta": {}, "funds": {}, "table": []}
-    with open(CACHE_FILE, encoding="utf-8") as f:
-        return json.load(f)
+    return storage.load_json(CACHE_FILE, {"meta": {}, "funds": {}, "table": []})
 
 
 def save_cache(cache: dict) -> None:
-    with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(cache, f, ensure_ascii=False, indent=2)
+    storage.save_json(CACHE_FILE, cache)
 
 
 def _merge_rows(funds: dict, rows: list[dict]) -> None:
