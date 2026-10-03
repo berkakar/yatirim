@@ -28,6 +28,38 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "9",
+        "date": "2026-10-03",
+        "title": "Stoplar mevcut pozisyona göre ayrılıyor; kurulamayan stop artık sessiz kalmıyor",
+        "problem": (
+            "MDB (28 Eylül): 24 Eylül'de konan bracket alış limiti (396.03) açılışta %24 boşlukla 308.82'den "
+            "doldu; Alpaca piyasanın üstünde kalan 390.09'luk stop bacağını dolumla aynı anda iptal etti. Stop "
+            "botu 'son trail seviyesi' olarak bu hiç devreye girmemiş bacağı geri yüklemeye çalıştı, her "
+            "geçişte 422 aldı ve bunu sadece log'a yazdı - pozisyon ~29 saat korumasız kaldı. Aynı kök neden: "
+            "ilk stop (1R) 17 Eylül'deki eski bir pozisyondan 368.41 okunmuştu (giriş 308.82 - 1R negatif), "
+            "yönetim başlangıcı da eski pozisyona dayanıyordu."
+        ),
+        "change": (
+            "- Pozisyonun açılış anı dolumlardan bulunur (ilave alım açılış sayılmaz); son trail seviyesi, ilk "
+            "stop ve yönetim başlangıcı yalnızca bu pozisyona ait stoplardan hesaplanır. Dolumla aynı anda "
+            "iptal edilen bracket bacağı ve eski pozisyonların stopları sayılmaz; dolumla devreye giren bacak "
+            "sayılır. Eski kuralla yazılmış önbellek kayıtları ilk geçişte yeniden hesaplanır.\n"
+            "- Geri yüklenecek seviye güncel fiyatın yanlış tarafındaysa kullanılmaz; naif stop da kırılmışsa "
+            "pozisyon satılmaz, güncel fiyattan aynı mesafede koruyucu stop kurulur ve Telegram'dan haber "
+            "verilir.\n"
+            "- Stop yönetimi bir pozisyonda hata verirse günde bir Telegram uyarısı gider (önceden sadece "
+            "log).\n"
+            "- Uyarı durumu ve açılış anı yeni bir kayıt açılmadan pozisyon yönetim önbelleğinde "
+            "(storage: SQLite ya da JSON) tutulur, pozisyon kapanınca silinir."
+        ),
+        "where": "alpaca_trailing_stop.py (position_opened_at, _belongs_to_position, last_trailed_stop_price, "
+                 "get_initial_stop_price, get_management_start, notify_once_per_day, manage_position), "
+                 "tests/test_position_stop_restore.py",
+        "settings": "Yok.",
+        "track": "Telegram'da '🚨 ... stop yönetimi başarısız' ya da '⚠️ ... koruma seviyesi ... yanlış "
+                 "tarafında' uyarıları; 1R kullanan algoritmalarda (atr_volatility) breakeven/trail kararları.",
+    },
+    {
         "id": "8",
         "date": "2026-09-28",
         "title": "Heikin Ashi alışı: bayat mum koruması, gerçek Stokastik kesişimi, eksik mum ve likidite filtresi",
