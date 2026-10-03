@@ -82,6 +82,11 @@ sudo systemctl start yatirim-job@orb-scan            # bir işi elle çalıştı
   Telegram'a bildirim gelir.
 - **Geri dönüş:** `sudo /opt/yatirim/bin/yatirim-timers disable`, ardından
   workflow'lardaki `schedule:` bloklarını geri alın.
+- **`/etc/yatirim/env` biçimi:** her satır boşluksuz `ANAHTAR=değer` olmalı (tırnak
+  gerekmez). Bu dosya `secrets.toml` değildir; TOML satırları (`name = "..."`,
+  `[cookie]`) buraya girmemeli. Geçersiz satırlar atlanır, işler çalışmaya devam eder ve
+  Telegram'a saatte en fazla bir uyarı gelir. Düzenledikten sonra kontrol:
+  `bash -n /etc/yatirim/env && echo geçerli`.
 
 ## Actions'tan davranış farkları
 
