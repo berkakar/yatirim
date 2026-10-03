@@ -259,7 +259,9 @@ def render_orb_scan(username: str):
             st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
         else:
             st.info("Şu an geçerli bir kırılım sinyali üreten hisse yok (bu, seansın erken/geç bir "
-                    "saatinde beklenen bir durumdur).")
+                    "saatinde beklenen bir durumdur). Canlı taramayla aynı kural: bugünkü seansı 09:30 "
+                    "barıyla başlamayan, barları arasında boşluk olan (IEX'te seyrek işlem gören hisseler) "
+                    "ya da son barı bayat olan hisseler taranmaz.")
 
     st.divider()
     st.subheader("📦 Şu Anki Pozisyonlar")
