@@ -25,13 +25,35 @@ if ! job_define "$JOB"; then
   exit 2
 fi
 
-# APCA_*, TELEGRAM_BOT_TOKEN vb. - systemd EnvironmentFile ile de yükleniyor,
-# elle çalıştırmalar için burada da okunuyor.
-if [ -r /etc/yatirim/env ]; then
-  set -a
-  # shellcheck disable=SC1091
-  source /etc/yatirim/env
-  set +a
+ENV_FILE="${YATIRIM_ENV_FILE:-/etc/yatirim/env}"
+
+# APCA_*, TELEGRAM_BOT_TOKEN, YATIRIM_DB_PATH vb. - systemd EnvironmentFile ile de
+# yükleniyor, elle çalıştırmalar için burada da okunuyor. Dosya kabuk komutu gibi
+# `source` EDİLMİYOR: değerler systemd'deki gibi olduğu gibi alınır ($ vb. yorumlanmaz)
+# ve ANAHTAR=değer biçiminde olmayan satırlar atlanır. Aksi halde tek bir bozuk satır
+# (örn. 2026-10-02'de dosyaya yanlışlıkla yapıştırılan secrets.toml içeriği) `set -u`
+# ile run_job.sh'yi daha başlamadan düşürüp trailing stop dahil TÜM işleri durdurmuştu.
+env_bad_lines=()
+if [ -r "$ENV_FILE" ]; then
+  n=0
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1))
+    line="${line%$'\r'}"
+    if [[ -z "${line//[[:space:]]/}" || "$line" =~ ^[[:space:]]*# ]]; then
+      continue
+    fi
+    if [[ "$line" =~ ^([A-Za-z_][A-Za-z0-9_]*)=(.*)$ ]]; then
+      key="${BASH_REMATCH[1]}"
+      val="${BASH_REMATCH[2]}"
+      # systemd gibi: değerin tamamı tırnak içindeyse tırnaklar atılır.
+      if [[ "$val" =~ ^\"(.*)\"$ || "$val" =~ ^\'(.*)\'$ ]]; then
+        val="${BASH_REMATCH[1]}"
+      fi
+      export "$key=$val"
+    else
+      env_bad_lines+=("$n")
+    fi
+  done < "$ENV_FILE"
 fi
 
 export GIT_SSH_COMMAND="ssh -i $BASE/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$BASE/.ssh/known_hosts"
@@ -40,12 +62,11 @@ export PYTHONUNBUFFERED=1
 
 log() { echo "[$JOB] $*"; }
 
-notify() {
-  # Hata bildirimi: TELEGRAM_CHAT_ID tanımlı değilse uygulamanın kendi
-  # bildirim ayarındaki chat_id kullanılır (alpaca_trailing_stop.py ile aynı kaynak:
-  # storage.load_json, SQLite açıksa veritabanından, değilse repodaki dosyadan).
-  local text="⚠️ Droplet işi başarısız: $JOB
-$1"
+send_telegram() {
+  # TELEGRAM_CHAT_ID tanımlı değilse uygulamanın kendi bildirim ayarındaki chat_id
+  # kullanılır (alpaca_trailing_stop.py ile aynı kaynak: storage.load_json, SQLite
+  # açıksa veritabanından, değilse repodaki dosyadan).
+  local text="$1"
   local chat_id="${TELEGRAM_CHAT_ID:-}"
   if [ -z "$chat_id" ] && [ -f "$WORK/storage.py" ]; then
     chat_id="$(cd "$WORK" && "$VENV/bin/python" -c \
@@ -56,6 +77,26 @@ $1"
     curl -fsS -m 15 -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
       --data-urlencode "chat_id=$chat_id" --data-urlencode "text=$text" \
       || log "Telegram bildirimi gönderilemedi"
+  fi
+}
+
+notify() {
+  send_telegram "⚠️ Droplet işi başarısız: $JOB
+$1"
+}
+
+# Ortam dosyasında atlanan satırlar varsa uyar; iş yine de devam eder. Her iş 5 dk'da
+# bir çalıştığı için aynı dosya içeriği için en fazla saatte bir mesaj gönderilir.
+warn_bad_env() {
+  [ "${#env_bad_lines[@]}" -gt 0 ] || return 0
+  local msg="$ENV_FILE içinde ANAHTAR=değer biçiminde olmayan ${#env_bad_lines[@]} satır atlandı (satır: ${env_bad_lines[*]}). İşler çalışmaya devam ediyor ama bu satırlardaki ayarlar okunmuyor. secrets.toml içeriği bu dosyaya girmiş olabilir; satırlar boşluksuz ANAHTAR=değer olmalı."
+  log "UYARI: $msg"
+  local stamp
+  stamp="$BASE/.env-warning-$(sha256sum "$ENV_FILE" 2>/dev/null | cut -c1-16)"
+  if [ -z "$(find "$stamp" -mmin -60 2>/dev/null)" ]; then
+    send_telegram "⚠️ Droplet ortam dosyası bozuk (ilk fark eden iş: $JOB)
+$msg"
+    touch "$stamp" 2>/dev/null || true
   fi
 }
 
@@ -73,6 +114,8 @@ fi
 cd "$WORK" || die "$WORK bulunamadı"
 git fetch --quiet origin "$BRANCH" || die "git fetch başarısız"
 git reset --quiet --hard "origin/$BRANCH" || die "git reset başarısız"
+# Chat ID'yi storage.py ile okuyabilmesi için klon güncellendikten sonra.
+warn_bad_env
 git clean --quiet -fd
 
 # --- 2) requirements.txt değiştiyse venv'i güncelle ----------------------------
