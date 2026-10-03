@@ -1,0 +1,10 @@
+[Unit]
+Description=yatirim sunucu kaynak raporu (her gün)
+
+[Timer]
+OnCalendar=*-*-* 09:00:00 Europe/Istanbul
+Unit=yatirim-server-report.service
+RandomizedDelaySec=0
+
+[Install]
+WantedBy=timers.target

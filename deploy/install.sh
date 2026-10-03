@@ -41,9 +41,10 @@ chmod 700 "$BASE/.ssh"
 install -d -m 750 -o root -g yatirim /etc/yatirim
 
 echo "==> Script'ler ve systemd birimleri"
-install -m 755 -o root -g root "$SRC/run_job.sh" "$SRC/yatirim-timers" "$BASE/bin/"
+install -m 755 -o root -g root "$SRC/run_job.sh" "$SRC/yatirim-timers" "$SRC/server_monitor.sh" "$BASE/bin/"
 install -m 644 -o root -g root "$SRC/jobs.sh" "$BASE/bin/"
-install -m 644 -o root -g root "$SRC"/systemd/yatirim-job@.service "$SRC"/systemd/yatirim-*.timer /etc/systemd/system/
+install -m 644 -o root -g root "$SRC"/systemd/yatirim-job@.service "$SRC"/systemd/yatirim-server-*.service \
+  "$SRC"/systemd/yatirim-*.timer /etc/systemd/system/
 systemctl daemon-reload
 
 if [ ! -f /etc/yatirim/env ]; then
@@ -61,6 +62,10 @@ EOF
 fi
 chown root:yatirim /etc/yatirim/env
 chmod 640 /etc/yatirim/env
+
+echo "==> Sunucu izleme (Telegram'a kaynak raporu ve eşik uyarıları)"
+# İş timer'larından farklı olarak hemen açılır: alım/satım yapmaz, Actions ile çakışmaz.
+systemctl enable --now yatirim-server-report.timer yatirim-server-check.timer >/dev/null
 
 echo "==> Python venv"
 [ -x "$BASE/venv/bin/python" ] || sudo -u yatirim python3 -m venv "$BASE/venv"

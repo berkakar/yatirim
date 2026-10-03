@@ -98,6 +98,33 @@ sudo systemctl start yatirim-job@orb-scan            # bir işi elle çalıştı
 - Sunucu kapalıyken kaçırılan tetiklemeler açılışta telafi edilmez
   (`Persistent=false`). Alım/satım işlerinin geç çalışmaması için bu bilinçli.
 
+## Sunucu kaynaklarını Telegram'a gönderme
+
+`install.sh` iki izleme timer'ını da kurup açar (iş timer'larından bağımsızdır,
+`yatirim-timers disable` onları kapatmaz). Mesajlar işlerin hata bildirimleriyle
+aynı bot ve chat ID'ye gider (`TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` ya da
+uygulamadaki bildirim ayarı).
+
+- **Günlük rapor** (`yatirim-server-report.timer`, her gün 09:00 TRT): CPU, load,
+  RAM, swap, disk, en çok RAM kullanan süreçler, arayüz servisinin durumu, açık iş
+  timer'ı sayısı ve son 24 saatte hata veren işler.
+- **Eşik kontrolü** (`yatirim-server-check.timer`, 5 dk'da bir): bir eşik aşılınca
+  uyarı, sorun sürerse 3 saatte bir hatırlatma, düzelince tek bir "düzeldi" mesajı.
+
+| Değişken (`/etc/yatirim/env`) | Varsayılan | Anlamı |
+|---|---|---|
+| `MONITOR_DISK_PCT` | 85 | Kök disk doluluk % sınırı |
+| `MONITOR_MEM_PCT` | 90 | RAM kullanım % sınırı (önbellek hariç) |
+| `MONITOR_SWAP_PCT` | 80 | Swap kullanım % sınırı |
+| `MONITOR_LOAD_FACTOR` | 2 | 5 dk load > çekirdek sayısı × bu değer |
+| `MONITOR_REMIND_MIN` | 180 | Süren sorun için hatırlatma aralığı (dk) |
+
+```bash
+sudo systemctl start yatirim-server-report         # raporu şimdi gönder
+/opt/yatirim/bin/server_monitor.sh print           # sadece ekrana yaz
+systemctl list-timers 'yatirim-server-*'
+```
+
 ## İsteğe bağlı: Streamlit arayüzünü de Droplet'e taşıma
 
 `deploy/web/` altındaki dosyalar arayüzü Nginx arkasında yayına alır. Önce
