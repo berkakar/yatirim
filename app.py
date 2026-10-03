@@ -139,7 +139,9 @@ authenticator = stauth.Authenticate(
     _credentials,
     st.secrets["cookie"]["name"],
     st.secrets["cookie"]["key"],
-    st.secrets["cookie"]["expiry_days"],
+    # secrets.toml'da tırnaklı ("30") yazılırsa da çalışsın - streamlit-authenticator
+    # bunu timedelta(days=...) ile kullanıyor, metin gelirse girişte TypeError verir.
+    float(st.secrets["cookie"]["expiry_days"]),
 )
 _LOGO_PATH = "assets/logo.jpg"
 _LOGIN_BOX_WIDTH = 380
