@@ -483,7 +483,84 @@ def prune_management_start_cache(open_symbols: set[str]) -> None:
     _save_management_start_cache(cache)
 
 
-def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) -> datetime:
+# [2026-10-03] Bir stop emrinin MEVCUT pozisyona ait olup olmadığı, pozisyonun
+# açılış zamanına göre ayrılır (position_opened_at). Önceden "sembolün en eski /
+# en son stop emri" kullanılıyordu ve bu, pozisyondan ÖNCEKİ emirleri de
+# kapsıyordu. Gözlemlenen gerçek örnek MDB (2026-09-28): 24 Eylül'de konan
+# bracket alış limiti (396.03) açılışta %24 boşlukla 308.82'den doldu, Alpaca
+# piyasanın üstünde kalan 390.09'luk stop bacağını AYNI ANDA iptal etti;
+# last_trailed_stop_price bu hiç devreye girmemiş bacağı "son trail seviyesi"
+# sayıp 390.09'u geri yüklemeye çalıştı, Alpaca reddetti ve pozisyon ~29 saat
+# korumasız kaldı. initial_stop_price da 17 Eylül'deki eski bir pozisyondan
+# 368.41 okunmuştu (giriş 308.82 - 1R negatif).
+POSITION_FILLS_LOOKBACK_DAYS = 60
+# Bracket bacağının iptali dolumla aynı anda (ms farkla) gelir - bu pay içinde
+# biten bir emir pozisyona ait sayılmaz.
+STOP_LEG_GRACE = timedelta(seconds=5)
+
+
+def position_opened_at(client: AlpacaClient, symbol: str, signed_qty: float) -> datetime | None:
+    """Mevcut pozisyonun açıldığı an: güncel adetten geriye doğru dolumlar
+    üzerinden yürüyerek pozisyonun en son SIFIRDAN açıldığı dolum bulunur
+    (ilave alımlar açılış sayılmaz). POSITION_FILLS_LOOKBACK_DAYS içinde
+    bulunamazsa (pozisyon daha eski) None - bu durumda filtre uygulanmaz.
+
+    Sonuç pozisyon yönetim önbelleğinde (storage: SQLite ya da JSON) sembol
+    başına bir kez tutulur; kayıt pozisyon kapanınca
+    prune_management_start_cache ile silinir. İlk hesaplandığında aynı
+    kayıttaki earliest_stop_at / initial_stop_price da silinir - bu alanlar
+    eski kuralla (pozisyon öncesi emirleri de sayarak) hesaplanmış olabilir."""
+    cache = _load_management_start_cache()
+    cached = cache.get(symbol) or {}
+    if "opened_at" in cached:
+        return _parse_iso(cached["opened_at"]) if cached["opened_at"] else None
+    try:
+        fills = client.get_symbol_fills(symbol, POSITION_FILLS_LOOKBACK_DAYS)
+    except Exception as e:
+        log(f"{symbol}: pozisyon açılış zamanı için dolumlar alınamadı, filtre uygulanmıyor: {e}")
+        return None
+    fills = sorted((f for f in fills if f.get("filled_at")), key=lambda f: _parse_iso(f["filled_at"]))
+    opened = None
+    qty = signed_qty
+    for fill in reversed(fills):
+        delta = float(fill["filled_qty"]) * (1 if fill["side"] == "buy" else -1)
+        before = qty - delta
+        if abs(before) < 1e-9:
+            opened = _parse_iso(fill["filled_at"])
+            break
+        qty = before
+    cache[symbol] = {"opened_at": opened.isoformat() if opened else None}
+    _save_management_start_cache(cache)
+    return opened
+
+
+def _belongs_to_position(order: dict, opened_at: datetime | None) -> bool:
+    """Pozisyon açıldıktan sonra kurulmuş ya da açılıştan sonra da yaşamış
+    (bracket bacağı gibi önceden kurulup dolumla devreye giren) emirler
+    pozisyona aittir; açılıştan önce ya da açılışla aynı anda biten emirler
+    (eski pozisyonların stopları, dolumda iptal edilen bracket bacağı) değil."""
+    if opened_at is None:
+        return True
+    if _parse_iso(order["created_at"]) >= opened_at:
+        return True
+    ended = (order.get("canceled_at") or order.get("expired_at") or order.get("replaced_at")
+             or order.get("filled_at"))
+    return ended is None or _parse_iso(ended) > opened_at + STOP_LEG_GRACE
+
+
+def _position_stop_history(
+    client: AlpacaClient, symbol: str, signed_qty: float | None, limit: int = 50,
+) -> tuple[list[dict], datetime | None]:
+    history = client.get_stop_order_history(symbol, limit=limit)
+    if signed_qty is None:
+        return history, None
+    opened_at = position_opened_at(client, symbol, signed_qty)
+    return [o for o in history if _belongs_to_position(o, opened_at)], opened_at
+
+
+def get_management_start(
+    client: AlpacaClient, symbol: str, lookback_days: int, signed_qty: float | None = None,
+) -> datetime:
     """The earlier of `lookback_days` ago and when we first started
     managing this position's stop - whichever is more recent wins, so
     structure from before we ever held the trade can't anchor the
@@ -496,9 +573,15 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
     (her pass'te, her açık pozisyon için) çağrılması önlenir.
     `default_start` ise `lookback_days`'e göre kayan (canlı) bir pencere
     olduğu için HER ÇAĞRIDA taze hesaplanır - aksi halde lookback_days'ten
-    uzun süredir açık bir pozisyon için pencere donmuş kalırdı."""
+    uzun süredir açık bir pozisyon için pencere donmuş kalırdı.
+
+    signed_qty verilirse yalnızca mevcut pozisyona ait stoplar sayılır ve
+    pozisyonun açılış anı biliniyorsa doğrudan o kullanılır (bkz.
+    position_opened_at) - bracket bacağı dolumdan önce kurulduğu için en
+    eski stopun zamanı açılıştan önce olabilir."""
     default_start = datetime.now(timezone.utc) - timedelta(days=lookback_days)
 
+    opened_at = position_opened_at(client, symbol, signed_qty) if signed_qty is not None else None
     cache = _load_management_start_cache()
     cached = cache.get(symbol)
     # "earliest_stop_at" anahtarının VARLIĞI kontrol edilir (kaydın varlığı
@@ -506,8 +589,11 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
     if cached is not None and "earliest_stop_at" in cached:
         earliest = _parse_iso(cached["earliest_stop_at"]) if cached.get("earliest_stop_at") else None
     else:
-        history = client.get_stop_order_history(symbol, limit=200)
-        earliest = min((_parse_iso(o["created_at"]) for o in history), default=None)
+        if opened_at is not None:
+            earliest = opened_at
+        else:
+            history, _ = _position_stop_history(client, symbol, signed_qty, limit=200)
+            earliest = min((_parse_iso(o["created_at"]) for o in history), default=None)
         cache[symbol] = {**(cached or {}), "earliest_stop_at": earliest.isoformat() if earliest else None}
         _save_management_start_cache(cache)
 
@@ -516,17 +602,20 @@ def get_management_start(client: AlpacaClient, symbol: str, lookback_days: int) 
     return max(default_start, earliest)
 
 
-def get_initial_stop_price(client: AlpacaClient, symbol: str) -> float | None:
+def get_initial_stop_price(client: AlpacaClient, symbol: str, signed_qty: float | None = None) -> float | None:
     """[2026-09-28 · Öneri 1-2] Pozisyonun İLK stop seviyesi (en eski stop
     emrinin fiyatı) - 1R = giriş - ilk stop hesabı için (StopContext.
     initial_stop_price). get_management_start ile aynı cache dosyasında,
     sembol başına bir kez hesaplanır; eski cache kayıtlarında alan yoksa
-    geçmiş bir kez daha çekilip eklenir."""
+    geçmiş bir kez daha çekilip eklenir. signed_qty verilirse yalnızca
+    mevcut pozisyona ait stoplar sayılır (bkz. _belongs_to_position)."""
+    if signed_qty is not None:
+        position_opened_at(client, symbol, signed_qty)  # gerekirse eski alanları geçersiz kılar
     cache = _load_management_start_cache()
     cached = cache.get(symbol) or {}
     if "initial_stop_price" in cached:
         return cached["initial_stop_price"]
-    history = client.get_stop_order_history(symbol, limit=200)
+    history, _ = _position_stop_history(client, symbol, signed_qty, limit=200)
     earliest = min(history, key=lambda o: _parse_iso(o["created_at"]), default=None)
     price = None
     if earliest is not None:
@@ -635,7 +724,7 @@ def seconds_until_open(clock: dict) -> float:
     return max(0.0, (next_open - datetime.now(timezone.utc)).total_seconds())
 
 
-def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
+def last_trailed_stop_price(client: AlpacaClient, symbol: str, signed_qty: float | None = None) -> float | None:
     """En son (open/replaced/canceled/expired fark etmez) stop emrinin
     fiyatı - ama sadece yakın zamanda (EXTENDED_HOURS_RESTORE_MAX_AGE_DAYS
     içinde) kurulmuşsa; aksi halde None. manage_position, resting bir stop
@@ -646,8 +735,11 @@ def last_trailed_stop_price(client: AlpacaClient, symbol: str) -> float | None:
 
     get_management_start'taki gibi, API'nin direction="desc" sıralamasına
     güvenmek yerine dönen kayıtlar arasından en yeni created_at'i elle
-    buluyor."""
-    history = client.get_stop_order_history(symbol)
+    buluyor. signed_qty verilirse yalnızca mevcut pozisyona ait stoplar
+    sayılır (bkz. _belongs_to_position) - pozisyon öncesi emirler ve
+    dolumla aynı anda iptal edilen bracket bacağı "son trail seviyesi"
+    sayılmaz."""
+    history, _ = _position_stop_history(client, symbol, signed_qty)
     if not history:
         return None
     latest = max(history, key=lambda o: _parse_iso(o["created_at"]))
@@ -680,6 +772,42 @@ def _stop_bars_for_timeframe(
     return bars, history_bars
 
 
+def notify_once_per_day(symbol: str, kind: str, msg: str) -> None:
+    """Telegram uyarısı - aynı sembol ve tür için günde en fazla bir kez
+    (stop botu birkaç dakikada bir çalıştığından aynı hata her geçişte
+    tekrar ederdi). Son gönderim günü pozisyon yönetim önbelleğindeki
+    sembol kaydında tutulur (storage: SQLite ya da JSON - yeni bir kayıt
+    adı gerekmez) ve pozisyon kapanınca kayıtla birlikte silinir."""
+    log(msg)
+    today = datetime.now(ET).date().isoformat()
+    cache = _load_management_start_cache()
+    entry = cache.get(symbol) or {}
+    alerts = entry.get("alerts") or {}
+    if alerts.get(kind) == today:
+        return
+    bot_token, chat_id = load_telegram_settings()
+    if not (bot_token and chat_id):
+        return
+    try:
+        send_telegram_message(bot_token, chat_id, msg)
+    except TelegramError as e:
+        log(f"Telegram bildirimi gönderilemedi: {e}")
+        return
+    cache = _load_management_start_cache()  # gönderim sırasında başka bir alan değişmiş olabilir
+    entry = cache.get(symbol) or {}
+    entry["alerts"] = {**(entry.get("alerts") or {}), kind: today}
+    cache[symbol] = entry
+    _save_management_start_cache(cache)
+
+
+def _wrong_side(level: float, last_price: float | None, side: str) -> bool:
+    """Satış stopu piyasanın altında (alış stopu üstünde) olmalı - değilse
+    Alpaca 422 ile reddeder."""
+    if last_price is None:
+        return False
+    return level >= last_price if side == "long" else level <= last_price
+
+
 def manage_position(
     client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT,
     stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
@@ -709,7 +837,7 @@ def manage_position(
         and minutes_since_open < float(execution["opening_shield_minutes"])
     )
 
-    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
+    management_start = get_management_start(client, symbol, LOOKBACK_DAYS, signed_qty)
     bars, history_bars = _stop_bars_for_timeframe(client, symbol, timeframe, management_start)
 
     topped_up = False
@@ -733,7 +861,17 @@ def manage_position(
             entry_price, side, bars=history_bars or None,
             **resolve_kwargs(algo.initial_stop, algo_settings, shared_settings),
         )
-        restored = last_trailed_stop_price(client, symbol)
+        restored = last_trailed_stop_price(client, symbol, signed_qty)
+        try:
+            last_price = client.get_latest_trade_price(symbol)
+        except Exception:
+            last_price = None
+        if restored is not None and _wrong_side(restored, last_price, side):
+            # [2026-10-03] Fiyat geri yüklenecek seviyenin zaten ötesinde - o
+            # seviyeden stop Alpaca'ca reddedilir (MDB vakası). Naif stopa düşülür.
+            log(f"{symbol}: son trail seviyesi {restored:.2f} güncel fiyatın ({last_price:.2f}) yanlış "
+                f"tarafında, kullanılmıyor.")
+            restored = None
         if restored is not None:
             # Extended-hours guard'ın bıraktığı acil limit emri seans
             # bitiminde dolmadan düşmüş olabilir - bu durumda structure
@@ -748,6 +886,23 @@ def manage_position(
         else:
             initial_stop = naive_stop
             reason = "geçmişte yakın zamanlı bir stop yok, naif ilk stop"
+
+        if _wrong_side(initial_stop, last_price, side):
+            # [2026-10-03] Fiyat girişe göre hesaplanan naif stopun da ötesine
+            # geçmiş (ör. boşluklu açılışta dolan limit emir). Pozisyonu
+            # piyasa emriyle satmak yerine, naif stopun girişe olan mesafesi
+            # kadar GÜNCEL fiyatın ötesine koruyucu bir stop kurulur ve haber
+            # verilir - karar kullanıcıda kalır, pozisyon korumasız kalmaz.
+            distance = abs(entry_price - naive_stop)
+            fallback = last_price - distance if side == "long" else last_price + distance
+            notify_once_per_day(
+                symbol, "stop_breached",
+                f"⚠️ {symbol}: koruma seviyesi ({initial_stop:.2f}) güncel fiyatın ({last_price:.2f}) yanlış "
+                f"tarafında kaldı (giriş {entry_price:.2f}). Stop, güncel fiyattan aynı mesafede "
+                f"{fallback:.2f} seviyesine kuruldu - pozisyonu gözden geçirin.",
+            )
+            initial_stop = fallback
+            reason = "seviye kırılmıştı, güncel fiyata göre koruyucu stop"
 
         stop_order = client.place_stop_order(symbol, qty, side, initial_stop, client_order_id=stop_tag("initial", symbol))
         log(f"{symbol}: no resting stop found (not opened as a bracket order here, or "
@@ -798,7 +953,7 @@ def manage_position(
     ctx = StopContext(
         side=side, entry_price=entry_price, current_stop_price=current_stop_price,
         bars=bars, daily_closes=daily_closes, topped_up=topped_up, top_up_stop_mode=top_up_stop_mode,
-        initial_stop_price=get_initial_stop_price(client, symbol), history_bars=history_bars,
+        initial_stop_price=get_initial_stop_price(client, symbol, signed_qty), history_bars=history_bars,
     )
     decision = algo.trail(ctx, **resolve_kwargs(algo.trail, algo_settings, shared_settings))
     if decision is None:
@@ -847,7 +1002,7 @@ def load_telegram_settings() -> tuple[str | None, str | None]:
 
 def _extended_hours_trail(
     client: AlpacaClient, symbol: str, side: str, entry_price: float, current_stop_price: float,
-    stop_order_id: str, stop_algorithm: str, stop_settings: dict | None,
+    stop_order_id: str, stop_algorithm: str, stop_settings: dict | None, signed_qty: float | None = None,
 ) -> None:
     """guard_position, stop hâlâ korumadaysa (kırılmamışsa) normalde hiçbir
     şey yapmıyordu - ama bu, pre-market/after-hours'ta fiyat LEHE hareket
@@ -868,7 +1023,7 @@ def _extended_hours_trail(
     shared_settings = stop_settings.get("shared") or {}
     algo_settings = stop_settings.get(stop_algorithm) or {}
 
-    management_start = get_management_start(client, symbol, LOOKBACK_DAYS)
+    management_start = get_management_start(client, symbol, LOOKBACK_DAYS, signed_qty)
     bars = get_regular_hours_bars(
         client, symbol, TIMEFRAME, management_start,
         cache_file=INTRADAY_BARS_CACHE_PATH, include_extended_hours=True,
@@ -959,7 +1114,7 @@ def guard_position(
     elif client.has_open_exit_order(symbol, side):
         return  # guard'ın önceki acil emri hâlâ resting - dokunma
     else:
-        reference_price = last_trailed_stop_price(client, symbol)
+        reference_price = last_trailed_stop_price(client, symbol, signed_qty)
         if reference_price is None:
             return  # ne resting emir ne güvenilir geçmiş var - yapacak bir şey yok
         if shield_enabled:
@@ -977,6 +1132,7 @@ def guard_position(
             if execution["extended_hours_trail_enabled"] and real_stop is None:
                 _extended_hours_trail(
                     client, symbol, side, entry_price, reference_price, resting_order_id, stop_algorithm, stop_settings,
+                    signed_qty,
                 )
             return
         # Kör bölgeyi kapatan proaktif adım: henüz kırılmamış, seviyeyi normal
@@ -1116,7 +1272,12 @@ def run_once(client: AlpacaClient) -> None:
             )
         except Exception as e:
             # Bir pozisyondaki hata diğerlerinin stop yönetimini durdurmasın.
-            log(f"{pos['symbol']}: manage_position başarısız, bu pass atlanıyor: {e}")
+            # [2026-10-03] Önceden sadece log'a yazılıyordu - MDB stopu bu yüzden
+            # ~29 saat sessizce kurulamadı. Artık günde bir Telegram uyarısı.
+            notify_once_per_day(
+                pos["symbol"], "manage_failed",
+                f"🚨 {pos['symbol']}: stop yönetimi başarısız, pozisyon KORUMASIZ olabilir: {e}",
+            )
 
 
 def run_loop(client: AlpacaClient) -> None:
