@@ -1,0 +1,10 @@
+[Unit]
+Description=yatirim sunucu kaynak eşik kontrolü (5 dk'da bir)
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Unit=yatirim-server-check.service
+
+[Install]
+WantedBy=timers.target

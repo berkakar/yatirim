@@ -1,0 +1,14 @@
+[Unit]
+Description=yatirim sunucu kaynak raporunu Telegram'a gönder
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yatirim
+Group=yatirim
+# Son 24 saatte hata veren işleri journal'dan okuyabilmek için.
+SupplementaryGroups=systemd-journal
+EnvironmentFile=/etc/yatirim/env
+ExecStart=/opt/yatirim/bin/server_monitor.sh report
+TimeoutStartSec=2min

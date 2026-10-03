@@ -1,0 +1,12 @@
+[Unit]
+Description=yatirim sunucu kaynak eşiklerini kontrol et, aşılırsa Telegram'a uyar
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=yatirim
+Group=yatirim
+EnvironmentFile=/etc/yatirim/env
+ExecStart=/opt/yatirim/bin/server_monitor.sh check
+TimeoutStartSec=2min
