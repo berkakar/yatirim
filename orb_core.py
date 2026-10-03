@@ -44,15 +44,21 @@ import math
 import os
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import storage
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import get_bars_for_timeframe
+from alpaca_trailing_stop import _timeframe_duration, get_bars_for_timeframe, notify_once_per_day, protective_stop
 from buy_algorithms import orb_signal
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
 from stop_tags import stop_tag
+
+ET = ZoneInfo("America/New_York")
+SESSION_OPEN_ET = (9, 30)
+# Bar verisinin Alpaca'da oluşması için pay - bkz. orb_bars_problem.
+BAR_DATA_GRACE = timedelta(minutes=5)
 
 DEFAULT_TOP_N = 5
 DEFAULT_TIMEFRAME = "15Min"
@@ -142,6 +148,44 @@ class OrbCandidate:
     reason: str
 
 
+def _bar_start_et(bar) -> datetime:
+    return datetime.fromisoformat(bar.t.replace("Z", "+00:00")).astimezone(ET)
+
+
+def orb_bars_problem(bars: list, timeframe: str, now: datetime | None = None) -> str | None:
+    """[2026-10-03] orb_signal'a vermeden önce bugünkü seansın barlarını
+    doğrular; sorun varsa kısa bir açıklama, yoksa None.
+
+    orb_signal "günün ilk barı"nı açılış aralığı sayar ve kırılımı ilk
+    max_bars_after_open bar içinde arar. Mumlar IEX akışından geliyor; seyrek
+    işlem gören küçük hisselerde işlem olmayan 15 dakikalarda mum hiç
+    oluşmuyor. Bu durumda "ilk bar" 09:30 barı değil, örneğin öğleden sonraki
+    bir bar oluyordu ve sinyal sahte bir açılış aralığına göre veriliyordu
+    (gözlemlenen gerçek örnek: 2026-09-30 taraması 15:33 ET'de 4 aday buldu -
+    15dk'lık barla 4 bar sınırı 10:30 ET'de dolmuş olmalıydı; NUTX/HVT/KRUS'ta
+    açılış aralığının dibi girişin sentler altında kaldı, stop kurulamadı).
+
+    Kontroller: son bar bugüne ait ve taze (bir sonraki barın kapanması
+    gereken süreyi geçmemiş), bugünkü seans 09:30 barıyla başlıyor, barlar
+    arasında boşluk yok."""
+    if not bars:
+        return "bar yok"
+    now = now or datetime.now(timezone.utc)
+    duration = _timeframe_duration(timeframe)
+    today = now.astimezone(ET).date()
+    last_start = _bar_start_et(bars[-1])
+    if last_start.date() != today:
+        return f"son bar bugüne ait değil ({last_start:%Y-%m-%d %H:%M} ET)"
+    if now - (last_start + duration) > duration + BAR_DATA_GRACE:
+        return f"son bar bayat ({last_start:%H:%M} ET)"
+    starts = [_bar_start_et(b) for b in bars if _bar_start_et(b).date() == today]
+    if (starts[0].hour, starts[0].minute) != SESSION_OPEN_ET:
+        return f"seans {SESSION_OPEN_ET[0]:02d}:{SESSION_OPEN_ET[1]:02d} barıyla başlamıyor ({starts[0]:%H:%M} ET)"
+    if any(b - a != duration for a, b in zip(starts, starts[1:])):
+        return "seansta eksik bar var"
+    return None
+
+
 def scan_candidates(
     client: AlpacaClient, universe: list[str], timeframe: str = DEFAULT_TIMEFRAME,
     volume_mult: float = DEFAULT_VOLUME_MULT, max_bars_after_open: int = DEFAULT_MAX_BARS_AFTER_OPEN,
@@ -160,7 +204,7 @@ def scan_candidates(
             bars = get_bars_for_timeframe(client, symbol, timeframe, start, exclude_forming=True)
         except Exception:
             continue
-        if not bars:
+        if not bars or orb_bars_problem(bars, timeframe) is not None:
             continue
         signal = orb_signal(bars, volume_mult=volume_mult, max_bars_after_open=max_bars_after_open)
         if signal is None:
@@ -171,6 +215,29 @@ def scan_candidates(
         candidates.append(OrbCandidate(symbol=symbol, price=signal.price, score=score, reason=signal.reason))
     candidates.sort(key=lambda c: c.score, reverse=True)
     return candidates
+
+
+def _breakout_still_valid(
+    client: AlpacaClient, symbol: str, bars: list | None, timeframe: str, volume_mult: float,
+    max_bars_after_open: int, now: datetime | None = None,
+) -> str | None:
+    """Alıştan hemen önceki doğrulama - geçerliyse None, değilse sebebi."""
+    if not bars:
+        return "taze bar alınamadı"
+    problem = orb_bars_problem(bars, timeframe, now)
+    if problem is not None:
+        return problem
+    if orb_signal(bars, volume_mult=volume_mult, max_bars_after_open=max_bars_after_open) is None:
+        return "kırılım sinyali artık yok"
+    today = (now or datetime.now(timezone.utc)).astimezone(ET).date()
+    range_high = next(b for b in bars if _bar_start_et(b).date() == today).h
+    try:
+        last_price = client.get_latest_trade_price(symbol)
+    except Exception:
+        last_price = None
+    if last_price is not None and last_price <= range_high:
+        return f"fiyat ({last_price:.2f}) açılış aralığının üstünden ({range_high:.2f}) geri döndü"
+    return None
 
 
 def select_top_candidates(candidates: list[OrbCandidate], top_n: int = DEFAULT_TOP_N) -> list[OrbCandidate]:
@@ -283,6 +350,17 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
             except Exception:
                 stop_bars = None
 
+            # [2026-10-03] Tarama yüzlerce sembolü gezdiği için (2026-09-30: 15 dk)
+            # sinyal ile alış arasında fiyat açılış aralığına geri dönebiliyordu.
+            # Alıştan hemen önce taze barlarla kırılım yeniden doğrulanır ve
+            # güncel fiyatın hâlâ açılış aralığının üstünde olması istenir.
+            stale_reason = _breakout_still_valid(
+                client, cand.symbol, stop_bars, timeframe, volume_mult, max_bars_after_open,
+            )
+            if stale_reason is not None:
+                buy_errors.append(f"{cand.symbol}: alınmadı, {stale_reason}")
+                continue
+
             if risk is not None and qty > 0:
                 estimated_stop = stop_algo.initial_stop(
                     cand.price, "long", bars=stop_bars,
@@ -302,14 +380,35 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
             filled_qty = float(filled["filled_qty"])
             available_cash -= filled_qty * fill_price
 
-            stop_price = round(stop_algo.initial_stop(
+            stop_price = stop_algo.initial_stop(
                 fill_price, "long", bars=stop_bars,
                 **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
-            ), 2)
+            )
+            # [2026-10-03] Dolumdan sonra fiyat yapısal stopun altına inmişse
+            # (2026-09-30 NUTX: stop 212.02, fiyat 211.16) Alpaca stopu
+            # reddediyordu - trailing stop botuyla aynı kural: güncel fiyatın
+            # aynı mesafe altına koruyucu stop + Telegram.
+            try:
+                last_price = client.get_latest_trade_price(cand.symbol)
+            except Exception:
+                last_price = None
+            stop_price, moved = protective_stop(stop_price, fill_price, last_price, "long")
+            stop_price = round(stop_price, 2)
+            if moved:
+                notify_once_per_day(
+                    cand.symbol, "orb_stop_moved",
+                    f"⚠️ {cand.symbol}: ORB girişi {fill_price:.2f}, fiyat ({last_price:.2f}) açılış aralığı stopunun "
+                    f"altına indi - stop güncel fiyattan aynı mesafede {stop_price:.2f} seviyesine kuruldu.",
+                )
             try:
                 client.place_stop_order(cand.symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", cand.symbol))
             except Exception as e:
                 buy_errors.append(f"{cand.symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
+                notify_once_per_day(
+                    cand.symbol, "orb_stop_failed",
+                    f"🚨 {cand.symbol}: ORB ile {fill_price:.2f}'den alındı ama stop kurulamadı, pozisyon KORUMASIZ "
+                    f"(stop botu bir sonraki geçişte yeniden deneyecek): {e}",
+                )
 
             holdings[cand.symbol] = {
                 "qty": filled_qty, "entry_price": fill_price,

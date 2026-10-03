@@ -28,6 +28,35 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "10",
+        "date": "2026-10-03",
+        "title": "ORB: eksik/bayat barlarla sinyal yok, alıştan önce kırılım yeniden doğrulanıyor, stop reddedilmiyor",
+        "problem": (
+            "2026-09-29/30'da ORB HVT, KRUS ve NUTX'i aldı ama stop kuramadı ('stop price must be less than "
+            "current price' - NUTX: stop 212.02, fiyat 211.16). Kök neden: (1) IEX'te seyrek işlem gören küçük "
+            "hisselerde 15dk barları eksik; orb_signal günün 'ilk barı'nı açılış aralığı sayıyor, 4 bar sınırı "
+            "da eksik barlarla gün boyu dolmuyordu - 30 Eylül taraması 15:33 ET'de 4 aday buldu. (2) Tarama "
+            "~1.600 sembolü 15 dakikada geziyor; sinyal ile alış arasında fiyat açılış aralığına geri "
+            "dönüyordu. Açılış aralığının dibi girişin sentler altında kalınca stop birkaç saniyede fiyatın "
+            "üstünde kaldı."
+        ),
+        "change": (
+            "- Bugünkü seans 09:30 barıyla başlamayan, barları arasında boşluk olan ya da son barı bayat olan "
+            "hisselerde ORB sinyali aranmaz (önizlemede de).\n"
+            "- Alıştan hemen önce taze barlarla sinyal yeniden doğrulanır; güncel fiyat açılış aralığının "
+            "üstünde değilse alım yapılmaz (özette 'alınmadı' olarak görünür).\n"
+            "- Dolumdan sonra fiyat yapısal stopun altındaysa stop, trailing stop botuyla aynı kuralla "
+            "(protective_stop) güncel fiyattan aynı mesafeye kurulur ve Telegram'dan haber verilir; stop yine "
+            "de kurulamazsa KORUMASIZ uyarısı gider (önceden sadece çalışma özetindeydi)."
+        ),
+        "where": "orb_core.py (orb_bars_problem, _breakout_still_valid, scan_candidates, scan_and_buy), "
+                 "alpaca_trailing_stop.py (protective_stop), orb_scan.py, tests/test_orb_entry_guards.py",
+        "settings": "Yok.",
+        "track": "ORB çalışma özetinde 'stop kurulamadı' hatası kalmamalı; 'alınmadı, ...' satırları kaç "
+                 "bayat kırılımın engellendiğini gösterir. ORB girişlerinin stop mesafesi (giriş - açılış "
+                 "aralığı dibi) büyümeli.",
+    },
+    {
         "id": "9",
         "date": "2026-10-03",
         "title": "Stoplar mevcut pozisyona göre ayrılıyor; kurulamayan stop artık sessiz kalmıyor",

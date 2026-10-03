@@ -808,6 +808,18 @@ def _wrong_side(level: float, last_price: float | None, side: str) -> bool:
     return level >= last_price if side == "long" else level <= last_price
 
 
+def protective_stop(stop_price: float, entry_price: float, last_price: float | None, side: str) -> tuple[float, bool]:
+    """[2026-10-03] Kurulacak stop güncel fiyatın yanlış tarafındaysa (Alpaca
+    422 ile reddederdi) pozisyonu satmak yerine, stopun girişe olan mesafesi
+    kadar GÜNCEL fiyatın ötesine taşınmış seviyeyi döner. (seviye, taşındı mı).
+    manage_position ve modüllerin alış sonrası stop kurulumu (orb_core) aynı
+    kuralı kullanır."""
+    if not _wrong_side(stop_price, last_price, side):
+        return stop_price, False
+    distance = abs(entry_price - stop_price)
+    return (last_price - distance if side == "long" else last_price + distance), True
+
+
 def manage_position(
     client: AlpacaClient, pos: dict, top_up_stop_mode: str = TOP_UP_STOP_MODE_DEFAULT,
     stop_algorithm: str = DEFAULT_STOP_ALGORITHM, stop_settings: dict | None = None,
@@ -893,8 +905,7 @@ def manage_position(
             # piyasa emriyle satmak yerine, naif stopun girişe olan mesafesi
             # kadar GÜNCEL fiyatın ötesine koruyucu bir stop kurulur ve haber
             # verilir - karar kullanıcıda kalır, pozisyon korumasız kalmaz.
-            distance = abs(entry_price - naive_stop)
-            fallback = last_price - distance if side == "long" else last_price + distance
+            fallback, _ = protective_stop(naive_stop, entry_price, last_price, side)
             notify_once_per_day(
                 symbol, "stop_breached",
                 f"⚠️ {symbol}: koruma seviyesi ({initial_stop:.2f}) güncel fiyatın ({last_price:.2f}) yanlış "
