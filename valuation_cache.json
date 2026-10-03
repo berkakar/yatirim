@@ -652,27 +652,27 @@
   "GUBRF.IS": {
     "raw": {
       "Hisse": "GUBRF.IS",
-      "Alt Sektör (İş Modeli)": "Diğer",
-      "Ana Sektör": "Diğer",
-      "F/K": null,
-      "PD/DD": null,
-      "FD/FAVÖK": null,
-      "PEG": null,
-      "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": null,
-      "Öz Sermaye Getirisi (ROE) %": null,
-      "Net Kar Marjı %": null,
-      "Brüt Kar Marjı %": null,
+      "Alt Sektör (İş Modeli)": "Agricultural Inputs",
+      "Ana Sektör": "Basic Materials",
+      "F/K": 19.69,
+      "PD/DD": 3.96,
+      "FD/FAVÖK": 10.85,
+      "PEG": 0.6,
+      "EPS Büyümesi %": -15.4,
+      "Gelir Büyümesi %": 24.1,
+      "Öz Sermaye Getirisi (ROE) %": 18.43,
+      "Net Kar Marjı %": 11.86,
+      "Brüt Kar Marjı %": 25.01,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": null,
-      "Borç / Özsermaye": null,
+      "Varlık Getirisi (ROA) %": 11.27,
+      "Borç / Özsermaye": 0.21,
       "Borç / Varlık %": null,
-      "Cari Oran": null,
-      "Likidite Oranı": null,
+      "Cari Oran": 1.63,
+      "Likidite Oranı": 0.59,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": null
+      "_most_recent_quarter": "2026-06-30"
     },
-    "cached_at": "2026-09-07"
+    "cached_at": "2026-10-03"
   },
   "MAVI.IS": {
     "raw": {
@@ -5277,27 +5277,27 @@
   "ADESE.IS": {
     "raw": {
       "Hisse": "ADESE.IS",
-      "Alt Sektör (İş Modeli)": "Diğer",
-      "Ana Sektör": "Diğer",
-      "F/K": null,
-      "PD/DD": null,
-      "FD/FAVÖK": null,
+      "Alt Sektör (İş Modeli)": "Real Estate - Diversified",
+      "Ana Sektör": "Real Estate",
+      "F/K": 2.87,
+      "PD/DD": 0.23,
+      "FD/FAVÖK": 38.63,
       "PEG": null,
       "EPS Büyümesi %": null,
-      "Gelir Büyümesi %": null,
-      "Öz Sermaye Getirisi (ROE) %": null,
-      "Net Kar Marjı %": null,
-      "Brüt Kar Marjı %": null,
+      "Gelir Büyümesi %": 168.8,
+      "Öz Sermaye Getirisi (ROE) %": 1.56,
+      "Net Kar Marjı %": 3.46,
+      "Brüt Kar Marjı %": 28.23,
       "Faiz Karşılama Oranı": null,
-      "Varlık Getirisi (ROA) %": null,
-      "Borç / Özsermaye": null,
+      "Varlık Getirisi (ROA) %": 0.43,
+      "Borç / Özsermaye": 0.02,
       "Borç / Varlık %": null,
-      "Cari Oran": null,
-      "Likidite Oranı": null,
+      "Cari Oran": 4.79,
+      "Likidite Oranı": 0.21,
       "Varlık Devir Hızı": null,
-      "_most_recent_quarter": null
+      "_most_recent_quarter": "2026-06-30"
     },
-    "cached_at": "2026-09-07"
+    "cached_at": "2026-10-03"
   },
   "BOSSA.IS": {
     "raw": {
