@@ -67,12 +67,32 @@ collect() {
   fi
 }
 
-# Son 24 saatte hata veren işler (run_job.sh'nin "HATA:" satırları). Journal okuma
-# izni yoksa (systemd-journal grubu) boş döner.
+# Son 24 saatte başarısız biten iş çalıştırmaları, iş başına adet. systemd'nin her
+# başarısız çalıştırma için yazdığı "Failed with result" satırından sayılır; böylece
+# run_job.sh'nin "HATA:" satırını yazamadan düştüğü durumlar da (örn. bozuk ortam
+# dosyası) yakalanır. Journal okunamazsa "?" döner.
 failed_jobs_24h() {
-  journalctl -q --no-pager -o cat --since "-24h" -u 'yatirim-job@*' 2>/dev/null \
-    | sed -n 's/^\[\([^]]*\)\] HATA:.*/\1/p' | sort | uniq -c | sort -rn \
+  local out
+  if ! out="$(journalctl -q --no-pager -o cat --since "-24h" -u 'yatirim-job@*' 2>/dev/null)"; then
+    echo "?"
+    return
+  fi
+  printf '%s\n' "$out" \
+    | sed -n "s/^yatirim-job@\([^.]*\)\.service: Failed with result.*/\1/p" \
+    | sort | uniq -c | sort -rn \
     | awk '{ printf "%s%s ×%s", (NR > 1 ? ", " : ""), $2, $1 }'
+}
+
+# failed durumda kalan birimler ve ne zamandan beri - bir iş son çalıştırmasında
+# başarısız olduysa bir sonraki başarılı çalıştırmaya kadar bu durumda kalır.
+failed_units_detail() {
+  local u ts when
+  for u in $FAILED_UNITS; do
+    ts="$(systemctl show -p InactiveEnterTimestamp --value "$u" 2>/dev/null)"
+    when="$(TZ=Europe/Istanbul date -d "$ts" '+%d.%m %H:%M' 2>/dev/null || echo '?')"
+    u="${u#yatirim-}"; u="${u#job@}"; u="${u%.service}"
+    printf '  • %s (%s TRT)\n' "$u" "$when"
+  done
 }
 
 top_mem_procs() {
@@ -101,12 +121,16 @@ build_report() {
   printf '📊 En çok RAM: %s\n' "$(top_mem_procs)"
   [ -n "$STREAMLIT_STATE" ] && printf '🌐 Arayüz (streamlit): %s\n' "$STREAMLIT_STATE"
   printf '⏰ Açık iş timer'"'"'ı: %s\n' "$(active_job_timers)"
-  if [ -n "$failed_jobs" ]; then
-    printf '❌ Son 24 saatte hata veren işler: %s\n' "$failed_jobs"
+  if [ "$failed_jobs" = "?" ]; then
+    printf '❔ Son 24 saatin iş hataları okunamadı (journal erişimi yok)\n'
+  elif [ -n "$failed_jobs" ]; then
+    printf '❌ Son 24 saatte başarısız çalıştırmalar: %s\n' "$failed_jobs"
   else
-    printf '✅ Son 24 saatte hata veren iş yok\n'
+    printf '✅ Son 24 saatte başarısız çalıştırma yok\n'
   fi
-  [ -n "$FAILED_UNITS" ] && printf '⚠️ failed durumdaki birimler: %s\n' "$FAILED_UNITS"
+  if [ -n "$FAILED_UNITS" ]; then
+    printf '⚠️ Son çalıştırması başarısız olanlar:\n%s\n' "$(failed_units_detail)"
+  fi
   return 0
 }
 
@@ -118,21 +142,30 @@ resolve_chat_id() {
     echo "$TELEGRAM_CHAT_ID"
     return
   fi
-  local d
+  # Bir kopyada okunamaz ya da boşsa sıradakine geçilir; hata çıktısı teşhis için
+  # journal'a yazılır.
+  local d id
   for d in "$BASE/app" "$BASE"/work/*; do
     [ -f "$d/storage.py" ] || continue
-    (cd "$d" && "$VENV/bin/python" -c \
-      'import storage; print((storage.load_json("bildirim_ayarlari_berkakar.json", {}).get("telegram_chat_id") or "").strip())' \
-      2>/dev/null) && return
+    id="$(cd "$d" && "$VENV/bin/python" -c \
+      'import storage; print((storage.load_json("bildirim_ayarlari_berkakar.json", {}).get("telegram_chat_id") or "").strip())')" \
+      || { echo "chat ID $d içinden okunamadı" >&2; continue; }
+    if [ -n "$id" ]; then
+      echo "$id"
+      return
+    fi
   done
 }
 
 send_telegram() {
   local chat_id
+  if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+    echo "TELEGRAM_BOT_TOKEN tanımlı değil (/etc/yatirim/env), mesaj gönderilmedi." >&2
+    return 1
+  fi
   chat_id="$(resolve_chat_id)"
-  if [ -z "${TELEGRAM_BOT_TOKEN:-}" ] || [ -z "$chat_id" ]; then
-    echo "TELEGRAM_BOT_TOKEN ya da chat ID tanımlı değil, mesaj gönderilmedi:" >&2
-    echo "$1" >&2
+  if [ -z "$chat_id" ]; then
+    echo "Telegram chat ID bulunamadı: /etc/yatirim/env içinde TELEGRAM_CHAT_ID boş ve uygulamanın bildirim ayarında da yok. Mesaj gönderilmedi." >&2
     return 1
   fi
   curl -fsS -m 15 -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
