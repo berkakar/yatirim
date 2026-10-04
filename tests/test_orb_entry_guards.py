@@ -82,10 +82,15 @@ class BreakoutStillValidTest(unittest.TestCase):
 class ProtectiveStopTest(unittest.TestCase):
     def test_nutx_case(self):
         # Dolum 212.19, yapısal stop 212.02, fiyat 211.16 -> Alpaca reddediyordu.
+        # Mesafe (0.17) en az %0.5'e (STOP_MIN_GAP_PCT) çıkarılır.
         price, moved = protective_stop(212.02, 212.19, 211.16, "long")
         self.assertTrue(moved)
-        self.assertAlmostEqual(price, 211.16 - (212.19 - 212.02))
-        self.assertLess(price, 211.16)
+        self.assertAlmostEqual(price, 211.16 * (1 - 0.005))
+
+    def test_risk_distance_kept_when_wider_than_min_gap(self):
+        price, moved = protective_stop(95.0, 100.0, 94.0, "long")
+        self.assertTrue(moved)
+        self.assertAlmostEqual(price, 89.0)
 
     def test_valid_stop_is_untouched(self):
         self.assertEqual(protective_stop(98.0, 100.0, 99.5, "long"), (98.0, False))
@@ -109,8 +114,10 @@ class ScanAndBuyStopTest(unittest.TestCase):
         client.get_latest_trade_price.side_effect = list(last_prices)
         client.place_market_entry.return_value = {"id": "b"}
         client.wait_for_fill.return_value = {"filled_avg_price": "212.19", "filled_qty": "6"}
-        if stop_raises:
-            client.place_stop_order.side_effect = RuntimeError("422")
+        client.place_stop_order.side_effect = (
+            RuntimeError("422") if stop_raises
+            else (lambda symbol, qty, side, stop_price, **kw: {"stop_price": f"{stop_price:.2f}"})
+        )
         algo = mock.Mock(initial_stop=mock.Mock(return_value=212.02))
         cfg = {"enabled": True, "cash_allocation_pct": 10.0, "top_n": 1, "stop_algorithm": "opening_range"}
         with mock.patch.object(orb_core, "load_holdings_local", return_value={}), \
@@ -125,21 +132,22 @@ class ScanAndBuyStopTest(unittest.TestCase):
                 mock.patch("relative_strength_core.load_holdings_local", return_value={}), \
                 mock.patch("heikin_ashi_intraday_core.load_holdings_local", return_value={}), \
                 mock.patch("alpaca_buy_points.load_module_risk_context", return_value=None), \
-                mock.patch.object(orb_core, "notify_once_per_day") as notify:
+                mock.patch("alpaca_trailing_stop.notify_once_per_day") as notify:
             summary = orb_core.scan_and_buy(client, "test", cfg, {})
         return client, notify, summary
 
     def test_price_below_structural_stop_places_protective_stop(self):
         client, notify, summary = self._run([211.16])
         placed = client.place_stop_order.call_args.args[3]
-        self.assertEqual(placed, round(211.16 - (212.19 - 212.02), 2))
-        self.assertEqual(notify.call_args.args[1], "orb_stop_moved")
+        self.assertAlmostEqual(placed, 211.16 * (1 - 0.005))
+        self.assertEqual(client.place_stop_order.call_args.kwargs["reference_price"], 212.19)
+        self.assertEqual(notify.call_args.args[1], "stop_moved")
         self.assertEqual(summary["buy_errors"], [])
 
     def test_failed_stop_alerts(self):
         client, notify, summary = self._run([212.50], stop_raises=True)
         self.assertEqual(client.place_stop_order.call_args.args[3], 212.02)
-        self.assertEqual(notify.call_args.args[1], "orb_stop_failed")
+        self.assertEqual(notify.call_args.args[1], "stop_failed")
         self.assertIn("KORUMASIZ", summary["buy_errors"][0])
 
     def test_stale_breakout_is_not_bought(self):

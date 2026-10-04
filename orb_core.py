@@ -48,7 +48,7 @@ from zoneinfo import ZoneInfo
 
 import storage
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import _timeframe_duration, get_bars_for_timeframe, notify_once_per_day, protective_stop
+from alpaca_trailing_stop import _timeframe_duration, get_bars_for_timeframe, place_protective_stop
 from buy_algorithms import orb_signal
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
@@ -386,29 +386,16 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
             )
             # [2026-10-03] Dolumdan sonra fiyat yapısal stopun altına inmişse
             # (2026-09-30 NUTX: stop 212.02, fiyat 211.16) Alpaca stopu
-            # reddediyordu - trailing stop botuyla aynı kural: güncel fiyatın
-            # aynı mesafe altına koruyucu stop + Telegram.
+            # reddediyordu - place_protective_stop stopu güncel fiyatın aynı
+            # mesafe altına taşır, gerekirse Alpaca'nın kendi fiyatıyla
+            # yeniden dener ve Telegram'dan haber verir.
             try:
-                last_price = client.get_latest_trade_price(cand.symbol)
-            except Exception:
-                last_price = None
-            stop_price, moved = protective_stop(stop_price, fill_price, last_price, "long")
-            stop_price = round(stop_price, 2)
-            if moved:
-                notify_once_per_day(
-                    cand.symbol, "orb_stop_moved",
-                    f"⚠️ {cand.symbol}: ORB girişi {fill_price:.2f}, fiyat ({last_price:.2f}) açılış aralığı stopunun "
-                    f"altına indi - stop güncel fiyattan aynı mesafede {stop_price:.2f} seviyesine kuruldu.",
+                place_protective_stop(
+                    client, cand.symbol, filled_qty, "long", stop_price, entry_price=fill_price,
+                    client_order_id=stop_tag("initial", cand.symbol), context="ORB girişi",
                 )
-            try:
-                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", cand.symbol))
             except Exception as e:
                 buy_errors.append(f"{cand.symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
-                notify_once_per_day(
-                    cand.symbol, "orb_stop_failed",
-                    f"🚨 {cand.symbol}: ORB ile {fill_price:.2f}'den alındı ama stop kurulamadı, pozisyon KORUMASIZ "
-                    f"(stop botu bir sonraki geçişte yeniden deneyecek): {e}",
-                )
 
             holdings[cand.symbol] = {
                 "qty": filled_qty, "entry_price": fill_price,

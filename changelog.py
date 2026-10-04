@@ -28,6 +28,35 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "11",
+        "date": "2026-10-04",
+        "title": "Stop her koşulda kuruluyor: tüm modüller tek güvenceli yoldan",
+        "problem": (
+            "Stop kurulumu 12 ayrı yerde (ORB, Heikin Ashi, RS, Premium Buy Point kırılım/ilave alım/seans dışı, "
+            "Alım-Stop-Alım, stop botu) doğrudan yapılıyordu. Alpaca stopu fiyatın yanlış tarafında diye "
+            "reddederse (MDB, NUTX, HVT, KRUS) pozisyon korumasız kalıyor, çoğu yerde bu sadece log'a ya da "
+            "çalışma özetine yazılıyordu. Alpaca'nın kontrol ettiği fiyat IEX son işlem fiyatından farklı "
+            "olabildiği için kendi fiyat kontrolümüz geçse bile ret gelebiliyordu."
+        ),
+        "change": (
+            "- AlpacaClient.place_stop_order: 'stop price must be less/greater than current price' reddinde "
+            "Alpaca'nın yanıttaki kendi market_price'ı alınır, stop aynı risk mesafesiyle (girişe uzaklık; "
+            "giriş bilinmiyorsa %1.5; her durumda en az %0.5) o fiyatın ötesine taşınıp yeniden denenir - fiyat "
+            "düşmeye devam ederse takip eder (3 deneme). 5xx ve bağlantı hataları da tekrar denenir.\n"
+            "- place_protective_stop: tüm modüllerin ortak yolu - güncel fiyata göre önceden düzeltir, stop "
+            "taşındıysa '⚠️', yine de kurulamazsa '🚨 KORUMASIZ' Telegram uyarısı (günde bir); stop botu 5 "
+            "dakikada bir yeniden dener.\n"
+            "- Bir test, stopu bu yolun dışında kuran yeni kod eklenirse kırılır."
+        ),
+        "where": "alpaca_client.py (place_stop_order, stop_beyond_price), alpaca_trailing_stop.py "
+                 "(place_protective_stop, protective_stop), orb_core.py, heikin_ashi_intraday_core.py, "
+                 "relative_strength_core.py, alpaca_buy_points.py, buy_stop_rebuy.py, "
+                 "tests/test_stop_placement_guarantee.py",
+        "settings": "Yok.",
+        "track": "Çalışma özetlerinde ve loglarda 'stop kurulamadı' kalmamalı; Telegram'daki '⚠️ ... stop ... "
+                 "seviyesine kuruldu' uyarıları kaç kez taşıma gerektiğini gösterir.",
+    },
+    {
         "id": "10",
         "date": "2026-10-03",
         "title": "ORB: eksik/bayat barlarla sinyal yok, alıştan önce kırılım yeniden doğrulanıyor, stop reddedilmiyor",

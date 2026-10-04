@@ -151,7 +151,7 @@ from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
     extended_hours_session, get_bars_for_timeframe, load_stop_loss_settings, load_telegram_settings,
-    load_top_up_stop_mode, minutes_since_regular_open, resolve_stop_algorithm, TIMEFRAME, log,
+    load_top_up_stop_mode, minutes_since_regular_open, place_protective_stop, resolve_stop_algorithm, TIMEFRAME, log,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 from heikin_ashi_intraday_core import get_cash_allocation_pct as get_ha_cash_allocation_pct
@@ -468,7 +468,10 @@ def check_symbol(
             # korumasız kalmasın, eski adet/fiyatla stop'u hemen geri kur.
             log(f"{symbol}: ilave alım market emri başarısız/zaman aşımı ({e}), stop ${old_stop_price:.2f} "
                 "olarak geri kuruldu, ilave alım yapılmadı.")
-            client.place_stop_order(symbol, old_qty, "long", old_stop_price, client_order_id=stop_tag("restore", symbol))
+            place_protective_stop(
+                client, symbol, old_qty, "long", old_stop_price, entry_price=float(position["avg_entry_price"]),
+                client_order_id=stop_tag("restore", symbol), context="ilave alım başarısız, eski stop geri kuruluyor",
+            )
             return 0.0
 
         fill_price = float(filled["filled_avg_price"])
@@ -485,7 +488,11 @@ def check_symbol(
         else:
             new_stop_price = old_stop_price
 
-        client.place_stop_order(symbol, new_qty, "long", new_stop_price, client_order_id=stop_tag("topup", symbol))
+        new_stop_order = place_protective_stop(
+            client, symbol, new_qty, "long", new_stop_price, entry_price=float(new_position["avg_entry_price"]),
+            client_order_id=stop_tag("topup", symbol), context="ilave alım sonrası",
+        )
+        new_stop_price = float(new_stop_order.get("stop_price") or new_stop_price)
         if risk is not None:
             risk["remaining"] -= max(0.0, fill_price - new_stop_price) * top_up_qty
         spent = top_up_qty * fill_price
@@ -572,7 +579,12 @@ def check_symbol(
         ), 2)
         stop_msg_suffix = f", stop ${stop_loss_price:.2f} kuruldu."
         try:
-            client.place_stop_order(symbol, filled_qty, "long", stop_loss_price, client_order_id=stop_tag("initial", symbol))
+            stop_order = place_protective_stop(
+                client, symbol, filled_qty, "long", stop_loss_price, entry_price=fill_price,
+                client_order_id=stop_tag("initial", symbol), context="kırılım girişi",
+            )
+            stop_loss_price = float(stop_order.get("stop_price") or stop_loss_price)
+            stop_msg_suffix = f", stop ${stop_loss_price:.2f} kuruldu."
         except Exception as e:
             stop_msg_suffix = f" ama koruma stopu KURULAMADI, pozisyon KORUMASIZ: {e}"
             log(f"{symbol}: kırılım sonrası stop kurulamadı: {e}")
@@ -850,7 +862,11 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                     # saklanıyor, extended-hours guard (guard_position) onu
                     # resting stop olarak görüp kırılırsa marketable limite
                     # çeviriyor, normal seans açılınca da kendisi devreye giriyor.
-                    client.place_stop_order(symbol, qty, "long", stop_price, client_order_id=stop_tag("initial", symbol))
+                    stop_order = place_protective_stop(
+                        client, symbol, qty, "long", stop_price, entry_price=entry_price,
+                        client_order_id=stop_tag("initial", symbol), context="seans dışı giriş",
+                    )
+                    stop_price = float(stop_order.get("stop_price") or stop_price)
                     msg = (
                         f"✅ {symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
                         f"koruma stopu {stop_price:.2f} seviyesinden (GTC stop - seans dışında "

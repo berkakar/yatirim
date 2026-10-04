@@ -46,7 +46,7 @@ class FakeClient:
     def has_open_exit_order(self, symbol, side):
         return False
 
-    def place_stop_order(self, symbol, qty, side, stop_price, client_order_id=None):
+    def place_stop_order(self, symbol, qty, side, stop_price, client_order_id=None, reference_price=None):
         self.placed.append(round(stop_price, 2))
         return {"id": "new", "stop_price": str(stop_price), "qty": str(qty), "client_order_id": client_order_id}
 
