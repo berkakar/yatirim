@@ -49,6 +49,10 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
    *Settings → Deploy keys → Add deploy key* ekranına yapıştırın,
    **"Allow write access"** kutusunu işaretleyin ve script'i tekrar çalıştırın.
    (`--with-playwright` sadece Russell 2000 işi için gerekli.)
+
+   > `/root/yatirim` sadece bu ilk kurulum içindir. Arayüz kurulduktan sonra
+   > (aşağıdaki "Streamlit arayüzü" bölümü) Droplet'teki komutları dakikada bir `main` ile
+   > kendiliğinden eşitlenen `/opt/yatirim/app` kopyasından çalıştırın; `git pull` gerekmez.
 3. **Secret'ları girin:** `sudo nano /etc/yatirim/env`. Değerler GitHub'daki
    `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY` ve `TELEGRAM_BOT_TOKEN` secret'larıyla aynı.
 4. **Deneyin:** Alpaca'ya dokunmayan bir işle başlayın.
@@ -76,7 +80,8 @@ sudo systemctl start yatirim-job@orb-scan            # bir işi elle çalıştı
 - **Kod güncellemeleri** için bir şey yapmaya gerek yok: her iş çalışmadan önce
   main'i çeker. `requirements.txt` değişirse paketler de kendiliğinden kurulur.
 - **`deploy/` altındaki bir dosya değişirse** (zamanlama, yeni iş) Droplet'te
-  `cd /root/yatirim && git pull && sudo bash deploy/install.sh` çalıştırın.
+  `sudo bash /opt/yatirim/app/deploy/install.sh` çalıştırın (arayüz kurulu değilse
+  `cd /root/yatirim && git pull && sudo bash deploy/install.sh`).
 - **Push çakışması:** state push edilemezse commit kaybolmaz. Commit
   `/opt/yatirim/work/<iş>` içinde `unpushed/<zaman>` branch'inde saklanır ve
   Telegram'a bildirim gelir.
@@ -139,6 +144,11 @@ systemctl list-timers 'yatirim-server-*'
    sudo bash deploy/web/install_web.sh borsa.ornek.com ben@ornek.com   # alan adıyla
    sudo bash deploy/web/install_web.sh                                  # alan adı olmadan
    ```
+   İlk kurulum `/opt/yatirim/app` kopyasını oluşturur. Sonraki çalıştırmalarda (örn.
+   `deploy/web/` değiştiğinde) doğrudan oradan çalıştırın:
+   ```bash
+   sudo bash /opt/yatirim/app/deploy/web/install_web.sh borsa.ornek.com
+   ```
    Script Nginx'i (WebSocket başlıklarıyla), Let's Encrypt sertifikasını, güvenlik
    duvarını (sadece 22/80/443) ve 2 GB swap'i kurar. Alan adı verildiyse tarayıcıya
    IP yazanlar da `https://alan-adı` adresine yönlendirilir. Arayüz `/opt/yatirim/app`
@@ -191,8 +201,7 @@ Değişken tanımlı değilse eski düzen (GitHub API + JSON dosyaları + push) 
 **Tek komutla** (piyasa kapalıyken, hafta sonu önerilir):
 
 ```bash
-cd /root/yatirim && git pull --ff-only origin main
-sudo bash deploy/enable_sqlite.sh
+sudo bash /opt/yatirim/app/deploy/enable_sqlite.sh
 ```
 
 `enable_sqlite.sh` aşağıdaki adımların hepsini sırayla yapar:
@@ -217,8 +226,8 @@ Elle yapmak isterseniz adımlar (root olarak):
    ```
 3. Güncel `run_job.sh`'yi kurun (hata bildirimi chat ID'yi veritabanından okusun):
    ```bash
-   cd /root/yatirim && git pull --ff-only origin main
-   install -m 755 -o root -g root deploy/run_job.sh /opt/yatirim/bin/
+   systemctl start yatirim-app-sync.service   # /opt/yatirim/app'i main ile eşitle
+   install -m 755 -o root -g root /opt/yatirim/app/deploy/run_job.sh /opt/yatirim/bin/
    ```
 4. Veritabanı klasörünü oluşturun ve main'deki güncel JSON'ları aktarın. Kullanıcı listesi
    `/opt/yatirim/.streamlit/secrets.toml` içinden okunur:

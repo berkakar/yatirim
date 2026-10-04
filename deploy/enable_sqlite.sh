@@ -2,8 +2,7 @@
 # SQLite'ı devreye alır - deploy/README.md "SQLite'ı devreye alma" adımlarının
 # tek komutluk hâli. Droplet'te root olarak, piyasa kapalıyken çalıştırın:
 #
-#   cd /root/yatirim && git pull --ff-only origin main
-#   sudo bash deploy/enable_sqlite.sh
+#   sudo bash /opt/yatirim/app/deploy/enable_sqlite.sh
 #
 # Yaptıkları:
 #   1. Açık timer'ları kapatır, arayüzü ve eşitlemeyi durdurur, çalışan işin
