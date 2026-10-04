@@ -28,6 +28,26 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "12",
+        "date": "2026-10-04",
+        "title": "Sahipsiz stop temizliği",
+        "problem": (
+            "Stop botu yalnızca açık pozisyonları geziyordu. Pozisyon elle ya da bir modülün market satışıyla "
+            "kapanıp stopu iptal edilmezse emir açık kalıyordu: tetiklenirse marjinli hesapta açığa satış "
+            "açabilir, aynı hissede sonradan açılan yeni bir pozisyonu da eski seviye ve adetle satabilirdi."
+        ),
+        "change": (
+            "- Stop botu her geçişte (pozisyon hiç kalmamış olsa da) açık stop emirlerini tarar; pozisyonu "
+            "olmayan ya da yönü pozisyonu kapatmayan stopları iptal eder ve Telegram'dan haber verir.\n"
+            "- Dokunulmayanlar: dolmamış bracket bacakları ('held') ve 10 dakikadan yeni stoplar (bir modül o "
+            "an alış yapıyor olabilir). İptalden hemen önce pozisyon bir kez daha sorgulanır."
+        ),
+        "where": "alpaca_trailing_stop.py (cancel_orphan_stops, run_once), tests/test_orphan_stops.py",
+        "settings": "Yok.",
+        "track": "Telegram'daki '🧹 ... sahipsiz stop ... iptal edildi' uyarıları - sık geliyorsa stopu iptal "
+                 "etmeden satan bir yol var demektir, kaynağı araştırılmalı.",
+    },
+    {
         "id": "11",
         "date": "2026-10-04",
         "title": "Stop her koşulda kuruluyor: tüm modüller tek güvenceli yoldan",
