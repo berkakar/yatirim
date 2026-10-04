@@ -140,7 +140,8 @@ systemctl list-timers 'yatirim-server-*'
    sudo bash deploy/web/install_web.sh                                  # alan adı olmadan
    ```
    Script Nginx'i (WebSocket başlıklarıyla), Let's Encrypt sertifikasını, güvenlik
-   duvarını (sadece 22/80/443) ve 2 GB swap'i kurar. Arayüz `/opt/yatirim/app`
+   duvarını (sadece 22/80/443) ve 2 GB swap'i kurar. Alan adı verildiyse tarayıcıya
+   IP yazanlar da `https://alan-adı` adresine yönlendirilir. Arayüz `/opt/yatirim/app`
    kopyasından çalışır ve bu kopya dakikada bir `main` ile eşitlenir.
 3. **Secrets:** Streamlit Cloud → uygulama → *Settings → Secrets* içeriğini aynen
    `/opt/yatirim/.streamlit/secrets.toml` dosyasına yapıştırın, sonra

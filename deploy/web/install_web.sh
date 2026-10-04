@@ -105,6 +105,18 @@ if [ -n "$DOMAIN" ]; then
   fi
 fi
 
+IP_REDIRECT=/etc/nginx/sites-available/yatirim-ip-redirect
+if [ -n "$DOMAIN" ]; then
+  echo "==> IP ile gelenleri $DOMAIN adresine yönlendirme"
+  if grep -q "listen 443" /etc/nginx/sites-available/yatirim; then target="https://$DOMAIN"; else target="http://$DOMAIN"; fi
+  sed "s|__TARGET__|$target|" "$SRC/nginx-ip-redirect.conf" > "$IP_REDIRECT"
+  ln -sf "$IP_REDIRECT" /etc/nginx/sites-enabled/yatirim-ip-redirect
+else
+  rm -f /etc/nginx/sites-enabled/yatirim-ip-redirect "$IP_REDIRECT"
+fi
+nginx -t
+systemctl reload nginx
+
 IP="$(curl -fsS -4 -m 5 https://ifconfig.me 2>/dev/null || hostname -I | cut -d' ' -f1)"
 if [ -n "$DOMAIN" ] && grep -q "listen 443" /etc/nginx/sites-available/yatirim; then
   URL="https://$DOMAIN"
