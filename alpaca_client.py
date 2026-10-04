@@ -17,6 +17,9 @@ if sys.platform == "win32":
 
 import requests
 
+# Bir emrin artık değişmeyeceği durumlar (filled hariç) - bkz. wait_for_fill.
+ORDER_FINAL_STATUSES = frozenset({"canceled", "expired", "rejected", "done_for_day", "replaced"})
+
 # [2026-10-03] place_stop_order'ın "stop her koşulda kurulsun" güvencesi.
 STOP_PLACE_MAX_ATTEMPTS = 3
 STOP_MIN_GAP_PCT = 0.005         # yeni stop güncel fiyata bundan daha yakın olmaz
@@ -473,15 +476,40 @@ class AlpacaClient:
         return result
 
     def wait_for_fill(self, order_id: str, timeout: float = 30) -> dict:
+        """Emir tamamen dolana kadar bekler ve emri döner.
+
+        [2026-10-04] Süre dolarsa ya da emir dolmadan kapanırsa, dolmamış kısım
+        iptal edilip emir yeniden okunur: KISMEN (ya da iptal sırasında
+        tamamen) dolmuşsa emir yine döner - çağıran, stopu filled_qty kadar
+        gerçek pozisyon için kurar. Önceden kısmi ya da zaman aşımından sonra
+        gelen dolum hiç stop kurulmadan açık kalıyordu. Hiç dolmamışsa
+        TimeoutError."""
         deadline = time.monotonic() + timeout
+        order = None
         while time.monotonic() < deadline:
             r = self._get(f"/orders/{order_id}")
             r.raise_for_status()
             order = r.json()
             if order["status"] == "filled":
                 return order
+            if order["status"] in ORDER_FINAL_STATUSES:
+                break
             time.sleep(1)
-        raise TimeoutError(f"Order {order_id} did not fill within {timeout}s")
+        if order is None or order["status"] not in ORDER_FINAL_STATUSES:
+            try:
+                self.cancel_order(order_id)
+            except requests.HTTPError:
+                pass  # bu arada dolmuş olabilir - aşağıda yeniden okunuyor
+        for _ in range(5):
+            r = self._get(f"/orders/{order_id}")
+            r.raise_for_status()
+            order = r.json()
+            if order["status"] in ORDER_FINAL_STATUSES or order["status"] == "filled":
+                break
+            time.sleep(1)
+        if float(order.get("filled_qty") or 0) > 0 and order.get("filled_avg_price"):
+            return order
+        raise TimeoutError(f"Order {order_id} did not fill within {timeout}s (status {order['status']})")
 
     def get_watchlist(self, watchlist_id: str) -> dict:
         r = self._get(f"/watchlists/{watchlist_id}")

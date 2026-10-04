@@ -28,6 +28,30 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "13",
+        "date": "2026-10-04",
+        "title": "Heikin Ashi / PBP kırılım girişleri ve modül çıkışlarında stopsuz kalma boşlukları kapatıldı",
+        "problem": (
+            "Giriş stopları zaten ortak güvenceli yoldan kuruluyordu (#11), ama iki boşluk kalmıştı: (1) "
+            "wait_for_fill, market emri 30 sn içinde TAMAMEN dolmazsa hata veriyordu - kısmen dolan hisseler "
+            "için stop hiç kurulmuyor, zaman aşımından sonra gelen dolum stopsuz ve modülün kaydı dışında "
+            "kalıyordu (HA bunu gün sonunda kapatmazdı). (2) Heikin Ashi çıkışı ve RS rotasyonu satışı stopu "
+            "önce iptal edip sonra market emri veriyordu; satış reddedilirse pozisyon stopsuz kalıyordu."
+        ),
+        "change": (
+            "- wait_for_fill: süre dolunca dolmamış kısım iptal edilip emir yeniden okunur; kısmen ya da iptal "
+            "sırasında dolmuşsa emir döner ve stop gerçek dolan adet için kurulur. Hiç dolmamışsa eskisi gibi "
+            "hata (HA, PBP kırılım ve ilave alım, ORB, RS, Alım-Stop-Alım hepsi bunu kullanıyor).\n"
+            "- close_position_market: stopu iptal edip satar; satış reddedilirse stop aynı seviyeden hemen geri "
+            "kurulur (açılış kalkanındaki gerçek seviye korunur). HA çıkışı ve RS satışı bunu kullanıyor."
+        ),
+        "where": "alpaca_client.py (wait_for_fill), alpaca_trailing_stop.py (close_position_market), "
+                 "heikin_ashi_intraday_core.py (_sell), relative_strength_core.py, tests/test_entry_exit_protection.py",
+        "settings": "Yok.",
+        "track": "Telegram'da 'market çıkışı başarısız' bağlamlı stop uyarıları; HA kayıtlarında olmayan "
+                 "stopsuz pozisyon kalmamalı.",
+    },
+    {
         "id": "12",
         "date": "2026-10-04",
         "title": "Sahipsiz stop temizliği",

@@ -46,7 +46,7 @@ from zoneinfo import ZoneInfo
 
 import storage
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import get_bars_for_timeframe, place_protective_stop
+from alpaca_trailing_stop import close_position_market, get_bars_for_timeframe, place_protective_stop
 from buy_algorithms import heikin_ashi_stoch_signal
 from heikin_ashi import SMA_PERIOD, long_exit_reason, stochastic_series
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
@@ -224,11 +224,8 @@ def _sell(client: AlpacaClient, symbol: str, kind: str) -> float | None:
     if position is None:
         return None
     qty = float(position["qty"])
-    stop_order = client.get_open_stop_order(symbol)
-    if stop_order is not None:
-        client.cancel_order(stop_order["id"])
     tag = f"{ORDER_TAG_PREFIX}-{kind}-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
-    client.place_market_exit(symbol, qty, client_order_id=tag)
+    close_position_market(client, symbol, qty, client_order_id=tag, context=f"Heikin Ashi {kind}")
     return qty
 
 
