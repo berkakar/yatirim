@@ -46,7 +46,7 @@ from zoneinfo import ZoneInfo
 
 import storage
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import get_bars_for_timeframe
+from alpaca_trailing_stop import get_bars_for_timeframe, place_protective_stop
 from buy_algorithms import heikin_ashi_stoch_signal
 from heikin_ashi import SMA_PERIOD, long_exit_reason, stochastic_series
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
@@ -370,7 +370,11 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
                 **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
-                client.place_stop_order(cand.symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", cand.symbol))
+                order = place_protective_stop(
+                    client, cand.symbol, filled_qty, "long", stop_price, entry_price=fill_price,
+                    client_order_id=stop_tag("initial", cand.symbol), context="Heikin Ashi girişi",
+                )
+                stop_price = float(order.get("stop_price") or stop_price)
             except Exception as e:
                 summary["errors"].append(f"{cand.symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
 

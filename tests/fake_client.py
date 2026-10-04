@@ -56,7 +56,7 @@ class FakeClient:
         self.orders.append(order)
         return order
 
-    def place_stop_order(self, symbol, qty, side, stop_price, client_order_id=None):
+    def place_stop_order(self, symbol, qty, side, stop_price, client_order_id=None, reference_price=None):
         self.calls.append(("place_stop", symbol, round(stop_price, 2), client_order_id))
         return self._new(symbol=symbol, qty=str(qty), side="sell", type="stop",
                          stop_price=f"{stop_price:.2f}", client_order_id=client_order_id)

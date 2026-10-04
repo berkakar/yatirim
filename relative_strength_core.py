@@ -58,6 +58,7 @@ from datetime import datetime, timedelta, timezone
 
 import storage
 from alpaca_client import AlpacaClient
+from alpaca_trailing_stop import place_protective_stop
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
@@ -371,7 +372,10 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
                 **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
             ), 2)
             try:
-                client.place_stop_order(symbol, filled_qty, "long", stop_price, client_order_id=stop_tag("initial", symbol))
+                place_protective_stop(
+                    client, symbol, filled_qty, "long", stop_price, entry_price=fill_price,
+                    client_order_id=stop_tag("initial", symbol), context="RS Rotasyonu girişi",
+                )
             except Exception as e:
                 buy_errors.append(f"{symbol}: alındı (@ {fill_price:.2f}) ama stop kurulamadı, KORUMASIZ: {e}")
 

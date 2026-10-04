@@ -17,6 +17,41 @@ if sys.platform == "win32":
 
 import requests
 
+# [2026-10-03] place_stop_order'ın "stop her koşulda kurulsun" güvencesi.
+STOP_PLACE_MAX_ATTEMPTS = 3
+STOP_MIN_GAP_PCT = 0.005         # yeni stop güncel fiyata bundan daha yakın olmaz
+STOP_FALLBACK_DISTANCE_PCT = 0.015  # giriş bilinmiyorsa mesafe
+
+
+def stop_beyond_price(market_price: float, stop_price: float, reference_price: float | None, side: str) -> float:
+    """Piyasanın yanlış tarafında kalan bir stopu, aynı riski koruyarak
+    market_price'ın doğru tarafına taşır: mesafe = stopun girişe
+    (reference_price) uzaklığı, giriş bilinmiyorsa fiyatın
+    STOP_FALLBACK_DISTANCE_PCT'si; en az STOP_MIN_GAP_PCT."""
+    distance = abs(reference_price - stop_price) if reference_price else market_price * STOP_FALLBACK_DISTANCE_PCT
+    distance = max(distance, market_price * STOP_MIN_GAP_PCT)
+    return market_price - distance if side == "long" else market_price + distance
+
+
+def _wrong_side_market_price(error: Exception) -> float | None:
+    """Alpaca'nın "stop price must be less/greater than current price"
+    reddinde gövdedeki market_price; başka bir hataysa None."""
+    response = getattr(error, "response", None)
+    if response is None:
+        return None
+    try:
+        body = response.json()
+    except ValueError:
+        return None
+    message = str(body.get("message") or "")
+    if "stop price must be" not in message or not body.get("market_price"):
+        return None
+    try:
+        return float(body["market_price"])
+    except (TypeError, ValueError):
+        return None
+
+
 DEFAULT_TRADING_URL = "https://paper-api.alpaca.markets/v2"
 DEFAULT_DATA_URL = "https://data.alpaca.markets/v2"
 
@@ -234,22 +269,62 @@ class AlpacaClient:
         r.raise_for_status()
 
     def place_stop_order(self, symbol: str, qty: float, side: str, stop_price: float,
-                         client_order_id: str | None = None) -> dict:
+                         client_order_id: str | None = None, reference_price: float | None = None,
+                         max_attempts: int = STOP_PLACE_MAX_ATTEMPTS) -> dict:
         """client_order_id: [2026-09-28 · Öneri 3/6] stop emrine bir etiket
         (bkz. stop_tags.py) - açılış kalkanının gerçek stop seviyesini ve
         İşlem Günlüğü'nün çıkış sebebini Alpaca'nın kendi emir geçmişinde
-        taşır, ayrı bir state dosyasına gerek kalmaz."""
-        payload = {
-            "symbol": symbol,
-            "qty": qty,
-            "side": "sell" if side == "long" else "buy",
-            "type": "stop",
-            "stop_price": f"{stop_price:.2f}",
-            "time_in_force": "gtc",
-        }
-        if client_order_id is not None:
-            payload["client_order_id"] = client_order_id
-        return self._post("/orders", payload)
+        taşır, ayrı bir state dosyasına gerek kalmaz.
+
+        [2026-10-03] Stop her koşulda kurulmaya çalışılır - pozisyon korumasız
+        kalmamalı. Alpaca stopu piyasanın yanlış tarafında olduğu için 422 ile
+        reddederse (MDB 2026-09-28, NUTX/HVT/KRUS 2026-09-29/30), hata
+        gövdesindeki market_price - Alpaca'nın KENDİ referans fiyatı, IEX son
+        işlem fiyatından farklı olabilir - kullanılarak stop o fiyatın ötesine
+        taşınır ve yeniden denenir: mesafe, istenen stopun reference_price'a
+        (giriş) uzaklığı, yoksa fiyatın STOP_FALLBACK_DISTANCE_PCT'si; her
+        durumda en az STOP_MIN_GAP_PCT. Geçici hatalar (5xx, bağlantı) da
+        kısa bir beklemeyle yeniden denenir. Seviye değiştiyse dönen emirde
+        "_adjusted" = {"requested", "placed", "market_price"} bulunur.
+        Tüm denemeler başarısızsa son hata fırlatılır."""
+        requested = stop_price
+        market_price = None
+        last_error: Exception | None = None
+        for attempt in range(max_attempts):
+            payload = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": "sell" if side == "long" else "buy",
+                "type": "stop",
+                "stop_price": f"{stop_price:.2f}",
+                "time_in_force": "gtc",
+            }
+            if client_order_id is not None:
+                payload["client_order_id"] = client_order_id
+            try:
+                order = self._post("/orders", payload)
+            except requests.HTTPError as e:
+                last_error = e
+                market_price = _wrong_side_market_price(e)
+                if market_price is not None:
+                    stop_price = stop_beyond_price(market_price, requested, reference_price, side)
+                    continue
+                status = e.response.status_code if e.response is not None else 0
+                if status >= 500 and attempt < max_attempts - 1:
+                    time.sleep(1 + attempt)
+                    continue
+                raise
+            except requests.ConnectionError as e:
+                last_error = e
+                if attempt < max_attempts - 1:
+                    time.sleep(1 + attempt)
+                    continue
+                raise
+            if round(stop_price, 2) != round(requested, 2):
+                order["_adjusted"] = {"requested": requested, "placed": round(stop_price, 2),
+                                      "market_price": market_price}
+            return order
+        raise last_error
 
     def replace_stop_price(self, order_id: str, stop_price: float, client_order_id: str | None = None,
                            allow_untagged_fallback: bool = True) -> dict:

@@ -54,7 +54,7 @@ from alpaca_bars_cache import INTRADAY_BARS_CACHE_PATH, parse_iso
 from alpaca_buy_points import compute_available_cash_for_buying, load_local_config
 from alpaca_client import AlpacaClient, DEFAULT_DATA_URL, DEFAULT_TRADING_URL
 from alpaca_trailing_stop import (
-    get_bars_for_timeframe, load_stop_loss_settings, load_telegram_settings, log,
+    get_bars_for_timeframe, load_stop_loss_settings, load_telegram_settings, log, place_protective_stop,
     resolve_stop_algorithm, TIMEFRAME as DEFAULT_TIMEFRAME,
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM
@@ -226,9 +226,12 @@ def _process_pending(
         **resolve_kwargs(stop_algo.initial_stop, stop_algo_settings, stop_shared_settings),
     ), 2)
 
-    stop_msg_suffix = f", stop {stop_price:.2f} seviyesinden kuruldu."
     try:
-        client.place_stop_order(symbol, filled_qty, "long", stop_price)
+        order = place_protective_stop(
+            client, symbol, filled_qty, "long", stop_price, entry_price=fill_price, context="Alım-Stop-Alım",
+        )
+        stop_price = float(order.get("stop_price") or stop_price)
+        stop_msg_suffix = f", stop {stop_price:.2f} seviyesinden kuruldu."
     except Exception as e:
         stop_msg_suffix = f" ama koruma stopu KURULAMADI, pozisyon KORUMASIZ: {e}"
         log(f"{symbol}: Alım-Stop-Alım sonrası stop kurulamadı: {e}")

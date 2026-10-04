@@ -110,7 +110,7 @@ import requests
 from dotenv import load_dotenv
 
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
-from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL, stop_beyond_price
 import storage
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
@@ -700,7 +700,8 @@ def restore_from_shield(
         log(f"{symbol}: açılış kalkanı bitti, fiyat ({last_price:.2f}) gerçek stopun ({real:.2f}) altında - "
             f"pozisyon market emriyle kapatıldı.")
     except Exception as e:
-        client.place_stop_order(symbol, qty, side, disaster, client_order_id=shield_tag(symbol, real))
+        place_protective_stop(client, symbol, qty, side, disaster, client_order_id=shield_tag(symbol, real),
+                              context="kalkan sonrası market çıkışı başarısız")
         log(f"{symbol}: kalkan sonrası market çıkışı başarısız ({e}), felaket stopu {disaster:.2f} yeniden kuruldu.")
     return None
 
@@ -816,8 +817,47 @@ def protective_stop(stop_price: float, entry_price: float, last_price: float | N
     kuralı kullanır."""
     if not _wrong_side(stop_price, last_price, side):
         return stop_price, False
-    distance = abs(entry_price - stop_price)
-    return (last_price - distance if side == "long" else last_price + distance), True
+    return stop_beyond_price(last_price, stop_price, entry_price, side), True
+
+
+def place_protective_stop(
+    client: AlpacaClient, symbol: str, qty: float, side: str, stop_price: float,
+    entry_price: float | None = None, client_order_id: str | None = None, context: str = "",
+) -> dict:
+    """[2026-10-03] Sistemdeki TÜM stop kurulumlarının ortak yolu - pozisyon
+    korumasız kalmamalı. Önce güncel fiyata göre protective_stop uygulanır,
+    sonra AlpacaClient.place_stop_order (Alpaca'nın kendi referans fiyatıyla
+    yeniden deneme, geçici hatalarda tekrar) çağrılır. Seviye değiştiyse
+    Telegram'dan haber verilir (günde bir). Yine de kurulamazsa KORUMASIZ
+    uyarısı gönderilip hata fırlatılır - çağıranın kendi geri dönüş mantığı
+    (ör. ilave alımda eski stopu geri kurma) çalışabilsin; trailing stop
+    botu da bir sonraki geçişinde (Droplet'te 5 dk) yeniden dener."""
+    try:
+        last_price = client.get_latest_trade_price(symbol)
+    except Exception:
+        last_price = None
+    requested = stop_price
+    if entry_price is not None:
+        stop_price, _ = protective_stop(stop_price, entry_price, last_price, side)
+    try:
+        order = client.place_stop_order(
+            symbol, qty, side, stop_price, client_order_id=client_order_id, reference_price=entry_price,
+        )
+    except Exception as e:
+        notify_once_per_day(
+            symbol, "stop_failed",
+            f"🚨 {symbol}: stop kurulamadı{f' ({context})' if context else ''}, pozisyon KORUMASIZ olabilir - "
+            f"stop botu bir sonraki geçişte yeniden deneyecek: {e}",
+        )
+        raise
+    placed = float(order.get("stop_price") or round(stop_price, 2))
+    if round(placed, 2) != round(requested, 2):
+        notify_once_per_day(
+            symbol, "stop_moved",
+            f"⚠️ {symbol}: istenen stop {requested:.2f} güncel fiyatın yanlış tarafındaydı"
+            f"{f' ({context})' if context else ''}; stop {placed:.2f} seviyesine kuruldu.",
+        )
+    return order
 
 
 def manage_position(
@@ -915,7 +955,11 @@ def manage_position(
             initial_stop = fallback
             reason = "seviye kırılmıştı, güncel fiyata göre koruyucu stop"
 
-        stop_order = client.place_stop_order(symbol, qty, side, initial_stop, client_order_id=stop_tag("initial", symbol))
+        stop_order = place_protective_stop(
+            client, symbol, qty, side, initial_stop, entry_price=entry_price,
+            client_order_id=stop_tag("initial", symbol), context="stopsuz pozisyon",
+        )
+        initial_stop = float(stop_order.get("stop_price") or initial_stop)
         log(f"{symbol}: no resting stop found (not opened as a bracket order here, or "
             f"extended-hours guard emri seans bitiminde dolmadan düştü) - {reason}: "
             f"{initial_stop:.2f} (entry {entry_price:.2f}).")
@@ -1157,8 +1201,8 @@ def guard_position(
         # marketable limite çevirir), normal seans açılınca da kendisi çalışır.
         try:
             tag = shield_tag(symbol, real_stop) if real_stop is not None else stop_tag("restore", symbol)
-            client.place_stop_order(symbol, qty, side, reference_price, client_order_id=tag)
-        except requests.HTTPError as e:
+            client.place_stop_order(symbol, qty, side, reference_price, client_order_id=tag, reference_price=entry_price)
+        except Exception as e:
             msg = (f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
                    f"seviyesinden yeniden kurulamadı, pozisyon şu an KORUMASIZ olabilir: {e}")
         else:
