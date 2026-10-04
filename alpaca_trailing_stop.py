@@ -1295,6 +1295,66 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
         guard_position(client, pos, bot_token, chat_id, stop_algorithm, stop_settings)
 
 
+# [2026-10-04] Sahipsiz stop temizliği - bkz. cancel_orphan_stops.
+ORPHAN_STOP_MIN_AGE = timedelta(minutes=10)
+_CLOSING_SIDE = {"long": "sell", "short": "buy"}
+
+
+def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: datetime | None = None) -> list[str]:
+    """Pozisyonu olmayan (ya da emrin yönü pozisyonu kapatmayan) hisselerde
+    açık kalmış stop emirlerini iptal eder, iptal edilen sembolleri döner.
+
+    Neden: stop botu yalnızca açık pozisyonları geziyordu; pozisyon elle ya
+    da bir modülün market satışıyla kapanıp stop iptal edilmezse emir açık
+    kalıyordu. Tetiklenirse marjinli hesapta açığa satış açar, aynı hissede
+    sonradan açılan yeni bir pozisyonu da eski seviye ve adetle satabilir.
+
+    Dokunulmayanlar: dolmamış bracket bacakları ("held" - giriş emri dolunca
+    devreye girecek normal koruma) ve ORPHAN_STOP_MIN_AGE'den yeni emirler
+    (bir modül o an alış yapıp stop kuruyor olabilir; pozisyon listesi bir
+    an gecikebilir). İptalden hemen önce pozisyon bir kez daha sorgulanır."""
+    now = now or datetime.now(timezone.utc)
+    sides = {p["symbol"]: ("long" if float(p["qty"]) > 0 else "short") for p in positions}
+    try:
+        open_orders = client.get_open_orders()
+    except Exception as e:
+        log(f"Sahipsiz stop kontrolü: açık emirler alınamadı, atlanıyor: {e}")
+        return []
+    canceled = []
+    for order in open_orders:
+        if order.get("type") not in ("stop", "stop_limit") or order.get("status") == "held":
+            continue
+        if (order.get("asset_class") or "us_equity") != "us_equity":
+            continue
+        symbol = order["symbol"]
+        side = sides.get(symbol)
+        if side is not None and order.get("side") == _CLOSING_SIDE[side]:
+            continue  # pozisyonu koruyan normal stop
+        if now - _parse_iso(order["created_at"]) < ORPHAN_STOP_MIN_AGE:
+            continue
+        try:
+            position = client.get_position(symbol)
+        except Exception:
+            continue  # emin olamıyorsak dokunma
+        if position is not None:
+            live_side = "long" if float(position["qty"]) > 0 else "short"
+            if order.get("side") == _CLOSING_SIDE[live_side]:
+                continue
+        try:
+            client.cancel_order(order["id"])
+        except Exception as e:
+            log(f"{symbol}: sahipsiz stop iptal edilemedi: {e}")
+            continue
+        canceled.append(symbol)
+        level = order.get("stop_price")
+        notify_once_per_day(
+            symbol, "orphan_stop",
+            f"🧹 {symbol}: pozisyon yokken açık kalmış {order.get('side')} stop emri ({order.get('qty')} adet @ "
+            f"{level}) iptal edildi - tetiklenseydi istenmeyen bir pozisyon açılabilirdi.",
+        )
+    return canceled
+
+
 def run_once(client: AlpacaClient) -> None:
     clock = client.get_clock()
     if not clock["is_open"]:
@@ -1303,6 +1363,8 @@ def run_once(client: AlpacaClient) -> None:
 
     positions = [p for p in client.get_all_positions() if p.get("asset_class") == "us_equity"]
     prune_management_start_cache({p["symbol"] for p in positions})
+    # Pozisyon hiç kalmamış olsa da çalışmalı - aşağıdaki erken dönüşten önce.
+    cancel_orphan_stops(client, positions)
     if not positions:
         log("No open equity positions.")
         return
