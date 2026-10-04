@@ -44,7 +44,7 @@ for p in "$BASE/bin/yatirim-timers" "$BASE/bin/jobs.sh" "$BASE/venv/bin/python" 
 done
 grep -q '^YATIRIM_DB_PATH=' "$ENV_FILE" && die "YATIRIM_DB_PATH zaten $ENV_FILE içinde - SQLite zaten açık."
 grep -q 'storage.load_json' "$SRC/run_job.sh" \
-  || die "$SRC/run_job.sh eski. Önce: cd $(dirname "$SRC") && git pull --ff-only origin main"
+  || die "$SRC/run_job.sh eski. Önce kopyayı main ile eşitleyin: systemctl start yatirim-app-sync.service (ya da kendi klonunuzda git pull --ff-only origin main)"
 
 if [ "$FORCE" -eq 0 ]; then
   # ABD: hafta içi 02:30-20:30 ET (gece işleri + uzatılmış seans), BIST/TEFAS: hafta içi 08:30-19:30 TRT.
