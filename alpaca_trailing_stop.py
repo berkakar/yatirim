@@ -809,6 +809,34 @@ def _wrong_side(level: float, last_price: float | None, side: str) -> bool:
     return level >= last_price if side == "long" else level <= last_price
 
 
+def close_position_market(
+    client: AlpacaClient, symbol: str, qty: float, client_order_id: str | None = None, context: str = "",
+) -> dict:
+    """[2026-10-04] Pozisyonu market emriyle kapatmanın ortak yolu: açık stop
+    önce iptal edilir (aynı sembolde zıt yönlü iki açık emre izin yok -
+    wash-trade), sonra satılır. Satış emri reddedilirse stop AYNI seviyeden
+    hemen geri kurulur ve hata fırlatılır - önceden bu durumda pozisyon
+    stopsuz kalıyordu (Heikin Ashi çıkışı, RS rotasyonu satışı)."""
+    stop_order = client.get_open_stop_order(symbol)
+    if stop_order is not None:
+        client.cancel_order(stop_order["id"])
+    try:
+        return client.place_market_exit(symbol, qty, client_order_id=client_order_id)
+    except Exception as e:
+        if stop_order is not None:
+            log(f"{symbol}: market çıkışı başarısız ({e}), stop {stop_order['stop_price']} geri kuruluyor.")
+            time.sleep(1)  # iptalin hisseleri serbest bırakması için
+            # Kalkandaki (felaket seviyesindeki) bir stop geri kurulurken etiketteki
+            # gerçek seviye korunur; yeni etiket, iptal edilen emrinkiyle çakışmaz.
+            real = parse_shield_real_stop(stop_order.get("client_order_id"))
+            place_protective_stop(
+                client, symbol, qty, "long", float(stop_order["stop_price"]),
+                client_order_id=shield_tag(symbol, real) if real is not None else stop_tag("restore", symbol),
+                context=f"{context} - market çıkışı başarısız" if context else "market çıkışı başarısız",
+            )
+        raise
+
+
 def protective_stop(stop_price: float, entry_price: float, last_price: float | None, side: str) -> tuple[float, bool]:
     """[2026-10-03] Kurulacak stop güncel fiyatın yanlış tarafındaysa (Alpaca
     422 ile reddederdi) pozisyonu satmak yerine, stopun girişe olan mesafesi

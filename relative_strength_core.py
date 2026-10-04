@@ -58,7 +58,7 @@ from datetime import datetime, timedelta, timezone
 
 import storage
 from alpaca_client import AlpacaClient
-from alpaca_trailing_stop import place_protective_stop
+from alpaca_trailing_stop import close_position_market, place_protective_stop
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
@@ -305,11 +305,9 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
                 holdings.pop(symbol, None)  # zaten kapanmış (ör. safety-net stop) - sadece durumdan düş
                 continue
             qty = float(position["qty"])
-            stop_order = client.get_open_stop_order(symbol)
-            if stop_order is not None:
-                client.cancel_order(stop_order["id"])  # wash-trade koruması - bkz. top-up dalındaki aynı not
             tag = f"{ORDER_TAG_PREFIX}-exit-{symbol}-{int(datetime.now(timezone.utc).timestamp())}"
-            client.place_market_exit(symbol, qty, client_order_id=tag)
+            # Stop önce iptal edilir (wash-trade koruması); satış reddedilirse geri kurulur.
+            close_position_market(client, symbol, qty, client_order_id=tag, context="RS rotasyonu satışı")
             holdings.pop(symbol, None)
             sold.append(symbol)
         except Exception as e:
