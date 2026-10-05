@@ -567,3 +567,27 @@ class AlpacaClient:
             page_token = data.get("next_page_token")
             if not page_token:
                 return bars
+
+    def get_raw_bars_multi(self, symbols: list[str], timeframe: str, start_iso: str, feed: str = "iex",
+                           chunk_size: int = 200) -> dict[str, list[dict]]:
+        """Çok sembollü bar uç noktası (/stocks/bars?symbols=...) - yüzlerce
+        sembol için sembol başına ayrı istek yerine her `chunk_size` sembolde
+        bir istek (+ sayfaları) atar. Bar dönmeyen semboller sonuçta yer almaz."""
+        result: dict[str, list[dict]] = {}
+        for i in range(0, len(symbols), chunk_size):
+            chunk = symbols[i:i + chunk_size]
+            page_token = None
+            while True:
+                params = {"symbols": ",".join(chunk), "timeframe": timeframe, "start": start_iso,
+                          "limit": 10000, "feed": feed, "adjustment": "raw"}
+                if page_token:
+                    params["page_token"] = page_token
+                r = requests.get(f"{self.data_url}/stocks/bars", headers=self.headers, params=params)
+                r.raise_for_status()
+                data = r.json()
+                for symbol, bars in (data.get("bars") or {}).items():
+                    result.setdefault(symbol, []).extend(bars or [])
+                page_token = data.get("next_page_token")
+                if not page_token:
+                    break
+        return result

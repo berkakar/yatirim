@@ -1520,8 +1520,8 @@ elif module == "🎯 Premium Buy Point Portföyü":
 elif module == "🤖 Otomatik Alım/Satım":
     st.header("🤖 Otomatik Alım/Satım")
     st.caption(
-        "Bu mod tamamen Alpaca'daki verilerle çalışır: NASDAQ 100, NYSE ve bu piyasalara bağlı "
-        "kullanıcı tanımlı hisse gruplarını tarar, RSI14/RSI21 + EMA50/EMA200 momentum teyidiyle en "
+        "Bu mod tamamen Alpaca'daki verilerle çalışır: NASDAQ 100, NYSE, Russell 2000 (aşağıda "
+        "seçiliyse) ve bu piyasalara bağlı kullanıcı tanımlı hisse gruplarını tarar, RSI14/RSI21 + EMA50/EMA200 momentum teyidiyle en "
         "fazla 10 hisseye daraltır, backtest uygular ve %10 üzeri kârlılık gösterenleri Premium Buy "
         "Point Portföyü'ne aktarır - günde 1 kez tamamen otomatik de çalışabilir."
     )

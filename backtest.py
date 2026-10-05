@@ -4,8 +4,8 @@ tek bir hisse üzerinde geçmiş veriyle yeniden oynatır (bkz.
 backtest_engine.py - aynı karar fonksiyonlarını, aynı parametrelerle
 kullanır, böylece backtest sonucu canlı sistemin gerçekte ne yapacağını
 yansıtır). Sonuçlar backtest_data.py ile kalıcı olarak saklanır ve
-algoritma bazlı sekmelerde, önceki çalıştırmalarla birlikte gösterilir -
-her yeni çalıştırma eklenir, öncekiler hiç silinmez.
+algoritma bazlı sekmelerde gösterilir - varsayılan görünüm yalnızca en son
+çalıştırmadır, eski çalıştırmalar (hiç silinmez) bir seçiciyle açılır.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -53,19 +53,62 @@ def _negative_text_style():
 def _side_style(side):
     return {"Alış": _positive_text_style(), "Satış": _negative_text_style()}.get(side, "")
 
-_SUMMARY_COLUMN_CONFIG = {
-    "Başlangıç Bütçe": st.column_config.NumberColumn(format="localized"),
-    "Bitiş Değeri": st.column_config.NumberColumn(format="localized"),
-    "K/Z": st.column_config.NumberColumn(format="localized"),
-    "K/Z %": st.column_config.NumberColumn(format="%.2f%%"),
-    "Veri (gün)": st.column_config.NumberColumn(format="%d"),
-    "İşlem Başlangıcı (gün)": st.column_config.NumberColumn(format="%d"),
-    "İşlem Sayısı": st.column_config.NumberColumn(format="%d"),
+# Tablolardaki sayılar Türkçe biçimde (binlik ".", ondalık ",") ve sütun başına
+# sabit ondalıkla yazılır - st.column_config'in "localized" biçimi tarayıcı
+# diline göre 0-3 ondalık gösterdiği için "15.810,052" ile "10.000" yan yana
+# düşüyordu. Biçim Styler.format ile verilir; sıralama ham değerle yapılır.
+_NA = "—"
+
+
+def _tr_number(v, decimals: int = 2) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return _NA
+    s = f"{float(v):,.{decimals}f}"
+    return s.replace(",", "\0").replace(".", ",").replace("\0", ".")
+
+
+def _tr_int(v) -> str:
+    return _tr_number(v, 0)
+
+
+def _tr_price(v) -> str:
+    # 1$ altı hisselerde (Russell 2000'de sık) 2 ondalık fiyat farkını gizler.
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return _NA
+    return _tr_number(v, 2 if abs(float(v)) >= 1 else 4)
+
+
+def _tr_qty(v) -> str:
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return _NA
+    if float(v).is_integer():
+        return _tr_int(v)
+    return _tr_number(v, 4).rstrip("0").rstrip(",")
+
+
+_SUMMARY_FORMATTERS = {
+    "Başlangıç Bütçe": _tr_number,
+    "Bitiş Değeri": _tr_number,
+    "K/Z": _tr_number,
+    "K/Z %": _tr_number,
+    "Veri (gün)": _tr_int,
+    "İşlem Başlangıcı (gün)": _tr_int,
+    "İşlem Sayısı": _tr_int,
 }
-_TRADES_COLUMN_CONFIG = {
-    "Fiyat": st.column_config.NumberColumn(format="%.4f"),
-    "Adet": st.column_config.NumberColumn(format="localized"),
+_TRADES_FORMATTERS = {
+    "Fiyat": _tr_price,
+    "Adet": _tr_qty,
 }
+
+
+def _fmt_run_at(run_at: str | None) -> str:
+    """'2026-10-05T12:30:05+00:00' -> '2026-10-05 12:30 UTC'."""
+    if not run_at:
+        return "tarihsiz"
+    try:
+        return _parse_ts(run_at).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return run_at
 
 
 def _format_stop_loss(r: dict) -> str:
@@ -104,7 +147,8 @@ def _style_summary(df: pd.DataFrame):
                     style_df.loc[idx, "Zarar Kes"] = _negative_text_style()
         return style_df
 
-    return zebra_style(df, extra_style_fn=apply_styles)
+    styler = zebra_style(df, extra_style_fn=apply_styles)
+    return styler.format({c: f for c, f in _SUMMARY_FORMATTERS.items() if c in df.columns}, na_rep=_NA)
 
 
 def _style_trades(df: pd.DataFrame):
@@ -117,7 +161,8 @@ def _style_trades(df: pd.DataFrame):
                 style_df.loc[idx, "Yön"] = _side_style(data.loc[idx, "Yön"])
         return style_df
 
-    return zebra_style(df, extra_style_fn=apply_styles)
+    styler = zebra_style(df, extra_style_fn=apply_styles)
+    return styler.format({c: f for c, f in _TRADES_FORMATTERS.items() if c in df.columns}, na_rep=_NA)
 
 
 def _fetch_bars_for_timeframe(client: AlpacaClient, symbol: str, timeframe: str, start: datetime) -> list[Bar]:
@@ -209,22 +254,39 @@ def _render_bicak_kanali_chart(bars: list[Bar], symbol: str, timeframe: str, pen
     )
 
 
+VOLATILITY_CHUNK_SIZE = 200  # çok sembollü bar isteğinde tek seferde sorulan sembol sayısı
+VOLATILITY_AUTO_LOAD_LIMIT = 300  # bundan uzun listelerde volatilite ancak istenince yüklenir
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
-def _fetch_1d_volatility(key_id: str, secret_key: str, symbol: str) -> float | None:
-    """Son kapanan günün (Yüksek-Düşük)/Kapanış yüzdesi - basit, standart
-    bir gün-içi volatilite ölçütü."""
+def _fetch_1d_volatility_map(key_id: str, secret_key: str, symbols: tuple[str, ...]) -> dict[str, float]:
+    """Her sembol için son kapanan günün (Yüksek-Düşük)/Kapanış yüzdesi - basit,
+    standart bir gün-içi volatilite ölçütü. Alpaca'nın çok sembollü bar uç
+    noktasıyla her VOLATILITY_CHUNK_SIZE sembolde bir istek atılır (eskiden
+    sembol başına bir istek: Russell 2000'de ~2.000 istek, ~1 dakika)."""
     client = AlpacaClient(key_id, secret_key)
-    try:
-        start = datetime.now(timezone.utc) - timedelta(days=10)
-        raw_bars = client.get_raw_bars(symbol, "1Day", start.isoformat())
-    except Exception:
-        return None
-    if not raw_bars:
-        return None
-    last = raw_bars[-1]
-    if not last.get("c"):
-        return None
-    return round((last["h"] - last["l"]) / last["c"] * 100, 2)
+    start = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    volatility: dict[str, float] = {}
+
+    def _fetch(chunk: list[str]) -> None:
+        try:
+            bars_by_symbol = client.get_raw_bars_multi(chunk, "1Day", start, chunk_size=len(chunk))
+        except Exception:
+            # Tek bir geçersiz sembol tüm isteği düşürebilir - parçayı ikiye bölüp
+            # yeniden dene, böylece yalnızca sorunlu sembol boş kalır.
+            if len(chunk) > 1:
+                mid = len(chunk) // 2
+                _fetch(chunk[:mid])
+                _fetch(chunk[mid:])
+            return
+        for symbol, raw_bars in bars_by_symbol.items():
+            last = raw_bars[-1] if raw_bars else None
+            if last and last.get("c"):
+                volatility[symbol] = round((last["h"] - last["l"]) / last["c"] * 100, 2)
+
+    for i in range(0, len(symbols), VOLATILITY_CHUNK_SIZE):
+        _fetch(list(symbols[i:i + VOLATILITY_CHUNK_SIZE]))
+    return volatility
 
 
 def _daily_pairs(client: AlpacaClient, symbol: str, days_of_data: int) -> list[tuple]:
@@ -237,7 +299,8 @@ def _daily_pairs(client: AlpacaClient, symbol: str, days_of_data: int) -> list[t
 
 def _render_symbol_picker(client: AlpacaClient, key_id: str, secret_key: str, target_list: list[str]) -> str | None:
     st.subheader("📋 Hisse Seçimi")
-    st.caption("Backtest için listeden tek bir hisse seç (ilk sütun). '1G Volatilite %', son kapanan günün (Yüksek-Düşük)/Kapanış oranıdır.")
+    st.caption("Backtest için listeden tek bir hisse seç (ilk sütun). '1G Volatilite %', son kapanan günün "
+               "(Yüksek-Düşük)/Kapanış oranıdır. Uzun listede aramak için tablonun sağ üstündeki 🔍 simgesini kullan.")
 
     state_key = "backtest_selected_symbol"
     if state_key not in st.session_state:
@@ -245,8 +308,18 @@ def _render_symbol_picker(client: AlpacaClient, key_id: str, secret_key: str, ta
     if st.session_state[state_key] not in target_list:
         st.session_state[state_key] = None
 
-    with st.spinner("Volatilite verileri yükleniyor (1 saatlik önbellek)..."):
-        volatility = {s: _fetch_1d_volatility(key_id, secret_key, s) for s in target_list}
+    load_volatility = True
+    if len(target_list) > VOLATILITY_AUTO_LOAD_LIMIT:
+        load_volatility = st.toggle(
+            f"1G Volatilite'yi yükle ({len(target_list):,} hisse)".replace(",", "."),
+            value=False, key="backtest_load_volatility",
+            help=f"Liste {VOLATILITY_AUTO_LOAD_LIMIT} hisseden uzun olduğu için volatilite otomatik "
+                 "yüklenmez - hisse seçmek için gerekmez. Açarsan toplu istekle çekilir (1 saatlik önbellek).",
+        )
+    volatility = {}
+    if load_volatility:
+        with st.spinner(f"{len(target_list)} hissenin volatilitesi yükleniyor (1 saatlik önbellek)..."):
+            volatility = _fetch_1d_volatility_map(key_id, secret_key, tuple(target_list))
 
     picker_df = pd.DataFrame({
         "Seçili": [s == st.session_state[state_key] for s in target_list],
@@ -348,7 +421,7 @@ def _render_settings():
         value=0, step=5,
         help="Çekilen verinin başındaki bu kadar gün, sadece algoritmanın geçmiş bağlamı için kullanılır - alım/satım bu günden sonra başlar.",
     )
-    budget = c3.number_input("Portföy büyüklüğü ($)", min_value=0.0, value=10000.0, step=100.0)
+    budget = c3.number_input("Portföy büyüklüğü ($)", min_value=0, value=10000, step=100, format="%d")
 
     st.subheader("🛑 Risk Yönetimi")
     sl1, sl2 = st.columns([1, 2])
@@ -446,7 +519,18 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, stop
         progress.progress((i + 1) / len(combos))
     progress.empty()
 
-    return append_results(username, new_runs)
+    return append_results(username, new_runs), run_at
+
+
+RESULTS_BATCH_KEY = "bt_results_batch"
+ALL_BATCHES = "__all__"
+
+
+def _run_key(r: dict) -> str:
+    # Eski/başka modülden gelen kayıtlarda run_id olmayabilir.
+    return r.get("run_id") or "|".join(
+        str(r.get(k) or "") for k in ("run_at", "symbol", "algorithm", "timeframe", "stop_algorithm")
+    )
 
 
 def _render_results(all_results: list[dict], key_id: str, secret_key: str):
@@ -455,47 +539,98 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
         st.info("Henüz kaydedilmiş bir backtest çalıştırması yok.")
         return
 
-    grouped = group_by_algorithm(all_results)
+    # Bir "🚀 Backtest Çalıştır" tıklamasının ürettiği tüm kombinasyonlar aynı
+    # run_at'i paylaşır - sonuçlar bu çalıştırmalara göre ayrılır, varsayılan
+    # görünüm yalnızca en son çalıştırmadır (eskiden tüm geçmiş aynı tabloda).
+    batches: dict[str, list[dict]] = {}
+    for r in all_results:
+        batches.setdefault(r.get("run_at") or "", []).append(r)
+    batch_ids = sorted(batches, reverse=True)
+    batch_options = batch_ids + [ALL_BATCHES]
+    if st.session_state.get(RESULTS_BATCH_KEY) not in batch_options:
+        st.session_state[RESULTS_BATCH_KEY] = batch_ids[0]
+
+    def _batch_label(batch_id: str) -> str:
+        if batch_id == ALL_BATCHES:
+            return f"Tüm geçmiş ({len(batch_ids)} çalıştırma, {len(all_results)} sonuç)"
+        runs = batches[batch_id]
+        symbols = ", ".join(sorted({r.get("symbol") or "?" for r in runs}))
+        latest = " · en son" if batch_id == batch_ids[0] else ""
+        return f"{_fmt_run_at(batch_id)} · {symbols} · {len(runs)} sonuç{latest}"
+
+    f1, f2 = st.columns([3, 2])
+    picked_batch = f1.selectbox(
+        "Gösterilen çalıştırma", batch_options, format_func=_batch_label, key=RESULTS_BATCH_KEY,
+        help="Varsayılan olarak yalnızca en son backtest çalıştırması gösterilir. Eski çalıştırmalar "
+             "silinmez - buradan birini ya da 'Tüm geçmiş'i seçebilirsin.",
+    )
+    show_all = picked_batch == ALL_BATCHES
+    view = all_results if show_all else batches[picked_batch]
+    if show_all:
+        all_symbols = sorted({r.get("symbol") or "?" for r in all_results})
+        symbol_filter = f2.multiselect("Hisse filtresi", all_symbols, key="bt_results_symbol_filter",
+                                       placeholder="Tüm hisseler")
+        if symbol_filter:
+            view = [r for r in view if (r.get("symbol") or "?") in symbol_filter]
+        if not view:
+            st.info("Bu filtreye uyan sonuç yok.")
+            return
+    else:
+        f2.caption(f"🕒 Çalıştırma zamanı: {_fmt_run_at(picked_batch)} · {len(view)} kombinasyon")
+
+    grouped = group_by_algorithm(view)
     tab_ids = list(grouped.keys())
-    tab_labels = [ALGORITHMS.get(a, (a, None))[0] for a in tab_ids]
+    tab_labels = [f"{ALGORITHMS.get(a, (a, None))[0]} ({len(grouped[a])})" for a in tab_ids]
     tabs = st.tabs(tab_labels)
 
     for tab, algo_id in zip(tabs, tab_ids):
         with tab:
             runs = grouped[algo_id]
-            summary_rows = [{
-                "Çalıştırma (UTC)": r.get("run_at", ""),
-                "Hisse": r.get("symbol", ""),
-                "Mum Periyodu": TIMEFRAME_LABELS.get(r.get("timeframe"), r.get("timeframe")),
-                "Stop-Loss Mum Periyodu": TIMEFRAME_LABELS.get(
-                    r.get("stop_timeframe") or r.get("timeframe"), r.get("stop_timeframe") or r.get("timeframe")
-                ),
-                "Stop-Loss Algoritması": _stop_algorithm_label(r),
-                "Kaynak": r.get("source") or "Alpaca",
-                "Veri (gün)": r.get("days_of_data"),
-                "İşlem Başlangıcı (gün)": r.get("days_before_trading"),
-                "Başlangıç Bütçe": r.get("starting_budget"),
-                "Bitiş Değeri": r.get("final_value"),
-                "K/Z": r.get("pnl"),
-                "K/Z %": r.get("pnl_pct"),
-                "İşlem Sayısı": len(r.get("trades") or []),
-                "Zarar Kes": _format_stop_loss(r),
-            } for r in runs]
-            latest_run_at = max((r.get("run_at") or "" for r in runs), default="")
-            if latest_run_at:
-                freshness_caption(f"En son çalıştırma: {latest_run_at} UTC (her satırın kendi zamanı 'Çalıştırma (UTC)' sütununda).")
-            st.dataframe(
-                _style_summary(pd.DataFrame(summary_rows)), column_config=_SUMMARY_COLUMN_CONFIG,
-                use_container_width=True, hide_index=True,
-            )
+            if not show_all:
+                # Tek çalıştırma görünümünde en kârlı kombinasyon üstte.
+                runs = sorted(runs, key=lambda r: r.get("pnl_pct") or 0, reverse=True)
+            summary_rows = []
+            for r in runs:
+                row = {"Çalıştırma": _fmt_run_at(r.get("run_at"))} if show_all else {}
+                row.update({
+                    "Hisse": r.get("symbol", ""),
+                    "Mum Periyodu": TIMEFRAME_LABELS.get(r.get("timeframe"), r.get("timeframe")),
+                    "Stop-Loss Mum Periyodu": TIMEFRAME_LABELS.get(
+                        r.get("stop_timeframe") or r.get("timeframe"), r.get("stop_timeframe") or r.get("timeframe")
+                    ),
+                    "Stop-Loss Algoritması": _stop_algorithm_label(r),
+                    "Kaynak": r.get("source") or "Alpaca",
+                    "Veri (gün)": r.get("days_of_data"),
+                    "İşlem Başlangıcı (gün)": r.get("days_before_trading"),
+                    "Başlangıç Bütçe": r.get("starting_budget"),
+                    "Bitiş Değeri": r.get("final_value"),
+                    "K/Z": r.get("pnl"),
+                    "K/Z %": r.get("pnl_pct"),
+                    "İşlem Sayısı": len(r.get("trades") or []),
+                    "Zarar Kes": _format_stop_loss(r),
+                })
+                summary_rows.append(row)
+            st.dataframe(_style_summary(pd.DataFrame(summary_rows)), use_container_width=True, hide_index=True)
 
-            options = [
-                f"{r.get('run_at')} · {r.get('symbol')} · "
-                f"{TIMEFRAME_LABELS.get(r.get('timeframe'), r.get('timeframe'))} · {_stop_algorithm_label(r)}"
-                for r in runs
-            ]
-            picked = st.selectbox("İşlem detayı için bir çalıştırma seç", options, key=f"bt_detail_pick_{algo_id}")
-            picked_run = runs[options.index(picked)]
+            # Seçim anahtarı gösterilen çalıştırmaya özel: yeni bir backtest
+            # sonrası önceki bir seçim (ör. eski bir MSFT çalıştırması) taşınmaz,
+            # liste her zaman tablonun ilk satırıyla açılır.
+            run_by_key = {_run_key(r): r for r in runs}
+            run_keys = list(run_by_key)
+            pick_key = f"bt_detail_pick_{algo_id}_{picked_batch}"
+            if st.session_state.get(pick_key) not in run_keys:
+                st.session_state[pick_key] = run_keys[0]
+
+            def _run_label(k: str) -> str:
+                r = run_by_key[k]
+                prefix = f"{_fmt_run_at(r.get('run_at'))} · " if show_all else ""
+                return (f"{prefix}{r.get('symbol')} · "
+                        f"{TIMEFRAME_LABELS.get(r.get('timeframe'), r.get('timeframe'))} · "
+                        f"{_stop_algorithm_label(r)} · K/Z %{_tr_number(r.get('pnl_pct'))}")
+
+            picked_key = st.selectbox("İşlem detayı için bir kombinasyon seç", run_keys, format_func=_run_label,
+                                      key=pick_key)
+            picked_run = run_by_key[picked_key]
 
             if algo_id == "bicak_kanali":
                 bicak_chart_key = f"bt_show_bicak_chart_{algo_id}"
@@ -529,12 +664,10 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                     "Adet": t.get("qty"),
                     "Sebep": t.get("reason"),
                 } for t in trades]
-                if picked_run.get("run_at"):
-                    freshness_caption(f"Bu çalıştırma tarihi: {picked_run['run_at']} UTC.")
-                st.dataframe(
-                    _style_trades(pd.DataFrame(trade_rows)), column_config=_TRADES_COLUMN_CONFIG,
-                    use_container_width=True, hide_index=True,
+                freshness_caption(
+                    f"{picked_run.get('symbol')} · {_fmt_run_at(picked_run.get('run_at'))} çalıştırmasının işlemleri."
                 )
+                st.dataframe(_style_trades(pd.DataFrame(trade_rows)), use_container_width=True, hide_index=True)
 
                 chart_state_key = f"bt_show_chart_{algo_id}"
                 if chart_state_key not in st.session_state:
@@ -586,22 +719,28 @@ def render_backtest(target_list: list[str], username: str):
      days_before_trading, budget, stop_loss_enabled, max_loss_pct, bicak_pencere) = _render_settings()
 
     st.divider()
-    can_run = bool(selected_symbol and selected_algorithms and selected_stop_algorithms and selected_timeframes)
-    if st.button("🚀 Backtest Çalıştır", type="primary", disabled=not can_run):
+    missing = [label for label, ok in (
+        ("bir hisse (📋 Hisse Seçimi)", selected_symbol),
+        ("en az bir buy-point algoritması", selected_algorithms),
+        ("en az bir stop-loss algoritması", selected_stop_algorithms),
+        ("en az bir mum periyodu", selected_timeframes),
+    ) if not ok]
+    if st.button("🚀 Backtest Çalıştır", type="primary", disabled=bool(missing)):
         with st.spinner(
             f"{selected_symbol} için {len(selected_algorithms)} algoritma × {len(selected_stop_algorithms)} "
             f"stop-loss algoritması × {len(selected_timeframes)} mum periyodu çalıştırılıyor..."
         ):
-            all_results = _run_backtests(
+            all_results, run_at = _run_backtests(
                 client, selected_symbol, selected_algorithms, selected_stop_algorithms, selected_timeframes,
                 stop_timeframe_choice, days_of_data, days_before_trading, budget, stop_loss_enabled, max_loss_pct,
                 username, bicak_pencere,
             )
-        st.success("Backtest tamamlandı ve sonuçlar kaydedildi.")
+        # Sonuçlar bölümü yeni çalıştırmayla açılsın (bkz. _render_results).
+        st.session_state[RESULTS_BATCH_KEY] = run_at
+        st.success("Backtest tamamlandı ve sonuçlar kaydedildi - aşağıda bu çalıştırmanın sonuçları gösteriliyor.")
     else:
-        if not can_run:
-            st.caption("Çalıştırmak için bir hisse, en az bir buy-point algoritması, en az bir stop-loss "
-                       "algoritması ve en az bir mum periyodu seçmelisin.")
+        if missing:
+            st.caption("Çalıştırmak için seçilmesi gerekenler: " + ", ".join(missing) + ".")
         all_results = load_results(username)
 
     st.divider()
