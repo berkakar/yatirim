@@ -95,6 +95,21 @@ def load_intraday() -> dict[str, list[Bar]]:
     return _bars_from_cache("alpaca_intraday_bars_cache_berkakar.json", ":30Min", 400)
 
 
+def regular_session(data: dict[str, list[Bar]]) -> dict[str, list[Bar]]:
+    """Gün içi barlardan yalnızca normal seansı (09:30-16:00 New York) tutar -
+    Alpaca stop emirleri seans dışında tetiklenmez, ince seans dışı barlar
+    stop testini bozar."""
+    from zoneinfo import ZoneInfo
+    ny = ZoneInfo("America/New_York")
+
+    def inside(bar: Bar) -> bool:
+        t = datetime.fromisoformat(bar.t.replace("Z", "+00:00")).astimezone(ny)
+        minutes = t.hour * 60 + t.minute
+        return 9 * 60 + 30 <= minutes < 16 * 60
+
+    return {s: [b for b in bars if inside(b)] for s, bars in data.items()}
+
+
 def load_pack(directory: str, timeframe: str, min_bars: int) -> dict[str, list[Bar]]:
     """Uygulamadaki 📦 Backtest Veri Paketi'nin (backtest_data_pack.py) yazdığı
     <directory>/<timeframe>/<HİSSE>.json dosyaları - biçim önbellekle aynı."""
@@ -290,11 +305,11 @@ def load_saved_settings() -> dict:
 
 
 GRID = {
-    "trail_atr_mult": [2.5, 3.5, 5.0],
+    "trail_atr_mult": [3.5, 5.0, 7.0],
     "trail_start_r": [1.0, 1.5, 2.5],
     "tighten_per_r": [0.0, 0.25, 0.5],
-    "er_weight": [0.0, 0.5, 1.0],
-    "breakeven_r": [0.0, 1.0, 2.0],     # 0 = breakeven kapalı
+    "er_weight": [0.0, 0.5],
+    "breakeven_r": [0.0, 1.0],          # 0 = breakeven kapalı
     "max_atr_mult": [2.0, 3.0],
 }
 
@@ -391,6 +406,25 @@ def evaluate(name: str, data: dict[str, list[Bar]], args) -> list[str]:
     if tuned is not None:
         configs.append(("Akıllı Dinamik - eğitimde seçilen", "adaptive_dynamic", {"adaptive_dynamic": tuned}))
 
+    # Yıllara göre (tüm girişler, eğitim+test): sabit ayarlı kuralların farklı
+    # piyasa dönemlerinde (ör. 2022 düşüşü) nasıl davrandığı. "Eğitimde seçilen"
+    # eğitim yıllarında örneklem içi olduğu için burada yok.
+    years = sorted({data[e.symbol][e.idx].t[:4] for e in entries})
+    if len(years) > 1:
+        fixed = configs[:4]
+        by_year = {label: run_config(data, entries, algo_id, settings) for label, algo_id, settings in fixed}
+        lines += ["**Yıllara göre ortalama özsermaye katkısı (% / işlem, tüm girişler)**", "",
+                  "| Yıl | İşlem | " + " | ".join(label for label, _, _ in fixed) + " |",
+                  "|---|---|" + "---|" * len(fixed)]
+        for year in years:
+            idx = [k for k, e in enumerate(entries) if data[e.symbol][e.idx].t[:4] == year]
+            cells = []
+            for label, _, _ in fixed:
+                s_ = summarize([by_year[label][k] for k in idx])
+                cells.append(f"{s_['avg_eq']:+.3f}" if s_.get("n") else "-")
+            lines.append(f"| {year} | {len(idx)} | " + " | ".join(cells) + " |")
+        lines.append("")
+
     for kind_label, kind_filter in (("Tüm girişler", None), ("Trend girişleri", "trend"),
                                     ("Rastgele girişler", "rastgele"), ("Canlı sinyal girişleri", "sinyal")):
         subset = [e for e in test if kind_filter is None or e.kind.startswith(kind_filter)]
@@ -433,7 +467,8 @@ def main() -> None:
         pack = os.path.abspath(args.pack)
         lines += evaluate("Günlük bar (veri paketi)", load_pack(pack, "1Day", 120), args)
         if args.intraday:
-            lines += evaluate("30 dakikalık bar (veri paketi)", load_pack(pack, "30Min", 400), args)
+            lines += evaluate("30 dakikalık bar (veri paketi, normal seans)",
+                              regular_session(load_pack(pack, "30Min", 400)), args)
     elif args.yahoo:
         lines += evaluate("Yahoo günlük", load_yahoo([s.strip() for s in args.yahoo.split(",") if s.strip()],
                                                       args.period), args)
