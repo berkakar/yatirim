@@ -454,6 +454,7 @@ def main() -> None:
     parser.add_argument("--period", default="5y")
     parser.add_argument("--pack", default="", help="Backtest Veri Paketi klasörü (ör. backtest_data)")
     parser.add_argument("--step", type=int, default=3, help="trend/rastgele girişler kaç barda bir")
+    parser.add_argument("--only-intraday", action="store_true", help="--pack ile: günlük kısmı atla")
     parser.add_argument("--no-grid", action="store_true")
     parser.add_argument("--no-signals", action="store_true")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 2)
@@ -465,8 +466,9 @@ def main() -> None:
              f"%{MAX_POSITION_PCT:g} pozisyon tavanı) ile işlemin özsermayeye katkısı.", ""]
     if args.pack:
         pack = os.path.abspath(args.pack)
-        lines += evaluate("Günlük bar (veri paketi)", load_pack(pack, "1Day", 120), args)
-        if args.intraday:
+        if not args.only_intraday:
+            lines += evaluate("Günlük bar (veri paketi)", load_pack(pack, "1Day", 120), args)
+        if args.intraday or args.only_intraday:
             lines += evaluate("30 dakikalık bar (veri paketi, normal seans)",
                               regular_session(load_pack(pack, "30Min", 400)), args)
     elif args.yahoo:
