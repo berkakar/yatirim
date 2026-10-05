@@ -329,6 +329,43 @@ class ScheduleTest(unittest.TestCase):
                          datetime(2026, 10, 12, 15, 40, tzinfo=timezone.utc))
 
 
+class SmallSectorAndMissingDataTest(unittest.TestCase):
+    def test_small_sector_counts_as_one_and_missing_gets_no_points(self):
+        import valuation
+        raws = [make_raw(t, pe=pe, sub="Big") for t, pe in (("A", 10.0), ("B", 20.0), ("C", 20.0), ("D", 40.0))]
+        raws.append(make_raw("NOPE", pe=None, sub="Big"))                 # F/K yok -> Y
+        raws += [make_raw("S1", pe=5.0, sub="Small"), make_raw("S2", pe=50.0, sub="Small")]  # 2 hisse -> U
+        rows = {r["Hisse"]: r for r in valuation.calculate_sector_relative_scores(raws)}
+
+        self.assertFalse(rows["A"]["_az_hisseli"])
+        self.assertEqual(rows["A"]["Alt Sektör İskontosu %"], 50.0)
+        self.assertTrue(rows["S1"]["_az_hisseli"])
+        self.assertEqual(rows["S1"]["Alt Sektör İskontosu %"], 1.0)   # gerçek iskonto %81.8 değil
+        self.assertEqual(rows["S2"]["Alt Sektör İskontosu %"], 1.0)
+        self.assertIsNone(rows["NOPE"]["Alt Sektör İskontosu %"])
+        # Aynı veriler, tek fark iskonto: 1 -> 5p, Y -> 0p.
+        self.assertEqual(rows["S1"]["Nihai Skor"] - rows["NOPE"]["Nihai Skor"], 5)
+        # Eksik F/K medyana katılmadı: Big medyanı 20.
+        self.assertEqual(rows["A"]["Alt Sektör Ort. F/K"], 20.0)
+
+    def test_display_marks_u_and_y(self):
+        import pandas as pd
+        import valuation
+        raws = [make_raw("S1", pe=5.0, sub="Small"), make_raw("NOPE", pe=None, sub="Small")]
+        raws[1]["PEG"] = None
+        df = valuation.prepare_display_df(pd.DataFrame(valuation.calculate_sector_relative_scores(raws)))
+        self.assertNotIn("_az_hisseli", df.columns)
+        cell = valuation._format_cell
+        s1, nope = df.iloc[0], df.iloc[1]
+        self.assertEqual(cell(s1["Alt Sektör İskontosu %"]), "U")
+        self.assertEqual(cell(s1["Alt Sektör Ort. F/K"]), "U")
+        self.assertEqual(cell(nope["Alt Sektör İskontosu %"]), "Y")  # F/K yok: Y öncelikli
+        self.assertEqual(cell(nope["PEG"]), "Y")
+        self.assertEqual(cell(nope["F/K"]), "Y")
+        self.assertEqual(cell(s1["F/K"]), "5")
+        self.assertEqual(cell(s1["Bilanço Tarihi"]), "2026-06-30")
+
+
 class RateLimitDetectionTest(unittest.TestCase):
     def test_detects_yfinance_and_http_429(self):
         import valuation

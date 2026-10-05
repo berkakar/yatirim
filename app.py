@@ -21,7 +21,7 @@ from buy_algorithms import ALGORITHMS, reject_if_marketable
 from backtest_engine import run_backtest
 from backtest_data import append_results, new_run_id
 from stoploss import get_stoploss_data
-from valuation import style_valuation_df
+from valuation import style_valuation_df, prepare_display_df, SMALL_SECTOR_MAX
 import valuation_db
 from valuation_service import get_scores_for_selection, SERVICES, SERVICE_BY_MARKET, MODE_WEEKLY_HOURLY, cycle_progress, next_start
 from dtw_analysis import (
@@ -986,19 +986,26 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Veri Zamanı": st.column_config.TextColumn("Veri Zamanı (TRT)", help="💡 Hissenin verisinin Yahoo Finance'ten çekildiği tarih ve saat."),
         }
 
-        styled_df = style_valuation_df(df_val)
+        styled_df = style_valuation_df(prepare_display_df(df_val))
         st.dataframe(styled_df, column_config=column_config, use_container_width=True, hide_index=True)
+        st.markdown(
+            f"**U** — *Uygun değil:* Hissenin alt sektöründe (iş modeli grubunda) {SMALL_SECTOR_MAX} veya daha az hisse "
+            "olduğu için sektör ortalaması ve iskontosu anlamlı değil. Diğer hesaplar bozulmasın diye iskonto "
+            "hesaba **1** olarak girer (5 puan).  \n"
+            "**Y** — *Veri yok:* Yahoo Finance bu hisse için ilgili veriyi sağlamıyor. Eksik veri o kriterden puan "
+            "almaz ve sektör ortalamasına katılmaz."
+        )
 
         st.divider()
         with st.expander("ℹ️ Nihai Skor nasıl hesaplanıyor? Parametrelerin anlamı", expanded=True):
             st.markdown("""
 **Nihai Skor**, aşağıdaki 14 kritere göre 0'dan başlayıp puan **eklenerek** hesaplanır (hiçbir kriterde puan düşülmez).
-Maksimum toplam **100 puan**dır. Bir kritere ait veri yfinance'ten gelmiyorsa (None/boş), o kriterden puan alınmaz —
+Maksimum toplam **100 puan**dır. Bir kritere ait veri yfinance'ten gelmiyorsa (tabloda **Y**), o kriterden puan alınmaz —
 yani düşük skor her zaman "kötü şirket" anlamına gelmez, bazen sadece "eksik veri" anlamına gelir.
 
 | # | Kriter | Ağırlık | Ne anlama gelir? | Puanlama |
 |---|---|---|---|---|
-| 1 | **İş Modeli İskontosu %** | 15p | Hissenin F/K'sı, aynı mikro iş modelindeki (alt sektör) şirketlerin medyan F/K'sına göre ne kadar ucuz/pahalı. **Eksi değer = akranlarına göre daha pahalı (prim)**, bir hata değildir. | ≥30: 15p · 15-30: 10p · 0-15: 5p · <0 (prim): 0p |
+| 1 | **İş Modeli İskontosu %** | 15p | Hissenin F/K'sı, aynı mikro iş modelindeki (alt sektör) şirketlerin medyan F/K'sına göre ne kadar ucuz/pahalı. **Eksi değer = akranlarına göre daha pahalı (prim)**, bir hata değildir. | ≥30: 15p · 15-30: 10p · 0-15: 5p · <0 (prim): 0p · U (≤3 hisseli alt sektör, 1 kabul): 5p · Y: 0p |
 | 2 | **PEG** | 10p | F/K ÷ EPS büyüme oranı. 1'in altı, büyümesine göre ucuz demektir. | ≤1.0: 10p · 1.0-1.5: 5p |
 | 3 | **EPS Büyümesi %** | 10p | Yıllık kâr büyümesi. Negatifse şirketin kârı küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
 | 4 | **Gelir Büyümesi %** | 10p | Yıllık ciro büyümesi. Negatifse ciro küçülüyor demektir. | ≥10: 10p · 5-10: 5p |

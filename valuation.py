@@ -16,6 +16,21 @@ from yf_data_quality import is_info_meaningful
 
 SUB_SECTOR_FILE = "sub_sectors.json"
 
+# Alt sektörde (iş modelinde) bu kadar veya daha az hisse varsa sektör medyanı/iskontosu
+# anlamsız sayılır: hücrede "U" gösterilir, iskonto hesaba SMALL_SECTOR_DISCOUNT olarak girer.
+SMALL_SECTOR_MAX = 3
+SMALL_SECTOR_DISCOUNT = 1.0
+MARK_SMALL_SECTOR = "U"
+MARK_NO_DATA = "Y"
+SECTOR_COLUMNS = ("Alt Sektör Ort. F/K", "Alt Sektör İskontosu %")
+# "Y" (veri yok) gösterilecek veri sütunları - eksik değer bu kriterden puan almaz.
+DATA_COLUMNS = (
+    "Alt Sektör İskontosu %", "Alt Sektör Ort. F/K", "F/K", "PEG", "EPS Büyümesi %",
+    "Gelir Büyümesi %", "Öz Sermaye Getirisi (ROE) %", "Net Kar Marjı %", "Brüt Kar Marjı %",
+    "Faiz Karşılama Oranı", "Varlık Getirisi (ROA) %", "Borç / Özsermaye", "Borç / Varlık %",
+    "Cari Oran", "Likidite Oranı", "Varlık Devir Hızı", "Bilanço Tarihi", "Sonraki Bilanço",
+)
+
 
 class YahooRateLimited(Exception):
     """Yahoo Finance isteği "çok fazla istek" (HTTP 429) ile reddetti."""
@@ -187,17 +202,22 @@ def calculate_sector_relative_scores(raw_data_list):
     df['Bilanço Tarihi'] = df['_most_recent_quarter']
     df['Sonraki Bilanço'] = df['_next_earnings']
 
-    # 1. Alt Sektöre (İş Modeline) Göre F/K Medyanını Hesapla
-    sub_sector_medians = df.groupby('Alt Sektör (İş Modeli)')['F/K'].transform('median')
+    # 1. Alt Sektöre (İş Modeline) Göre F/K Medyanını Hesapla (eksik F/K'lar medyana katılmaz)
+    group = df.groupby('Alt Sektör (İş Modeli)')
+    sub_sector_medians = group['F/K'].transform('median')
     df['Alt Sektör Ort. F/K'] = sub_sector_medians
+    # Alt sektörde SMALL_SECTOR_MAX veya daha az hisse varsa kıyas anlamsız ("U").
+    df['_az_hisseli'] = group['Hisse'].transform('count') <= SMALL_SECTOR_MAX
 
     # 2. İş Modeli Grubu İskontosu % Hesapla
+    # - Hissenin F/K'sı ya da sektör medyanı yoksa: veri yok ("Y"), puan almaz.
+    # - Alt sektör az hisseliyse ("U"): diğer hesaplar bozulmasın diye 1 kabul edilir.
+    has_data = df['Alt Sektör Ort. F/K'].notna() & df['F/K'].notna() & (df['Alt Sektör Ort. F/K'] > 0)
+    discount = ((df['Alt Sektör Ort. F/K'] - df['F/K']) / df['Alt Sektör Ort. F/K']) * 100
     df['Alt Sektör İskontosu %'] = np.where(
-        df['Alt Sektör Ort. F/K'].notna() & df['F/K'].notna() & (df['Alt Sektör Ort. F/K'] > 0),
-        ((df['Alt Sektör Ort. F/K'] - df['F/K']) / df['Alt Sektör Ort. F/K']) * 100,
-        0
+        has_data & df['_az_hisseli'], SMALL_SECTOR_DISCOUNT,
+        np.where(has_data, discount.round(1), np.nan),
     )
-    df['Alt Sektör İskontosu %'] = df['Alt Sektör İskontosu %'].round(1)
 
     # 3. 100 Puanlık Skorlama Algoritması
     scores = []
@@ -206,9 +226,10 @@ def calculate_sector_relative_scores(raw_data_list):
         
         # 1. Alt Sektör İskontosu (Ağırlık: 15 Puan)
         disc = row['Alt Sektör İskontosu %']
-        if disc >= 30: score += 15
-        elif 15 <= disc < 30: score += 10
-        elif 0 <= disc < 15: score += 5
+        if pd.notna(disc):
+            if disc >= 30: score += 15
+            elif 15 <= disc < 30: score += 10
+            elif 0 <= disc < 15: score += 5
         
         # 2. PEG Oranı (10 Puan)
         peg = row['PEG']
@@ -314,14 +335,45 @@ def calculate_sector_relative_scores(raw_data_list):
         "Varlık Devir Hızı",           # 2 Puan
         "Bilanço Tarihi",              # Bilgi (puan yok)
         "Sonraki Bilanço",             # Bilgi (puan yok)
+        "_az_hisseli",                 # Alt sektör <= SMALL_SECTOR_MAX hisse -> "U"
     ]
 
     out = df[output_cols].astype(object).where(df[output_cols].notna(), None)
     return out.to_dict('records')
 
 
+def prepare_display_df(df):
+    """Tablo için hazırlık: az hisseli alt sektörlerin sektör hücrelerini "U" olarak
+    gösterilecek şekilde işaretler (değer sonsuz yapılır, metne style_valuation_df
+    çevirir) ve yardımcı sütunu kaldırır. Değerler sayısal kalır; renklendirme ve
+    sıralama bozulmaz."""
+    df = df.copy()
+    if "_az_hisseli" in df.columns:
+        small = df["_az_hisseli"].fillna(False).astype(bool)
+        if "Alt Sektör Ort. F/K" in df.columns:
+            df["Alt Sektör Ort. F/K"] = df["Alt Sektör Ort. F/K"].astype(float)
+            df.loc[small, "Alt Sektör Ort. F/K"] = np.inf
+        if "Alt Sektör İskontosu %" in df.columns:
+            disc = df["Alt Sektör İskontosu %"].astype(float)
+            # F/K'sı olmayan hissede "Y" kalır (iskonto zaten hesaplanamadı).
+            df["Alt Sektör İskontosu %"] = disc.where(~(small & disc.notna()), np.inf)
+        df = df.drop(columns=["_az_hisseli"])
+    return df
+
+
+def _format_cell(value):
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return MARK_NO_DATA
+    if isinstance(value, float) and np.isinf(value):
+        return MARK_SMALL_SECTOR
+    if isinstance(value, float):
+        return f"{value:.2f}".rstrip("0").rstrip(".")
+    return str(value)
+
+
 def style_valuation_df(df):
-    """Pandas dataframe için renklendirme kuralları."""
+    """Pandas dataframe için renklendirme kuralları. Eksik veri "Y", az hisseli
+    alt sektör "U" olarak gösterilir (bkz. prepare_display_df)."""
     def apply_styles(val_df):
         style_df = pd.DataFrame('', index=val_df.index, columns=val_df.columns)
         neg = f'color: {negative_color()};'
@@ -356,4 +408,6 @@ def style_valuation_df(df):
 
         return style_df
 
-    return zebra_style(df, extra_style_fn=apply_styles)
+    styler = zebra_style(df, extra_style_fn=apply_styles)
+    cols = [c for c in DATA_COLUMNS if c in df.columns]
+    return styler.format(_format_cell, subset=cols)
