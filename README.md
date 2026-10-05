@@ -7,6 +7,9 @@ Kendi çapımda yatırım araçları. Fincan Kulp ve Stop Loss
 python -m unittest discover -s tests -t .       # birim + sahte Alpaca istemcili entegrasyon testleri
 python scripts/compare_stop_algorithms.py       # stop kurallarının günlük önbellekle karşılaştırması
 python scripts/backtest_adaptive_stop.py        # Akıllı Dinamik Stop walk-forward doğrulaması (--intraday, --yahoo)
+# Uzun geçmişle: uygulamada BackTest > 📦 Backtest Veri Paketi, sonra
+git fetch origin backtest-data && git checkout origin/backtest-data -- backtest_data
+python scripts/backtest_adaptive_stop.py --pack backtest_data --intraday
 ```
 
 ## Değişiklik günlüğü

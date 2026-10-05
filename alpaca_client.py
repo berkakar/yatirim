@@ -569,7 +569,7 @@ class AlpacaClient:
                 return bars
 
     def get_raw_bars_multi(self, symbols: list[str], timeframe: str, start_iso: str, feed: str = "iex",
-                           chunk_size: int = 200) -> dict[str, list[dict]]:
+                           chunk_size: int = 200, adjustment: str = "raw") -> dict[str, list[dict]]:
         """Çok sembollü bar uç noktası (/stocks/bars?symbols=...) - yüzlerce
         sembol için sembol başına ayrı istek yerine her `chunk_size` sembolde
         bir istek (+ sayfaları) atar. Bar dönmeyen semboller sonuçta yer almaz."""
@@ -579,7 +579,7 @@ class AlpacaClient:
             page_token = None
             while True:
                 params = {"symbols": ",".join(chunk), "timeframe": timeframe, "start": start_iso,
-                          "limit": 10000, "feed": feed, "adjustment": "raw"}
+                          "limit": 10000, "feed": feed, "adjustment": adjustment}
                 if page_token:
                     params["page_token"] = page_token
                 r = requests.get(f"{self.data_url}/stocks/bars", headers=self.headers, params=params)

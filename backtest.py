@@ -16,6 +16,7 @@ import streamlit as st
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
+import backtest_data_pack
 from backtest_engine import run_backtest
 from bicak_kanali import find_kilavuz
 from bicak_kanali_test import render_bicak_kanali_chart
@@ -703,6 +704,58 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 st.caption("Bu çalıştırmada hiç işlem gerçekleşmedi.")
 
 
+def _render_data_pack(client: AlpacaClient):
+    """📦 Backtest Veri Paketi - bkz. backtest_data_pack.py."""
+    with st.expander("📦 Backtest Veri Paketi (algoritma doğrulaması için uzun geçmiş)"):
+        st.caption(
+            "Seçilen hisselerin geçmiş barlarını Alpaca'dan (bölünme/temettü düzeltmeli) çeker ve repoda "
+            f"`{backtest_data_pack.DATA_BRANCH}` dalına tek commit olarak yazar - canlı botların önbelleğine ve "
+            "`main` dalına dokunmaz. Claude Code oturumu bu dalı çekip "
+            "`scripts/backtest_adaptive_stop.py --pack backtest_data` ile doğrulama yapar."
+        )
+        symbols_text = st.text_area(
+            "Hisseler (virgülle)", value=", ".join(backtest_data_pack.DEFAULT_SYMBOLS), key="bt_pack_symbols",
+        )
+        c1, c2 = st.columns(2)
+        daily_years = c1.number_input("Günlük geçmiş (yıl, 0 = alma)", min_value=0, max_value=10, value=5,
+                                      step=1, key="bt_pack_daily_years")
+        intraday_months = c2.number_input("30 dakikalık geçmiş (ay, 0 = alma)", min_value=0, max_value=60,
+                                          value=12, step=1, key="bt_pack_intraday_months")
+        specs = {}
+        if daily_years:
+            specs["1Day"] = int(daily_years) * 365
+        if intraday_months:
+            specs["30Min"] = int(intraday_months) * 30
+        symbols = backtest_data_pack.parse_symbols(symbols_text)
+        token = st.secrets.get("GITHUB_TOKEN")
+        if not token:
+            st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - paket repoya yazılamaz.")
+        if st.button("📦 Veri paketini oluştur ve repoya gönder", disabled=not (token and symbols and specs),
+                     key="bt_pack_btn"):
+            bar = st.progress(0.0, text="Alpaca'dan veri çekiliyor...")
+            try:
+                files = backtest_data_pack.fetch_pack(
+                    client, symbols, specs,
+                    progress=lambda i, n, msg: bar.progress(min(i / max(n, 1), 1.0), text=msg),
+                )
+                if not files:
+                    st.error("Alpaca hiç bar döndürmedi - hisse kodlarını kontrol edin.")
+                    return
+                bar.progress(1.0, text=f"{len(files)} dosya GitHub'a yazılıyor...")
+                sha = backtest_data_pack.commit_files(
+                    "berkakar/yatirim", token, files,
+                    f"Backtest veri paketi: {len(symbols)} hisse, {', '.join(f'{k} {v}g' for k, v in specs.items())}",
+                )
+            except Exception as e:
+                st.error(f"Veri paketi oluşturulamadı: {e}")
+                return
+            missing = [s for s in symbols if not any(f"/{s}.json" in path for path in files)]
+            st.success(f"{len(files)} dosya `{backtest_data_pack.DATA_BRANCH}` dalına gönderildi (commit "
+                       f"`{sha[:7]}`). Claude Code oturumuna 'veri paketi hazır' yazabilirsiniz.")
+            if missing:
+                st.caption("Veri bulunamayan hisseler: " + ", ".join(missing))
+
+
 def render_backtest(target_list: list[str], username: str):
     user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
     key_id = user_alpaca.get("key_id")
@@ -745,3 +798,6 @@ def render_backtest(target_list: list[str], username: str):
 
     st.divider()
     _render_results(all_results, key_id, secret_key)
+
+    st.divider()
+    _render_data_pack(client)

@@ -28,6 +28,27 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "15",
+        "date": "2026-10-05",
+        "title": "BackTest sayfasına 📦 Backtest Veri Paketi düğmesi - algoritma doğrulaması için uzun geçmiş",
+        "problem": (
+            "Akıllı Dinamik Stop doğrulaması (#14) yalnızca 6-13 aylık günlük ve ~2.5 aylık 30dk önbellekle "
+            "yapılabildi: canlı önbellek en fazla 400 gün tutuyor, Claude Code oturumu dış veri kaynaklarına "
+            "erişemiyor."
+        ),
+        "change": (
+            "- BackTest sayfasının altında yeni bölüm: hisse listesi (varsayılan önbellekteki 30 hisse), günlük "
+            "geçmiş (varsayılan 5 yıl) ve 30dk geçmiş (varsayılan 12 ay). Veri Alpaca'dan bölünme/temettü "
+            "düzeltmeli çekilir, repoda ayrı `backtest-data` dalına tek commit olarak yazılır - canlı "
+            "önbelleklere ve `main`'e dokunmaz.\n"
+            "- scripts/backtest_adaptive_stop.py --pack backtest_data [--intraday] [--step N] bu paketi okur."
+        ),
+        "where": "backtest_data_pack.py, backtest.py (_render_data_pack), alpaca_client.py "
+                 "(get_raw_bars_multi adjustment), scripts/backtest_adaptive_stop.py, tests/test_backtest_data_pack.py",
+        "settings": "BackTest > 📦 Backtest Veri Paketi.",
+        "track": "Paket gönderildikten sonra doğrulama raporu reports/ altında yeniden üretilir.",
+    },
+    {
         "id": "14",
         "date": "2026-10-05",
         "title": "Akıllı Dinamik Stop (adaptive_dynamic) eklendi ve walk-forward backtest ile doğrulandı - seçenek, varsayılan değil",

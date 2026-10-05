@@ -6,3 +6,5 @@ __pycache__/
 *.pyc
 # SQLite veritabanı (storage.py) - repoda değil, sunucuda tutulur
 data/
+# Backtest veri paketi (backtest_data_pack.py) - ayrı backtest-data dalında tutulur
+backtest_data/

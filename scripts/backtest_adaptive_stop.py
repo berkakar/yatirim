@@ -39,6 +39,7 @@ günlük verisi indirilir - sunucuda daha uzun geçmişle tekrar doğrulamak iç
   python scripts/backtest_adaptive_stop.py --intraday       # + 30dk önbellek
   python scripts/backtest_adaptive_stop.py --yahoo AAPL,MSFT,NVDA --period 5y
   python scripts/backtest_adaptive_stop.py --no-grid        # tarama yok, varsayılanlar
+  python scripts/backtest_adaptive_stop.py --pack backtest_data --intraday   # uygulamadaki veri paketi
 """
 
 import argparse
@@ -73,7 +74,7 @@ SIGNAL_ALGOS = ("demand_zone", "volatility_support", "breakout_volume", "heikin_
 # ---------------------------------------------------------------- veri
 
 def _bars_from_cache(path: str, suffix: str, min_bars: int) -> dict[str, list[Bar]]:
-    with open(os.path.join(ROOT, path), encoding="utf-8") as f:
+    with open(path if os.path.isabs(path) else os.path.join(ROOT, path), encoding="utf-8") as f:
         series = json.load(f)["series"]
     result = {}
     for key, value in series.items():
@@ -92,6 +93,19 @@ def load_daily() -> dict[str, list[Bar]]:
 
 def load_intraday() -> dict[str, list[Bar]]:
     return _bars_from_cache("alpaca_intraday_bars_cache_berkakar.json", ":30Min", 400)
+
+
+def load_pack(directory: str, timeframe: str, min_bars: int) -> dict[str, list[Bar]]:
+    """Uygulamadaki 📦 Backtest Veri Paketi'nin (backtest_data_pack.py) yazdığı
+    <directory>/<timeframe>/<HİSSE>.json dosyaları - biçim önbellekle aynı."""
+    folder = os.path.join(directory, timeframe)
+    result: dict[str, list[Bar]] = {}
+    if not os.path.isdir(folder):
+        return result
+    for name in sorted(os.listdir(folder)):
+        if name.endswith(".json"):
+            result.update(_bars_from_cache(os.path.join(folder, name), f":{timeframe}", min_bars))
+    return result
 
 
 def load_yahoo(symbols: list[str], period: str) -> dict[str, list[Bar]]:
@@ -351,7 +365,7 @@ def evaluate(name: str, data: dict[str, list[Bar]], args) -> list[str]:
     saved = load_saved_settings()
     entries: list[Entry] = []
     for symbol, bars in data.items():
-        entries += trend_and_random_entries(symbol, bars)
+        entries += trend_and_random_entries(symbol, bars, step=args.step)
         if not args.no_signals:
             entries += signal_entries(symbol, bars)
     train, test, cut, split = split_entries(data, entries)
@@ -404,6 +418,8 @@ def main() -> None:
     parser.add_argument("--intraday", action="store_true", help="30dk önbelleği de değerlendir")
     parser.add_argument("--yahoo", default="", help="virgülle hisse listesi - yfinance ile günlük veri")
     parser.add_argument("--period", default="5y")
+    parser.add_argument("--pack", default="", help="Backtest Veri Paketi klasörü (ör. backtest_data)")
+    parser.add_argument("--step", type=int, default=3, help="trend/rastgele girişler kaç barda bir")
     parser.add_argument("--no-grid", action="store_true")
     parser.add_argument("--no-signals", action="store_true")
     parser.add_argument("--workers", type=int, default=os.cpu_count() or 2)
@@ -413,12 +429,17 @@ def main() -> None:
     lines = [f"# Akıllı Dinamik Stop doğrulaması ({started:%d.%m.%Y})", "",
              f"Kayma %{SLIPPAGE * 100:g}/taraf; özsermaye % = risk bazlı adet (%{RISK_PCT:g} risk, "
              f"%{MAX_POSITION_PCT:g} pozisyon tavanı) ile işlemin özsermayeye katkısı.", ""]
-    if args.yahoo:
+    if args.pack:
+        pack = os.path.abspath(args.pack)
+        lines += evaluate("Günlük bar (veri paketi)", load_pack(pack, "1Day", 120), args)
+        if args.intraday:
+            lines += evaluate("30 dakikalık bar (veri paketi)", load_pack(pack, "30Min", 400), args)
+    elif args.yahoo:
         lines += evaluate("Yahoo günlük", load_yahoo([s.strip() for s in args.yahoo.split(",") if s.strip()],
                                                       args.period), args)
     else:
         lines += evaluate("Günlük bar (Alpaca önbelleği)", load_daily(), args)
-    if args.intraday:
+    if args.intraday and not args.pack:
         lines += evaluate("30 dakikalık bar (Alpaca önbelleği)", load_intraday(), args)
     lines.append(f"_Süre: {(datetime.now() - started).seconds} sn_")
     print("\n".join(lines))
