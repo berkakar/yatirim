@@ -126,6 +126,17 @@ def _write_transaction(conn):
     conn.execute("COMMIT")
 
 
+def connection():
+    """Aynı veritabanı dosyasında kendi tablolarını tutan modüller (örn.
+    valuation_db) için kısa ömürlü bağlantı - `with storage.connection() as conn:`."""
+    return _connect()
+
+
+def write_transaction(conn):
+    """`connection()` ile açılan bağlantıda kilitli (BEGIN IMMEDIATE) yazma işlemi."""
+    return _write_transaction(conn)
+
+
 def _dumps(value) -> str:
     return json.dumps(value, ensure_ascii=False)
 

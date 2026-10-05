@@ -13,8 +13,10 @@ def get_stoploss_data(ticker):
 
     print(f"DEBUG: {ticker} için veri alınıyor...")
     
-    # 1. Veri İndirme (1 yıllık periyot)
-    df = yf.download(ticker, period="1y", progress=False)
+    # 1. Veri İndirme (2 yıllık periyot). EMA200'ün oturması için 200 bardan fazlası
+    # gerekir: 1 yıllık veride (~250 bar) ilk 200 bar başlangıca gidiyor ve değer gerçek
+    # EMA200'den sapıyordu. Volatilite/düşüş istatistikleri yine son 1 yıldan (bkz. stats).
+    df = yf.download(ticker, period="2y", progress=False)
     
     # yfinance sütun yapısını düzeltme (Eğer MultiIndex gelirse)
     if isinstance(df.columns, pd.MultiIndex):
@@ -27,7 +29,8 @@ def get_stoploss_data(ticker):
     # İşlem görmeyen/durdurulmuş bir sembol için Yahoo'nun bayat/tekrarlanan
     # fiyat döndürüp döndürmediğini doğrula - anlamsız bir stop loss/EMA
     # analizi üretmemek için.
-    if has_flat_prices(df['Close']):
+    # Son 1 yıla bakılır (2 yıllık pencere, son aylarda durmuş bir sembolü gizleyebilir).
+    if has_flat_prices(df['Close'].tail(253)):
         return None
 
     close = df['Close'].iloc[-1]
@@ -47,20 +50,24 @@ def get_stoploss_data(ticker):
     ema50_dist = ((close - ema50) / ema50) * 100 if pd.notna(ema50) else 0.0
     ema200_dist = ((close - ema200) / ema200) * 100 if pd.notna(ema200) else None
 
+    # Volatilite ve düşüş istatistikleri eskisi gibi son 1 yıl (~252 işlem günü) üzerinden;
+    # 2 yıllık veri yalnızca EMA'ların doğru oturması için.
+    stats = df.tail(253).copy()
+
     # 3. Yıllık Volatilite Hesaplama
-    df['Returns'] = np.log(df['Close'] / df['Close'].shift(1))
-    volatility = df['Returns'].std() * np.sqrt(252) * 100 
-    
+    stats['Returns'] = np.log(stats['Close'] / stats['Close'].shift(1))
+    volatility = stats['Returns'].std() * np.sqrt(252) * 100
+
     # 4. Maksimum Günlük Düşüş (Yüzdesel)
-    max_daily_drop = (df['Close'].pct_change() * 100).min()
-    
+    max_daily_drop = (stats['Close'].pct_change() * 100).min()
+
     # 5. Tipik Günlük Düşüş (0% ile -0.5% aralığındaki ortalama)
-    daily_pct = df['Close'].pct_change()
+    daily_pct = stats['Close'].pct_change()
     typical_drops = daily_pct[(daily_pct < 0) & (daily_pct > -0.005)]
     typical_drop_avg = typical_drops.mean() * 100 if not typical_drops.empty else 0
     
     # 6. Düşüş Histogramı (En sık görülen 5 düşüş seviyesi)
-    pct_changes = df['Close'].pct_change() * 100
+    pct_changes = stats['Close'].pct_change() * 100
     drops = pct_changes[pct_changes < 0]
     rounded_drops = np.floor(drops + 0.5)
     in_range = rounded_drops[(rounded_drops <= -1) & (rounded_drops >= -25)]

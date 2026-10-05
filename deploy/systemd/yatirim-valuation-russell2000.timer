@@ -1,0 +1,15 @@
+[Unit]
+Description=Değerleme & Ucuzluk Skoru - Russell 2000 servisi (haftada 1 döngü, saatte 1 paket)
+
+[Timer]
+# Her saat başı +5 dk tetiklenir. valuation_service.py döngü yoksa ve zamanı
+# gelmemişse hiçbir şey yapmadan çıkar; Cumartesi (ET) yeni haftalık döngüyü başlatır
+# ve her tetiklemede 1 paket (50 hisse) çeker - ~2000 hisse ≈ 40 saat.
+# Başlangıç günü/saati valuation_service.SERVICES["russell2000"] ile aynı olmalı.
+OnCalendar=*-*-* *:05:00 America/New_York
+Unit=yatirim-job@valuation-russell2000.service
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Değerleme & Ucuzluk Skoru - NASDAQ 100 servisi (ABD kapanışından (16:00) sonra)
+
+[Timer]
+# Piyasa servisleri Yahoo Finance tarafından engellenmemek için farklı saatlerde çalışır.
+OnCalendar=Mon..Fri *-*-* 17:15:00 America/New_York
+Unit=yatirim-job@valuation-nasdaq100.service
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Değerleme & Ucuzluk Skoru - BIST 100 servisi (BIST kapanışından (18:00) sonra)
+
+[Timer]
+# Piyasa servisleri Yahoo Finance tarafından engellenmemek için farklı saatlerde çalışır.
+OnCalendar=Mon..Fri *-*-* 18:40:00 Europe/Istanbul
+Unit=yatirim-job@valuation-bist100.service
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target
