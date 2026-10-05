@@ -16,7 +16,7 @@ import concurrent.futures
 import requests
 import streamlit as st
 
-from alpaca_client import AlpacaClient
+from alpaca_client import DEFAULT_TRADING_URL, AlpacaClient
 
 _TIMEOUT = 5
 _HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
@@ -33,11 +33,11 @@ def _check_yahoo_finance() -> tuple[bool, str]:
         return False, str(e)
 
 
-def _check_alpaca(key_id: str | None, secret_key: str | None) -> tuple[bool, str]:
+def _check_alpaca(key_id: str | None, secret_key: str | None, trading_url: str) -> tuple[bool, str]:
     if not key_id or not secret_key:
-        return False, "Bu kullanıcı için Alpaca anahtarı tanımlı değil"
+        return False, "Bu kullanıcı için seçili hesap türünün Alpaca anahtarı tanımlı değil"
     try:
-        AlpacaClient(key_id, secret_key).get_account()
+        AlpacaClient(key_id, secret_key, trading_url).get_account()
         return True, "Bağlantı OK"
     except Exception as e:
         return False, str(e)
@@ -74,13 +74,13 @@ def _check_telegram(bot_token: str | None) -> tuple[bool, str]:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def check_all_connections(
-    key_id: str | None, secret_key: str | None, bot_token: str | None
+    key_id: str | None, secret_key: str | None, bot_token: str | None, trading_url: str = DEFAULT_TRADING_URL,
 ) -> dict[str, tuple[bool, str]]:
     """Her kaynak için (bağlı_mı, detay_mesajı) döner - sıra her zaman
     Yahoo Finance, Alpaca Markets, TEFAS, KAP, Telegram şeklindedir."""
     checks = {
         "Yahoo Finance": _check_yahoo_finance,
-        "Alpaca Markets": lambda: _check_alpaca(key_id, secret_key),
+        "Alpaca Markets": lambda: _check_alpaca(key_id, secret_key, trading_url),
         "TEFAS": _check_tefas,
         "KAP": _check_kap,
         "Telegram": lambda: _check_telegram(bot_token),

@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 
 import buy_stop_rebuy
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import format_order_row, rebuy_row_style, TR_TZ
 from alpaca_trailing_stop import get_bars_for_timeframe, TIMEFRAME
@@ -134,20 +135,18 @@ def _render_buy_point_table(
 
 
 def render_premium_buy_portfolio(target_list: list[str], username: str):
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id = user_alpaca.get("key_id")
-    secret_key = user_alpaca.get("secret_key")
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     github_token = st.secrets.get("GITHUB_TOKEN")
 
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
+        missing_keys_warning(username)
         return
     if not github_token:
         st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - portföy ayarları kaydedilemez.")
         return
 
     watchlist_name = f"premium-buy-portfolio-{username}"
-    client = AlpacaClient(key_id, secret_key)
+    client = AlpacaClient(key_id, secret_key, trading_url)
     watchlist = client.get_or_create_watchlist(watchlist_name)
     current_symbols = [a["symbol"] for a in watchlist.get("assets", [])]
     config = read_portfolio_config(GITHUB_REPO, github_token, username)

@@ -9,19 +9,17 @@ fill'leri de loglar - stop tetiklenip pozisyon kapandıysa gerçek
 satış fiyatını/zamanını görmek için."""
 
 import json
-import os
 
 import storage
-from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+from alpaca_client import AlpacaClient
+from alpaca_account import build_job_client
 from orb_core import holdings_path
 
 
 def build_client() -> AlpacaClient:
-    key_id = os.environ["APCA_API_KEY_ID"]
-    secret_key = os.environ["APCA_API_SECRET_KEY"]
-    trading_url = os.environ.get("APCA_API_BASE_URL", DEFAULT_TRADING_URL)
-    data_url = os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL)
-    return AlpacaClient(key_id, secret_key, trading_url, data_url)
+    # Adres ve anahtarlar kullanıcının hesap türü ayarından (Sanal Para / Gerçek Para) -
+    # bkz. alpaca_account.build_job_client.
+    return build_job_client("berkakar")
 
 
 def report(username: str = "berkakar") -> None:

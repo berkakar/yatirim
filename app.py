@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from config import load_ticker_lists, save_ticker_lists, search_tickers, GITHUB_REPO, DEFAULT_NASDAQ_100, DEFAULT_NYSE, DEFAULT_BIST_100, DEFAULT_RUSSELL_2000, load_stock_groups, save_stock_groups, load_group_markets, save_group_markets, MARKETS
 from github_config import read_json_from_github, write_json_to_github
 from ui_style import zebra_style, freshness_caption
-from theme import inject_css, render_mode_switcher, get_plotly_template
+from theme import inject_css, render_mode_switcher, get_plotly_template, set_live_accent
 from scanner import (
     get_scanner_data, bars_from_df, fetch_daily_pairs, SCAN_TIMEFRAMES, SCAN_TIMEFRAME_LABELS,
     INTRADAY_DEFAULT_DAYS, INTRADAY_MAX_DAYS, DAILY_DEFAULT_DAYS, DAILY_MAX_DAYS,
@@ -34,8 +34,10 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import (
-    render_alpaca_dashboard, render_account_summary, render_positions_summary_table, render_account_mode_badge,
+from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
+from alpaca_account_ui import (
+    get_user_alpaca, has_alpaca_account, is_live, missing_keys_warning, render_account_mode_badge,
+    render_account_mode_setting,
 )
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
@@ -86,12 +88,6 @@ MODULE_DISPLAY = {
 def _save_file(username):
     return f"selected_tickers_{username}.json"
 
-def get_user_alpaca_creds(username):
-    """Kullanıcıya özel Alpaca anahtarlarını secrets.toml'daki [alpaca.<username>]
-    bölümünden okur. Tanımlı değilse (None, None) döner."""
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    return user_alpaca.get("key_id"), user_alpaca.get("secret_key")
-
 def save_selections(tickers, username):
     """Seçili hisseleri kalıcı olması için GitHub'a commit'ler (mümkün olduğunda),
     ayrıca yerel dosyaya da yazar - bkz. config.save_ticker_lists için aynı gerekçe.
@@ -133,6 +129,7 @@ def load_selections(username):
 
 # Sayfa Yapılandırması
 st.set_page_config(layout="wide", page_title="Yatırım Terminali")
+set_live_accent(False)  # Gerçek Para + Algoritmik Ticaret sayfasında aşağıda tekrar açılır
 inject_css()
 
 # ------------------------------------------------------------------------------
@@ -389,10 +386,14 @@ def render_chart_for(ticker):
 
 
 # Sanal Para / Gerçek Para rozeti: Giriş Sayfası'nda ve Algoritmik Ticaret
-# kategorisindeki her sayfanın en üstünde. Arayüzdeki tüm Alpaca istemcileri
-# DEFAULT_TRADING_URL ile oluşturulduğu için rozet de onu gösterir.
-if (module == NAV_HOME or category == "🤖 Algoritmik Ticaret") and all(get_user_alpaca_creds(username)):
-    render_account_mode_badge()
+# kategorisindeki her sayfanın en üstünde. Hesap türü kullanıcı bazlı ayardır
+# (bkz. alpaca_account.py); Gerçek Para'da Algoritmik Ticaret sayfalarının
+# zemini açık turuncu olur.
+if category == "🤖 Algoritmik Ticaret" and is_live(username):
+    set_live_accent(True)
+    inject_css()
+if (module == NAV_HOME or category == "🤖 Algoritmik Ticaret") and has_alpaca_account(username):
+    render_account_mode_badge(username)
 
 # ==============================================================================
 # 0. MODÜL: GİRİŞ SAYFASI (ANA SAYFA)
@@ -401,24 +402,28 @@ if module == NAV_HOME:
     st.header("🏠 Genel Bakış")
     st.caption("Hesap özeti, liste durumu ve bu oturumdaki son tarama sonuçları.")
 
-    key_id, secret_key = get_user_alpaca_creds(username)
+    if has_alpaca_account(username):
+        render_account_mode_setting(username)
+    key_id, secret_key, trading_url = get_user_alpaca(username)
 
     alpaca_positions = None
     if key_id and secret_key:
         try:
-            alpaca_client = AlpacaClient(key_id, secret_key)
+            alpaca_client = AlpacaClient(key_id, secret_key, trading_url)
             alpaca_positions = alpaca_client.get_all_positions()
             render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
             render_positions_summary_table(alpaca_positions)
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
+    elif has_alpaca_account(username):
+        missing_keys_warning(username)
     else:
         st.info(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
 
     st.divider()
     st.subheader("🔌 Bağlantılar")
     bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
-    connections = check_all_connections(key_id, secret_key, bot_token)
+    connections = check_all_connections(key_id, secret_key, bot_token, trading_url)
     conn_cols = st.columns(len(connections))
     for col, (name, (is_connected, detail)) in zip(conn_cols, connections.items()):
         icon = "🟢" if is_connected else "🔴"

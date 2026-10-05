@@ -110,7 +110,8 @@ import requests
 from dotenv import load_dotenv
 
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars
-from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL, stop_beyond_price
+from alpaca_client import AlpacaClient, stop_beyond_price
+from alpaca_account import build_job_client
 import storage
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
@@ -1440,11 +1441,9 @@ def run_loop(client: AlpacaClient) -> None:
 
 
 def build_client() -> AlpacaClient:
-    key_id = os.environ["APCA_API_KEY_ID"]
-    secret_key = os.environ["APCA_API_SECRET_KEY"]
-    trading_url = os.environ.get("APCA_API_BASE_URL", DEFAULT_TRADING_URL)
-    data_url = os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL)
-    return AlpacaClient(key_id, secret_key, trading_url, data_url)
+    # Adres ve anahtarlar kullanıcının hesap türü ayarından (Sanal Para / Gerçek Para) -
+    # bkz. alpaca_account.build_job_client.
+    return build_job_client("berkakar")
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
@@ -797,14 +798,12 @@ def _render_data_pack(key_id: str, secret_key: str):
 
 
 def render_backtest(target_list: list[str], username: str):
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id = user_alpaca.get("key_id")
-    secret_key = user_alpaca.get("secret_key")
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`). Backtest, geçmiş fiyat verisi için Alpaca'nın veri API'sini kullanır.")
+        missing_keys_warning(username, " Backtest, geçmiş fiyat verisi için Alpaca'nın veri API'sini kullanır.")
         return
 
-    client = AlpacaClient(key_id, secret_key)
+    client = AlpacaClient(key_id, secret_key, trading_url)
 
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()

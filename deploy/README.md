@@ -55,6 +55,11 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
    (`--with-playwright` sadece Russell 2000 işi için gerekli.)
 3. **Secret'ları girin:** `sudo nano /etc/yatirim/env`. Değerler GitHub'daki
    `APCA_API_KEY_ID`, `APCA_API_SECRET_KEY` ve `TELEGRAM_BOT_TOKEN` secret'larıyla aynı.
+   **Gerçek Para:** işlerin hangi Alpaca hesabında çalışacağını `APCA_API_BASE_URL`
+   değil, arayüzdeki *Giriş Sayfası → ⚙️ Alpaca Hesap Türü* ayarı belirler (bkz.
+   `alpaca_account.py`). Gerçek Para seçilecekse buraya gerçek hesabın anahtarlarını
+   `APCA_LIVE_API_KEY_ID` / `APCA_LIVE_API_SECRET_KEY` olarak ekleyin; eklenmemişse
+   Gerçek Para seçiliyken işler çalışmaz (Telegram'a hata gider), paper hesaba düşmez.
 4. **Deneyin:** Alpaca'ya dokunmayan bir işle başlayın.
    ```bash
    sudo systemctl start yatirim-job@tefas

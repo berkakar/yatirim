@@ -53,6 +53,10 @@ if [ ! -f /etc/yatirim/env ]; then
 # GitHub Actions secret'larının karşılığı. Değerleri doldurun.
 APCA_API_KEY_ID=
 APCA_API_SECRET_KEY=
+# Gerçek Para hesabının anahtarları - yalnızca arayüzde hesap türü "Gerçek Para"
+# seçildiğinde kullanılır (hesap türünü bu dosya değil, arayüzdeki ayar belirler).
+APCA_LIVE_API_KEY_ID=
+APCA_LIVE_API_SECRET_KEY=
 APCA_API_BASE_URL=https://paper-api.alpaca.markets/v2
 APCA_API_DATA_URL=https://data.alpaca.markets/v2
 TELEGRAM_BOT_TOKEN=

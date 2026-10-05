@@ -28,6 +28,29 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "18",
+        "date": "2026-10-05",
+        "title": "Alpaca hesap türü kullanıcı bazlı ayar oldu - Gerçek Para'ya onaylı geçiş, turuncu tema",
+        "problem": (
+            "Arayüz ve botlar her zaman paper adresine bağlanıyordu; gerçek hesaba geçmenin ve hangi hesapta "
+            "işlem yapıldığını tek yerden yönetmenin yolu yoktu."
+        ),
+        "change": (
+            "- Giriş Sayfası > ⚙️ Alpaca Hesap Türü: Sanal Para / Gerçek Para. Gerçek Para'ya geçiş onay kutusu "
+            "ve 'GERÇEK PARA' yazılmasını ister; Sanal Para'ya dönüş tek tıkla.\n"
+            "- Arayüz ve sunucudaki tüm botlar adresi ve anahtarları bu ayardan alır (alpaca_account.py). "
+            "Gerçek Para'da gerçek hesap anahtarları yoksa paper'a düşülmez: arayüz uyarı verir, işler çalışmaz.\n"
+            "- Gerçek Para'da Algoritmik Ticaret sayfalarının zemini açık turuncu olur."
+        ),
+        "where": "alpaca_account.py, alpaca_account_ui.py, theme.py (LIVE_ACCENT_OVERRIDES), app.py, runner'ların "
+                 "build_client'ı, arayüz modülleri, deploy/install.sh, deploy/README.md, tests/test_account_mode.py",
+        "settings": (
+            "Giriş Sayfası > ⚙️ Alpaca Hesap Türü. Gerçek hesap anahtarları: secrets.toml [alpaca.<kullanıcı>] "
+            "live_key_id / live_secret_key, sunucuda /etc/yatirim/env APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY."
+        ),
+        "track": "Geçişten sonra rozetin, turuncu zeminin ve Bağlantılar'daki Alpaca durumunun doğru hesabı gösterdiği kontrol edilmeli.",
+    },
+    {
         "id": "17",
         "date": "2026-10-05",
         "title": "Alpaca hesap türü rozeti: Sanal Para (Paper Trading) / Gerçek Para",
@@ -37,7 +60,7 @@ CHANGES = [
             "rozeti: paper uç noktasında 🧪 Sanal Para, canlı uç noktada kırmızı 💰 Gerçek Para.\n"
             "- Tür, emirlerin gönderildiği Alpaca uç noktasından (paper-api / api) belirlenir."
         ),
-        "where": "alpaca_client.py (is_paper_url, AlpacaClient.is_paper), alpaca_dashboard.py "
+        "where": "alpaca_client.py (is_paper_url, AlpacaClient.is_paper), alpaca_account_ui.py "
                  "(render_account_mode_badge), app.py, tests/test_account_mode.py",
         "settings": "Ayar yok - kullanıcıya Alpaca anahtarı tanımlıysa gösterilir.",
         "track": "Gerçek hesaba geçildiğinde rozetin Gerçek Para'ya döndüğü kontrol edilmeli.",
