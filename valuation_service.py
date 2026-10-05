@@ -79,8 +79,6 @@ SERVICES = {
 }
 MARKET_SLUGS = {slug: svc["market"] for slug, svc in SERVICES.items()}
 SERVICE_BY_MARKET = {svc["market"]: svc for svc in SERVICES.values()}
-# Haftalık döngü, son döngü başlangıcından en az bu kadar gün sonra yeniden başlar.
-CYCLE_MIN_GAP_DAYS = 6
 
 BATCH_SIZE = int(os.environ.get("VALUATION_BATCH_SIZE", "50"))
 # Servis: paketler arası bekleme (sn) ve hisseler arası rastgele kısa bekleme aralığı.
@@ -311,14 +309,19 @@ def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_P
 
 
 def cycle_due(service: dict, now_utc) -> bool:
-    """Haftalık döngü başlatılmalı mı? Başlangıç gününde (yerel saatle) olup son
-    döngü en az CYCLE_MIN_GAP_DAYS önce başlamışsa evet."""
-    local = now_utc.astimezone(ZoneInfo(service["tz"]))
+    """Haftalık döngü başlatılmalı mı? Başlangıç penceresindeyiz (Cumartesi/Pazar,
+    yerel saat) ve bu haftanın penceresi açıldığından beri hiç çalıştırma başlamadıysa
+    evet. Hafta içi elle yapılan --full doldurma bu haftanın döngüsünü engellemez."""
+    tz = ZoneInfo(service["tz"])
+    local = now_utc.astimezone(tz)
     if local.weekday() not in service["start_days"]:
         return False
+    days_since_open = (local.weekday() - service["start_days"][0]) % 7
+    open_day = (local - timedelta(days=days_since_open)).date()
+    window_open = datetime(open_day.year, open_day.month, open_day.day, tzinfo=tz).astimezone(timezone.utc)
     last = db.get_run(service["market"])
     last_start = db.parse_iso(last["started_at"]) if last else None
-    return last_start is None or now_utc - last_start >= timedelta(days=CYCLE_MIN_GAP_DAYS)
+    return last_start is None or last_start < window_open
 
 
 def run_cycle_step(service: dict, batch_size=BATCH_SIZE, ticker_delay_s=SERVICE_TICKER_DELAY_S,

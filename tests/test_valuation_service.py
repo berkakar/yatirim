@@ -295,6 +295,14 @@ class WeeklyHourlyCycleTest(ValuationServiceTestCase):
         # Bir sonraki Cumartesi başlar.
         self.assertEqual(self.step(fetcher, sat + timedelta(days=7))["action"], "step")
 
+    def test_weekday_full_run_does_not_block_saturday_cycle(self):
+        thu = datetime(2026, 10, 8, 14, 0, tzinfo=timezone.utc)
+        self.clock.t = thu
+        self.svc.run_market("Russell 2000", batch_size=50, batch_pause_s=0, ticker_delay_s=None,
+                            fetcher=FakeFetcher(), sleep=self.sleeps.append, now=self.clock)
+        sat = datetime(2026, 10, 10, 4, 5, tzinfo=timezone.utc)
+        self.assertEqual(self.step(FakeFetcher(), sat)["action"], "step")
+
     def test_not_started_on_weekdays(self):
         tue = datetime(2026, 10, 6, 14, 5, tzinfo=timezone.utc)
         fetcher = FakeFetcher()

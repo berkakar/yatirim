@@ -89,13 +89,21 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
 Arayüz seçilen portföyü bu tablodan okur; tabloda olmayan bir hisse Yahoo'dan anlık
 çekilir, piyasanın kayıtlı hisseleriyle birlikte skorlanır ve kaydedilir. Bu işler
 **SQLite gerektirir** (`YATIRIM_DB_PATH`). Ayarlar: `VALUATION_BATCH_SIZE` (50),
-`VALUATION_BATCH_PAUSE_S` (30). Kurulumdan sonra ilk doldurma için elle:
+`VALUATION_BATCH_PAUSE_S` (30).
+
+Devreye alma: kod sunucuda `/opt/yatirim/app` altında dakikada bir main ile eşitlendiği
+için betik dosyaları oradan alır (ayrı klon gerekmez). PR main'e alındıktan sonra:
 
 ```bash
-cd /root/yatirim && git pull && sudo bash deploy/install.sh
-sudo systemctl enable --now yatirim-valuation-{bist100,nasdaq100,nyse,russell2000}.timer
-sudo systemctl start yatirim-job@valuation-nasdaq100   # diğerleri kendi saatinde
+sudo bash /opt/yatirim/app/deploy/enable_valuation.sh --fill                  # kur, timer'ları aç, BIST/NASDAQ/NYSE'yi doldur
+sudo bash /opt/yatirim/app/deploy/enable_valuation.sh --fill --with-russell   # + Russell 2000 (tek seferde, ~1 saat)
+sudo bash /opt/yatirim/app/deploy/enable_valuation.sh status                  # timer'lar, son çalışmalar, kayıt sayıları
+sudo bash /opt/yatirim/app/deploy/enable_valuation.sh disable                 # timer'ları kapat
+journalctl -u yatirim-valuation-fill -f                                       # ilk doldurmayı izle
 ```
+
+İlk doldurma arka planda (systemd-run) ve piyasalar sırayla çalışır; terminali kapatmak
+onu durdurmaz.
 
 ## Günlük kullanım
 
