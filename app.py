@@ -5,6 +5,40 @@ import numpy as np
 import plotly.graph_objects as go
 import json
 import os
+import sys
+
+
+def _purge_stale_project_modules():
+    """Streamlit her etkileşimde yalnızca app.py'yi yeniden yürütür; içe
+    aktarılan proje modülleri (theme.py, backtest.py, ...) süreç belleğinde
+    kalır. Sunucuda kod güncellenip servis yeniden başlatılmazsa yeni app.py
+    eski bir modülden yeni bir adı import etmeye çalışır ve "cannot import
+    name" hatası verir. Burada proje dizinindeki modüllerin dosya zamanları
+    izlenir; biri değiştiyse (ya da bu süreçte ilk kez çalışılıyorsa) hepsi
+    sys.modules'tan çıkarılır, aşağıdaki import'lar güncel dosyaları yükler -
+    yeniden başlatmanın etkisi, servisi yeniden başlatmadan."""
+    app_dir = os.path.dirname(os.path.abspath(__file__)) + os.sep
+    current = {}
+    for name, mod in list(sys.modules.items()):
+        path = getattr(mod, "__file__", None)
+        if name == "__main__" or not path or not os.path.abspath(path).startswith(app_dir):
+            continue
+        try:
+            current[name] = os.path.getmtime(path)
+        except OSError:
+            current[name] = None
+    seen = getattr(sys, "_yatirim_module_mtimes", None)
+    if seen is None or any(name in seen and seen[name] != mtime for name, mtime in current.items()):
+        for name in current:
+            sys.modules.pop(name, None)
+        sys._yatirim_module_mtimes = {}
+    else:
+        # Son kontrolden sonra ilk kez yüklenen modüller (ör. fonksiyon içi import'lar).
+        seen.update({name: mtime for name, mtime in current.items() if name not in seen})
+
+
+_purge_stale_project_modules()
+
 import storage
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
