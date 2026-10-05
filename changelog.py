@@ -28,6 +28,26 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "16",
+        "date": "2026-10-05",
+        "title": "BackTest sonuç tablosuna Al-Tut karşılaştırması, kazanma oranı, maksimum düşüş ve profit factor",
+        "problem": (
+            "Sonuç tablosu yalnızca toplam K/Z gösteriyordu: stratejinin hisseyi alıp tutmaktan iyi olup "
+            "olmadığı, isabeti, kazanç/kayıp dengesi ve yol boyunca görülen en kötü düşüş görülemiyordu."
+        ),
+        "change": (
+            "- Yeni sütunlar: Al-Tut %, Al-Tut Farkı (K/Z % − Al-Tut %), Kazanma Oranı %, Maks. Düşüş %, "
+            "Profit Factor. Tablonun altında her alanın açıklaması not olarak gösterilir.\n"
+            "- Kazanma oranı ve profit factor kayıtlı işlemlerden hesaplanır, eski çalıştırmalarda da görünür. "
+            "Al-Tut ve maks. düşüş mum verisi gerektirdiği için yalnızca yeni çalıştırmalarda dolu."
+        ),
+        "where": "backtest_engine.py (trade_stats, max_drawdown_pct, BacktestResult.buy_hold_pct/"
+                 "max_drawdown_pct), backtest.py (_render_results, METRIC_NOTES), app.py (tarama backtest "
+                 "kaydı), tests/test_backtest_metrics.py",
+        "settings": "Ayar yok - BackTest > 📊 Sonuçlar.",
+        "track": "Yeni backtest çalıştırmalarında stratejiyi Al-Tut Farkı ve Maks. Düşüş ile birlikte değerlendir.",
+    },
+    {
         "id": "15",
         "date": "2026-10-05",
         "title": "BackTest sayfasına 📦 Backtest Veri Paketi düğmesi - algoritma doğrulaması için uzun geçmiş",

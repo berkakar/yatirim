@@ -187,6 +187,12 @@ class BacktestResult:
     final_value: float = 0.0
     stop_loss_triggered: bool = False
     stop_loss_triggered_at: str | None = None
+    # Al-Tut: işlem başlangıcındaki ilk mumun açılışında alıp test sonuna
+    # (stratejinin test_end_close'uyla aynı kapanış) kadar tutmanın getirisi.
+    buy_hold_pct: float | None = None
+    # Mark-to-market özsermaye eğrisinde (nakit + açık pozisyon × kapanış)
+    # bir zirveden sonraki en büyük yüzde düşüş - pozitif sayı (12.5 = %12.5).
+    max_drawdown_pct: float | None = None
 
     @property
     def pnl(self) -> float:
@@ -195,6 +201,79 @@ class BacktestResult:
     @property
     def pnl_pct(self) -> float:
         return round(self.pnl / self.starting_budget * 100, 2) if self.starting_budget else 0.0
+
+
+def _trade_field(t, name):
+    return t.get(name) if isinstance(t, dict) else getattr(t, name, None)
+
+
+def trade_stats(trades: list) -> dict:
+    """Alış-satış sırasındaki işlem listesinden (Trade ya da kayıtlı dict)
+    kapanmış işlem istatistikleri: her alış, ardından gelen satışla
+    eşleştirilir (motor her zaman tüm adedi tek satışla kapatır).
+
+    Döner: {"closed": kapanmış işlem sayısı, "win_rate": kazançlı işlem
+    yüzdesi (kapanmış işlem yoksa None), "profit_factor": brüt kâr / brüt
+    zarar (kapanmış işlem yoksa None, hiç zarar yoksa ve kâr varsa inf)}.
+    Bu sadece kayıtlı işlemlerden hesaplandığı için eski sonuçlar için de
+    çalışır."""
+    closed_pnls = []
+    entry = None
+    for t in trades or []:
+        side = _trade_field(t, "side")
+        if side == "buy":
+            entry = t
+        elif side == "sell" and entry is not None:
+            qty = _trade_field(t, "qty") or 0
+            closed_pnls.append((_trade_field(t, "price") - _trade_field(entry, "price")) * qty)
+            entry = None
+    if not closed_pnls:
+        return {"closed": 0, "win_rate": None, "profit_factor": None}
+    gross_profit = sum(p for p in closed_pnls if p > 0)
+    gross_loss = -sum(p for p in closed_pnls if p < 0)
+    if gross_loss > 0:
+        profit_factor = round(gross_profit / gross_loss, 2)
+    else:
+        profit_factor = math.inf if gross_profit > 0 else None
+    wins = sum(1 for p in closed_pnls if p > 0)
+    return {"closed": len(closed_pnls), "win_rate": round(wins / len(closed_pnls) * 100, 2),
+            "profit_factor": profit_factor}
+
+
+def max_drawdown_pct(trades: list, bars: list[Bar], starting_budget: float, start_ts: datetime) -> float | None:
+    """Nakit + açık pozisyonun mum kapanışıyla değerlendiği özsermaye
+    eğrisinde (start_ts'den itibaren) zirveden en büyük yüzde düşüş.
+    Satış anındaki gerçekleşen değer de (stop fiyatı/gap açılışı) bir
+    eğri noktasıdır - kapanış öncesi stoplanan bir mumun düşüşü kaybolmasın."""
+    if not starting_budget or not bars:
+        return None
+    pending = sorted(trades or [], key=lambda t: _parse(_trade_field(t, "time")))
+    cash, qty, k = starting_budget, 0.0, 0
+    peak, max_dd = starting_budget, 0.0
+
+    def _mark(value: float):
+        nonlocal peak, max_dd
+        peak = max(peak, value)
+        if peak > 0:
+            max_dd = max(max_dd, (peak - value) / peak * 100)
+
+    for bar in bars:
+        bar_ts = _parse(bar.t)
+        while k < len(pending) and _parse(_trade_field(pending[k], "time")) <= bar_ts:
+            t = pending[k]
+            amount = (_trade_field(t, "qty") or 0) * _trade_field(t, "price")
+            if _trade_field(t, "side") == "buy":
+                cash -= amount
+                qty += _trade_field(t, "qty") or 0
+            else:
+                cash += amount
+                qty -= _trade_field(t, "qty") or 0
+                _mark(cash + qty * _trade_field(t, "price"))
+            k += 1
+        if bar_ts < start_ts:
+            continue
+        _mark(cash + qty * bar.c)
+    return round(max_dd, 2)
 
 
 def run_backtest(
@@ -367,4 +446,7 @@ def run_backtest(
         result.trades.append(Trade("sell", last_bar.t, round(last_bar.c, 4), position["qty"], "test_end_close"))
 
     result.final_value = round(cash, 2)
+    if start_idx < len(bars) and bars[start_idx].o > 0:
+        result.buy_hold_pct = round((stop_bars_eff[-1].c / bars[start_idx].o - 1) * 100, 2)
+        result.max_drawdown_pct = max_drawdown_pct(result.trades, stop_bars_eff, starting_budget, trading_start)
     return result

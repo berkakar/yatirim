@@ -639,6 +639,8 @@ elif module == "Alım Bölgesi Tarama":
                         "final_value": result.final_value,
                         "pnl": result.pnl,
                         "pnl_pct": result.pnl_pct,
+                        "buy_hold_pct": result.buy_hold_pct,
+                        "max_drawdown_pct": result.max_drawdown_pct,
                         "stop_loss_enabled": False,
                         "max_loss_pct": None,
                         "stop_loss_triggered": result.stop_loss_triggered,
