@@ -1,0 +1,12 @@
+[Unit]
+Description=Değerleme & Ucuzluk Skoru - Russell 2000 servisi (NYSE servisinden sonra; ~2000 hisse, ~70 dk sürer)
+
+[Timer]
+# Piyasa servisleri Yahoo Finance tarafından engellenmemek için farklı saatlerde çalışır.
+OnCalendar=Mon..Fri *-*-* 20:30:00 America/New_York
+Unit=yatirim-job@valuation-russell2000.service
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

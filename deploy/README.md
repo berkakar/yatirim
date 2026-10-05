@@ -31,6 +31,10 @@ Streamlit arayüzü de isteğe bağlı olarak aynı Droplet'e taşınabilir (bkz
 | `tefas` | tefas_fonlari.yml | Hafta içi 09:00, 13:00, 19:10 TRT |
 | `fon-hisse-uyari` | fon_hisse_uyari.yml | Hafta içi 10:00–17:55 TRT, 5 dk'da bir |
 | `russell2000` | update_russell2000.yml | Her ayın 1'i 06:00 UTC |
+| `valuation-bist100` | — (yeni) | Hafta içi 18:40 TRT |
+| `valuation-nasdaq100` | — (yeni) | Hafta içi 17:15 ET |
+| `valuation-nyse` | — (yeni) | Hafta içi 18:45 ET |
+| `valuation-russell2000` | — (yeni) | Hafta içi 20:30 ET (~70 dk sürer) |
 
 Sadece elle tetiklenen `kap_refresh_holdings.yml`, `orb_stop_status.yml` ve ORB'nin
 `reconcile_symbols` girişi GitHub Actions'ta kaldı. `update_version.yml` de orada kaldı.
@@ -63,6 +67,31 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
    sudo /opt/yatirim/bin/yatirim-timers status
    ```
    ⚠️ İkisini aynı anda açık bırakmayın, aynı alım iki kez yapılabilir.
+
+## Değerleme & Ucuzluk Skoru servisleri
+
+`valuation-*` işleri `valuation_service.py`'yi her piyasa için ayrı saatte çalıştırır
+(Yahoo Finance'in toplu istekleri engellememesi için). Her çalıştırma:
+
+1. Evreni kurar: tüm kullanıcıların o piyasa listesi + o piyasaya bağlı tüm kullanıcı
+   grupları, tekrarlar elenmiş olarak.
+2. Veritabanında o piyasaya ait olup artık ne piyasa listesinde ne de herhangi bir
+   kullanıcının hisselerinde (grupları, kayıtlı seçimleri) olan satırları siler.
+3. Yahoo'dan 50'lik paketler halinde çeker (paketler arası ~30 sn; 429 gelirse
+   60/120/240 sn bekleyip tekrar dener, sonra bırakır).
+4. Çekim bitince skorları mevcut kriterlerle hesaplar ve `valuation_scores` tablosuna
+   tarih/saatle yazar (varsa üzerine).
+
+Arayüz seçilen portföyü bu tablodan okur; tabloda olmayan bir hisse Yahoo'dan anlık
+çekilir, piyasanın kayıtlı hisseleriyle birlikte skorlanır ve kaydedilir. Bu işler
+**SQLite gerektirir** (`YATIRIM_DB_PATH`). Ayarlar: `VALUATION_BATCH_SIZE` (50),
+`VALUATION_BATCH_PAUSE_S` (30). Kurulumdan sonra ilk doldurma için elle:
+
+```bash
+cd /root/yatirim && git pull && sudo bash deploy/install.sh
+sudo systemctl enable --now yatirim-valuation-{bist100,nasdaq100,nyse,russell2000}.timer
+sudo systemctl start yatirim-job@valuation-nasdaq100   # diğerleri kendi saatinde
+```
 
 ## Günlük kullanım
 

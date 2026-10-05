@@ -4,23 +4,31 @@ import pandas as pd
 import numpy as np
 import json
 import os
-import streamlit as st
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timezone
 
-import storage
-from github_config import read_json_from_github, update_json_on_github
 from theme import negative_color
 from ui_style import zebra_style
 from yf_data_quality import is_info_meaningful
 
+# Veri çekimi ve saklama artık piyasa servislerinde (valuation_service.py) ve
+# veritabanı tablosunda (valuation_db.py); bu modülde yalnızca tek hissenin ham
+# verisinin çıkarılması, skor hesabı ve tablo stili kaldı.
+
 SUB_SECTOR_FILE = "sub_sectors.json"
 
-GITHUB_REPO = "berkakar/yatirim"
-VALUATION_CACHE_FILE = "valuation_cache.json"
-# Bir hissenin en son bilinen bilanço (mostRecentQuarter) tarihinden itibaren, yeni bir
-# çeyrek raporu beklenmeden önce en az bu kadar gün geçmiş olmalı (~1 çeyrek + şirketlerin
-# raporlama gecikmesi için tampon). Bu süre dolmadan aynı hisse tekrar çekilmez.
-QUARTER_REFRESH_BUFFER_DAYS = 100
+
+class YahooRateLimited(Exception):
+    """Yahoo Finance isteği "çok fazla istek" (HTTP 429) ile reddetti."""
+
+
+def is_rate_limit_error(exc) -> bool:
+    """yfinance'in sürümüne göre YFRateLimitError ya da içinde 429 geçen bir HTTP
+    hatası gelir - ikisini de yakalamak için sınıf adına ve mesaja bakılır."""
+    if "RateLimit" in type(exc).__name__:
+        return True
+    text = str(exc)
+    return "429" in text or "Too Many Requests" in text or "Rate limited" in text
+
 
 def load_sub_sectors():
     """sub_sectors.json dosyasından özel alt sektör haritasını yükler."""
@@ -33,249 +41,127 @@ def load_sub_sectors():
     return {}
 
 
-def fetch_single_ticker_raw(ticker):
-    """yfinance üzerinden verileri çeker ve mikro iş modeli alt sektörünü atar."""
+def fetch_single_ticker_raw(ticker, sub_sectors_map=None, raise_on_rate_limit=False):
+    """yfinance üzerinden verileri çeker ve mikro iş modeli alt sektörünü atar.
+
+    Veri yoksa/anlamsızsa None döner. `raise_on_rate_limit` True ise Yahoo'nun
+    429 (çok fazla istek) yanıtı None yerine YahooRateLimited olarak fırlatılır;
+    paketler halinde çeken servis bu durumda bekleyip tekrar dener.
+    `sub_sectors_map` verilmezse sub_sectors.json her çağrıda yeniden okunur."""
     try:
-        t = yf.Ticker(ticker)
-        info = t.info
-
-        # Delisted/durdurulmuş/geçersiz bir sembol için Yahoo neredeyse boş
-        # bir .info sözlüğü döndürebilir - bunu, tüm oranları None olan
-        # "sahte" bir satır olarak tabloya sokmak yerine baştan reddet.
-        if not is_info_meaningful(info):
-            return None
-
-        main_sector = info.get('sector', 'Diğer')
-        industry = info.get('industry', 'Diğer')
-
-        # JSON dosyasından özel iş modeli alt sektörünü al
-        sub_sectors_map = load_sub_sectors()
-        alt_sek = sub_sectors_map.get(ticker, industry) # JSON'da yoksa yfinance industry kullan
-
-        # 1. Çarpanlar & Büyümeler
-        pe = info.get('trailingPE', None)
-        pb = info.get('priceToBook', None)
-        ev_ebitda = info.get('enterpriseToEbitda', None)
-
-        peg = info.get('pegRatio', None)
-        eps_growth = info.get('earningsGrowth', None)
-        if eps_growth is not None: eps_growth = round(eps_growth * 100, 2)
-        
-        rev_growth = info.get('revenueGrowth', None)
-        if rev_growth is not None: rev_growth = round(rev_growth * 100, 2)
-
-        # 2. Karlılıklar
-        roe = info.get('returnOnEquity', None)
-        if roe is not None: roe = round(roe * 100, 2)
-
-        net_margin = info.get('profitMargins', None)
-        if net_margin is not None: net_margin = round(net_margin * 100, 2)
-
-        gross_margin = info.get('grossMargins', None)
-        if gross_margin is not None: gross_margin = round(gross_margin * 100, 2)
-
-        roa = info.get('returnOnAssets', None)
-        if roa is not None: roa = round(roa * 100, 2)
-
-        # 3. Borçluluk ve Sağlık
-        debt_to_equity = info.get('debtToEquity', None)
-        if debt_to_equity is not None: debt_to_equity = round(debt_to_equity / 100, 2)
-
-        total_debt = info.get('totalDebt', None)
-        total_assets = info.get('totalAssets', None)
-        debt_to_assets = None
-        if total_debt and total_assets and total_assets > 0:
-            debt_to_assets = round((total_debt / total_assets) * 100, 2)
-
-        ebitda = info.get('ebitda', None)
-        interest_exp = info.get('interestExpense', None)
-        interest_coverage = None
-        if ebitda and interest_exp and interest_exp > 0:
-            interest_coverage = round(ebitda / interest_exp, 2)
-        else:
-            interest_coverage = info.get('interestCoverage', None)
-            if interest_coverage: interest_coverage = round(interest_coverage, 2)
-
-        # 4. Likidite & Operasyonel
-        current_ratio = info.get('currentRatio', None)
-        if current_ratio: current_ratio = round(current_ratio, 2)
-
-        quick_ratio = info.get('quickRatio', None)
-        if quick_ratio: quick_ratio = round(quick_ratio, 2)
-
-        total_revenue = info.get('totalRevenue', None)
-        asset_turnover = None
-        if total_revenue and total_assets and total_assets > 0:
-            asset_turnover = round(total_revenue / total_assets, 2)
-
-        # En son bilinen bilanço (çeyrek rapor) tarihi - paylaşımlı önbelleğin ne zaman
-        # yeniden çekim yapması gerektiğine karar vermesi için kullanılır (bkz.
-        # fetch_tickers_with_shared_cache).
-        most_recent_quarter = None
-        mrq_ts = info.get('mostRecentQuarter')
-        if mrq_ts:
-            try:
-                most_recent_quarter = datetime.fromtimestamp(mrq_ts, tz=timezone.utc).date().isoformat()
-            except Exception:
-                most_recent_quarter = None
-
-        return {
-            "Hisse": ticker,
-            "Alt Sektör (İş Modeli)": alt_sek,
-            "Ana Sektör": main_sector,
-            "F/K": round(pe, 2) if pe and pe > 0 else None,
-            "PD/DD": round(pb, 2) if pb and pb > 0 else None,
-            "FD/FAVÖK": round(ev_ebitda, 2) if ev_ebitda and ev_ebitda > 0 else None,
-            "PEG": round(peg, 2) if peg and peg > 0 else None,
-            "EPS Büyümesi %": eps_growth,
-            "Gelir Büyümesi %": rev_growth,
-            "Öz Sermaye Getirisi (ROE) %": roe,
-            "Net Kar Marjı %": net_margin,
-            "Brüt Kar Marjı %": gross_margin,
-            "Faiz Karşılama Oranı": interest_coverage,
-            "Varlık Getirisi (ROA) %": roa,
-            "Borç / Özsermaye": debt_to_equity,
-            "Borç / Varlık %": debt_to_assets,
-            "Cari Oran": current_ratio,
-            "Likidite Oranı": quick_ratio,
-            "Varlık Devir Hızı": asset_turnover,
-            "_most_recent_quarter": most_recent_quarter
-        }
+        info = yf.Ticker(ticker).info
+    except Exception as e:
+        if raise_on_rate_limit and is_rate_limit_error(e):
+            raise YahooRateLimited(str(e)) from e
+        return None
+    try:
+        return _raw_from_info(ticker, info, sub_sectors_map)
     except Exception:
         return None
 
 
-def _load_valuation_cache():
-    """Paylaşımlı değerleme önbelleğini yükler - önce GitHub'daki (kalıcı, tüm
-    kullanıcıların paylaştığı) kopyayı, yoksa yerel dosyayı dener. SQLite açıksa
-    (bkz. storage.enabled) yalnızca oradan okur."""
-    if storage.enabled():
-        return storage.read("valuation_cache") or {}
-    data = None
-    token = st.secrets.get("GITHUB_TOKEN")
-    if token:
+def _raw_from_info(ticker, info, sub_sectors_map=None):
+    # Delisted/durdurulmuş/geçersiz bir sembol için Yahoo neredeyse boş
+    # bir .info sözlüğü döndürebilir - bunu, tüm oranları None olan
+    # "sahte" bir satır olarak tabloya sokmak yerine baştan reddet.
+    if not is_info_meaningful(info):
+        return None
+
+    main_sector = info.get('sector', 'Diğer')
+    industry = info.get('industry', 'Diğer')
+
+    # JSON dosyasından özel iş modeli alt sektörünü al
+    if sub_sectors_map is None:
+        sub_sectors_map = load_sub_sectors()
+    alt_sek = sub_sectors_map.get(ticker, industry) # JSON'da yoksa yfinance industry kullan
+
+    # 1. Çarpanlar & Büyümeler
+    pe = info.get('trailingPE', None)
+    pb = info.get('priceToBook', None)
+    ev_ebitda = info.get('enterpriseToEbitda', None)
+
+    peg = info.get('pegRatio', None)
+    eps_growth = info.get('earningsGrowth', None)
+    if eps_growth is not None: eps_growth = round(eps_growth * 100, 2)
+    
+    rev_growth = info.get('revenueGrowth', None)
+    if rev_growth is not None: rev_growth = round(rev_growth * 100, 2)
+
+    # 2. Karlılıklar
+    roe = info.get('returnOnEquity', None)
+    if roe is not None: roe = round(roe * 100, 2)
+
+    net_margin = info.get('profitMargins', None)
+    if net_margin is not None: net_margin = round(net_margin * 100, 2)
+
+    gross_margin = info.get('grossMargins', None)
+    if gross_margin is not None: gross_margin = round(gross_margin * 100, 2)
+
+    roa = info.get('returnOnAssets', None)
+    if roa is not None: roa = round(roa * 100, 2)
+
+    # 3. Borçluluk ve Sağlık
+    debt_to_equity = info.get('debtToEquity', None)
+    if debt_to_equity is not None: debt_to_equity = round(debt_to_equity / 100, 2)
+
+    total_debt = info.get('totalDebt', None)
+    total_assets = info.get('totalAssets', None)
+    debt_to_assets = None
+    if total_debt and total_assets and total_assets > 0:
+        debt_to_assets = round((total_debt / total_assets) * 100, 2)
+
+    ebitda = info.get('ebitda', None)
+    interest_exp = info.get('interestExpense', None)
+    interest_coverage = None
+    if ebitda and interest_exp and interest_exp > 0:
+        interest_coverage = round(ebitda / interest_exp, 2)
+    else:
+        interest_coverage = info.get('interestCoverage', None)
+        if interest_coverage: interest_coverage = round(interest_coverage, 2)
+
+    # 4. Likidite & Operasyonel
+    current_ratio = info.get('currentRatio', None)
+    if current_ratio: current_ratio = round(current_ratio, 2)
+
+    quick_ratio = info.get('quickRatio', None)
+    if quick_ratio: quick_ratio = round(quick_ratio, 2)
+
+    total_revenue = info.get('totalRevenue', None)
+    asset_turnover = None
+    if total_revenue and total_assets and total_assets > 0:
+        asset_turnover = round(total_revenue / total_assets, 2)
+
+    # En son bilinen bilanço (çeyrek rapor) tarihi - bilgi amaçlı saklanır.
+    most_recent_quarter = None
+    mrq_ts = info.get('mostRecentQuarter')
+    if mrq_ts:
         try:
-            data = read_json_from_github(GITHUB_REPO, token, VALUATION_CACHE_FILE, {})
+            most_recent_quarter = datetime.fromtimestamp(mrq_ts, tz=timezone.utc).date().isoformat()
         except Exception:
-            data = None
+            most_recent_quarter = None
 
-    if not data and os.path.exists(VALUATION_CACHE_FILE):
-        try:
-            with open(VALUATION_CACHE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-        except Exception:
-            data = None
-
-    return data or {}
-
-
-def _save_valuation_cache_updates(updates):
-    """Bu çalıştırmada taze çekilen önbellek girdilerini (`updates`) kalıcı önbelleğe
-    ekler. `write_json_to_github` gibi tüm dosyayı elimizdeki (bayatlamış olabilecek)
-    kopyayla ezmek yerine, GitHub'daki EN GÜNCEL veriyi okuyup sadece kendi
-    güncellemelerimizi onun üzerine merge eder (bkz. update_json_on_github).
-
-    Bu, iki kullanıcının art arda değerleme analizini tetiklemesi durumunda birinin
-    güncellemesinin diğerininki tarafından sessizce ezilmesini (lost update) önler:
-    eskiden her iki kullanıcı da kendi bayat kopyasını temel alıp dosyanın tamamını
-    yeniden yazdığından, ikinci yazan birincinin az önce eklediği taze verileri
-    farkında olmadan siliyordu. SQLite açıksa aynı birleştirme storage.update ile
-    kilitli tek bir işlemde yapılır."""
-    if storage.enabled():
-        storage.update("valuation_cache", storage.SHARED, lambda current: {**(current or {}), **updates}, {})
-        return
-    token = st.secrets.get("GITHUB_TOKEN")
-    merged = None
-    if token:
-        try:
-            merged = update_json_on_github(
-                GITHUB_REPO, token, VALUATION_CACHE_FILE, {},
-                lambda current: {**current, **updates},
-                "Update valuation cache",
-            )
-        except Exception as e:
-            st.warning(f"⚠️ Değerleme önbelleği GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
-
-    if merged is None:
-        local = {}
-        if os.path.exists(VALUATION_CACHE_FILE):
-            try:
-                with open(VALUATION_CACHE_FILE, 'r', encoding='utf-8') as f:
-                    local = json.load(f)
-            except Exception:
-                local = {}
-        merged = {**local, **updates}
-
-    with open(VALUATION_CACHE_FILE, 'w', encoding='utf-8') as f:
-        json.dump(merged, f, ensure_ascii=False, indent=2)
-
-
-def _needs_refresh(cache_entry):
-    """Bir hissenin önbellek kaydının yeniden çekilmesi gerekip gerekmediğine, sabit
-    bir süre (TTL) yerine en son bilinen bilanço (mostRecentQuarter) tarihine göre
-    karar verir: yeni bir çeyrek rapor beklenen tarihe kadar tekrar çekmez."""
-    if cache_entry is None:
-        return True
-    raw = cache_entry.get("raw")
-    if not raw:
-        return True
-    mrq = raw.get("_most_recent_quarter")
-    if not mrq:
-        return True
-    try:
-        mrq_date = date.fromisoformat(mrq)
-    except Exception:
-        return True
-    next_expected = mrq_date + timedelta(days=QUARTER_REFRESH_BUFFER_DAYS)
-    return date.today() >= next_expected
-
-
-def fetch_tickers_with_shared_cache(ticker_list, progress_callback=None):
-    """Verilen hisseler için ham değerleme verilerini döner; mümkün olduğunca
-    paylaşımlı önbellekten yararlanarak gereksiz Yahoo Finance çağrılarını önler.
-
-    Bir hisse hiç çekilmediyse en az bir kere çekilir; daha sonra en son bilinen
-    bilanço tarihine göre yeni bir çeyrek rapor beklenmiyorsa tekrar çekilmez,
-    önbellekteki veri kullanılır. Tüm kullanıcılar aynı paylaşımlı JSON dosyasını
-    (GitHub üzerinden) okur/yazar, böylece bir kullanıcı için çekilen veri diğer
-    kullanıcılar tarafından da tekrar çekilmeden kullanılabilir.
-
-    Döner: (ham_veri_listesi, bu_çalıştırmada_yeniden_çekilen_hisseler,
-    {hisse: cached_at} - her hissenin önbellekteki verisinin hangi tarihte
-    çekildiği, tabloların üzerinde güncellik notu göstermek için)
-    """
-    cache = _load_valuation_cache()
-    results = []
-    freshly_fetched = []
-    cached_at = {}
-    updates = {}
-
-    for i, ticker in enumerate(ticker_list):
-        entry = cache.get(ticker)
-        if _needs_refresh(entry):
-            raw = fetch_single_ticker_raw(ticker)
-            if raw:
-                new_entry = {"raw": raw, "cached_at": date.today().isoformat()}
-                cache[ticker] = new_entry
-                updates[ticker] = new_entry
-                freshly_fetched.append(ticker)
-                results.append(raw)
-                cached_at[ticker] = new_entry["cached_at"]
-            elif entry:
-                # Yeniden çekim başarısız oldu (ör. geçici ağ hatası) - eski veriyi kullanmaya devam et
-                results.append(entry["raw"])
-                cached_at[ticker] = entry.get("cached_at")
-        else:
-            results.append(entry["raw"])
-            cached_at[ticker] = entry.get("cached_at")
-
-        if progress_callback:
-            progress_callback(i + 1, len(ticker_list), ticker)
-
-    if updates:
-        _save_valuation_cache_updates(updates)
-
-    return results, freshly_fetched, cached_at
+    return {
+        "Hisse": ticker,
+        "Alt Sektör (İş Modeli)": alt_sek,
+        "Ana Sektör": main_sector,
+        "F/K": round(pe, 2) if pe and pe > 0 else None,
+        "PD/DD": round(pb, 2) if pb and pb > 0 else None,
+        "FD/FAVÖK": round(ev_ebitda, 2) if ev_ebitda and ev_ebitda > 0 else None,
+        "PEG": round(peg, 2) if peg and peg > 0 else None,
+        "EPS Büyümesi %": eps_growth,
+        "Gelir Büyümesi %": rev_growth,
+        "Öz Sermaye Getirisi (ROE) %": roe,
+        "Net Kar Marjı %": net_margin,
+        "Brüt Kar Marjı %": gross_margin,
+        "Faiz Karşılama Oranı": interest_coverage,
+        "Varlık Getirisi (ROA) %": roa,
+        "Borç / Özsermaye": debt_to_equity,
+        "Borç / Varlık %": debt_to_assets,
+        "Cari Oran": current_ratio,
+        "Likidite Oranı": quick_ratio,
+        "Varlık Devir Hızı": asset_turnover,
+        "_most_recent_quarter": most_recent_quarter
+    }
 
 
 def calculate_sector_relative_scores(raw_data_list):

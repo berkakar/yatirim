@@ -21,7 +21,9 @@ from buy_algorithms import ALGORITHMS, reject_if_marketable
 from backtest_engine import run_backtest
 from backtest_data import append_results, new_run_id
 from stoploss import get_stoploss_data
-from valuation import fetch_tickers_with_shared_cache, calculate_sector_relative_scores, style_valuation_df
+from valuation import style_valuation_df
+import valuation_db
+from valuation_service import get_scores_for_selection
 from dtw_analysis import (
     fetch_and_cache_5m_data,
     compute_dtw_similarity,
@@ -210,6 +212,9 @@ if removed_group and "selected_stock_groups" in st.session_state:
 with st.sidebar:
     render_mode_switcher(key="sidebar_theme_switcher")
 market = st.sidebar.selectbox("Piyasa Seçimi", MARKETS)
+# Grup seçilince `market` aşağıda kapsam etiketine dönüşüyor; veritabanı/servis
+# anahtarı için asıl piyasa adı burada saklanır (bkz. Değerleme modülü).
+base_market = market
 
 # Piyasa değiştiğinde, artık seçili piyasaya ait olmayan grup seçimlerini
 # multiselect widget'ı oluşturulmadan önce temizlememiz gerekir (aksi halde
@@ -858,7 +863,23 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
 
     scan_list = list(st.session_state.selected_tickers) if "Sadece" in scan_mode else target_list
 
-    if st.button("🚀 Değerleme Analizini Başlat", type="primary"):
+    def _fmt_trt(iso_text):
+        dt = valuation_db.parse_iso(iso_text)
+        return f"{dt.astimezone(TR_TZ):%d.%m.%Y %H:%M}" if dt else "-"
+
+    _last_run = valuation_db.get_run(base_market)
+    if _last_run and _last_run.get("finished_at"):
+        _run_note = " ⚠️ Son çalıştırmada Yahoo çekimi yarıda kaldı." if _last_run.get("aborted") else ""
+        st.caption(
+            f"🗄️ **{base_market}** servisi en son {_fmt_trt(_last_run['finished_at'])} TRT'de çalıştı "
+            f"({_last_run.get('universe_size') or 0} hisse).{_run_note}"
+        )
+    else:
+        st.caption(
+            f"🗄️ **{base_market}** servisi henüz çalışmadı; seçtiğiniz hisseler Yahoo Finance'ten anlık çekilip veritabanına kaydedilecek."
+        )
+
+    if st.button("🚀 Değerleme Sonuçlarını Getir", type="primary"):
         if not scan_list:
             st.warning("⚠️ Lütfen analiz etmek için en az bir hisse seçin.")
         else:
@@ -866,20 +887,28 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             status_text = st.empty()
 
             def _report_progress(done, total, ticker):
-                status_text.text(f"Veriler kontrol ediliyor ({done}/{total}): {ticker}")
+                status_text.text(f"Veritabanında olmayan hisseler Yahoo Finance'ten çekiliyor ({done}/{total}): {ticker}")
                 progress_bar.progress(done / total)
 
-            raw_results, freshly_fetched, cached_at = fetch_tickers_with_shared_cache(scan_list, progress_callback=_report_progress)
+            rows, val_summary = get_scores_for_selection(base_market, scan_list, progress_callback=_report_progress)
 
             status_text.empty()
             progress_bar.empty()
-            cached_count = len(scan_list) - len(freshly_fetched)
-            st.caption(f"💾 {cached_count} hisse paylaşımlı önbellekten kullanıldı, {len(freshly_fetched)} hisse Yahoo Finance'den yeniden çekildi.")
+            msg = f"🗄️ {val_summary['from_db']} hisse veritabanından getirildi"
+            if val_summary["fetched"]:
+                msg += f", {val_summary['fetched']} hisse Yahoo Finance'ten anlık çekildi"
+            if val_summary["reused"]:
+                msg += f", {val_summary['reused']} hisse başka piyasa servisinin güncel verisinden alındı"
+            st.caption(msg + ".")
+            if val_summary["failed"]:
+                st.warning(f"⚠️ Veri alınamayan hisseler: {', '.join(val_summary['failed'])}")
+            if val_summary["aborted"]:
+                st.warning("⚠️ Yahoo Finance çok fazla istek uyarısı verdi; bazı hisseler çekilemedi. Bir süre sonra tekrar deneyin.")
 
-            # İş modeli alt sektör ortalamalarına ve 100 puanlık matrise göre skorla
-            st.session_state.val_results = calculate_sector_relative_scores(raw_results)
-            valid_dates = [d for d in cached_at.values() if d]
-            st.session_state.val_oldest_cached_at = min(valid_dates) if valid_dates else None
+            for row in rows:
+                row["Veri Zamanı"] = _fmt_trt(row.pop("_fetched_at", None))
+                row.pop("_source", None)
+            st.session_state.val_results = rows
 
     if 'val_results' in st.session_state and st.session_state.val_results:
         df_val = pd.DataFrame(st.session_state.val_results)
@@ -892,12 +921,11 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             df_val = df_val[df_val["Alt Sektör (İş Modeli)"] == selected_sub_sector]
 
         st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
-        oldest_cached_at = st.session_state.get("val_oldest_cached_at")
-        if oldest_cached_at:
-            freshness_caption(
-                f"Veri güncelliği: en eski hisse {oldest_cached_at} tarihinde çekilmiş "
-                "(her hisse kendi son bilanço tarihine göre bağımsız yenilenir, bkz. valuation._needs_refresh)."
-            )
+        freshness_caption(
+            "Veri güncelliği: her hissenin Yahoo Finance'ten çekildiği zaman 'Veri Zamanı' sütununda (TRT). "
+            "Skorlar, piyasa servisinin evreni (piyasa listesi + bu piyasaya bağlı kullanıcı grupları) üzerinden hesaplanır; "
+            "alt sektör medyanı bu evrene göredir."
+        )
 
         # Kolon İpuçları (Hint / Tooltip Yapılandırması)
         column_config = {
@@ -919,7 +947,8 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Borç / Varlık %": st.column_config.NumberColumn("Borç / Varlık % [4p]", help="💡 Optimum: < %50."),
             "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="💡 Optimum: 1.0 - 2.0."),
             "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="💡 Optimum: > 1.0."),
-            "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="💡 Optimum: 1.0 - 2.0.")
+            "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="💡 Optimum: 1.0 - 2.0."),
+            "Veri Zamanı": st.column_config.TextColumn("Veri Zamanı (TRT)", help="💡 Hissenin verisinin Yahoo Finance'ten çekildiği tarih ve saat."),
         }
 
         styled_df = style_valuation_df(df_val)

@@ -40,7 +40,6 @@ class WiringTestCase(unittest.TestCase):
             "stop_loss_settings.read_json_from_github", "stop_loss_settings.write_json_to_github",
             "bildirim_data.read_json_from_github", "bildirim_data.write_json_to_github",
             "turk_fonlari_takip_data.read_json_from_github", "turk_fonlari_takip_data.write_json_to_github",
-            "valuation.read_json_from_github", "valuation.update_json_on_github",
         ):
             p = mock.patch(target, side_effect=_github_must_not_be_called)
             p.start()
@@ -147,13 +146,16 @@ class FundsWiringTest(WiringTestCase):
 
 
 class ValuationWiringTest(WiringTestCase):
-    def test_updates_merge_into_shared_cache(self):
-        import valuation
+    def test_scores_table_lives_in_same_database(self):
+        import valuation_db
 
-        self.assertEqual(valuation._load_valuation_cache(), {})
-        valuation._save_valuation_cache_updates({"AAPL": {"pe": 30}})
-        valuation._save_valuation_cache_updates({"MSFT": {"pe": 35}})
-        self.assertEqual(valuation._load_valuation_cache(), {"AAPL": {"pe": 30}, "MSFT": {"pe": 35}})
+        valuation_db.upsert_rows([{
+            "market": "NASDAQ 100", "ticker": "AAPL", "raw": {"Hisse": "AAPL"},
+            "scored": {"Hisse": "AAPL", "Nihai Skor": 40},
+            "fetched_at": "2026-10-05T21:00:00Z", "scored_at": "2026-10-05T21:01:00Z",
+        }])
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["score"], 40)
+        self.assertTrue(os.path.exists(storage.db_path()))
         self.assertNoJsonFiles()
 
 

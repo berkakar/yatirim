@@ -100,6 +100,14 @@ job_define() {
       JOB_MSG="Update Russell 2000 ticker list"
       JOB_TIMEOUT=1800
       ;;
+    valuation-nasdaq100|valuation-nyse|valuation-bist100|valuation-russell2000)
+      # Değerleme & Ucuzluk Skoru piyasa servisleri (valuation_service.py). Her biri
+      # ayrı saatte çalışır, sonuçları SQLite'taki valuation_scores tablosuna yazar
+      # (YATIRIM_DB_PATH gerekir); commit'lenecek dosya yok.
+      JOB_CMDS=("python valuation_service.py --market ${1#valuation-}")
+      JOB_TIMEOUT=1800
+      [ "$1" = "valuation-russell2000" ] && JOB_TIMEOUT=6600  # ~2000 hisse, 40 paket
+      ;;
     *)
       return 1
       ;;
@@ -117,4 +125,8 @@ ALL_JOBS=(
   tefas
   fon-hisse-uyari
   russell2000
+  valuation-bist100
+  valuation-nasdaq100
+  valuation-nyse
+  valuation-russell2000
 )
