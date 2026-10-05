@@ -255,8 +255,8 @@ def render_otomatik_alim_satim(username: str):
     st.caption(
         "Etkinleştirilirse, yukarıdaki ayarlarla (nakit tutarı, evren, algoritma, mum periyodu) bu "
         "pipeline'ın tamamı (tara → RSI14/RSI21 + EMA50/EMA200 ile daralt → backtest → %10 üzeri "
-        "kârlılık gösterenleri Premium Buy Point Portföyü'ne ekle) GitHub Actions üzerinden **günde 1 "
-        "kez** otomatik çalışır - manuel buton tıklamaya gerek kalmaz. Gerçek alım/satım emirleri, bu "
+        "kârlılık gösterenleri Premium Buy Point Portföyü'ne ekle) sunucuda **günde 1 kez** (işlem "
+        "günleri 03:00 ET, piyasa açılmadan önce) otomatik çalışır - manuel buton tıklamaya gerek kalmaz. Gerçek alım/satım emirleri, bu "
         "portföyü zaten her 5 dakikada bir tarayan mevcut Alpaca botları tarafından yürütülür; bu "
         "modülün otomatik kısmı sadece o botların kullandığı portföyü günlük olarak günceller. Yukarıdaki "
         "manuel adım butonları her zaman kullanılabilir kalır."

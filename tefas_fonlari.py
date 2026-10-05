@@ -100,7 +100,7 @@ def render_turk_fonlari():
     if not table:
         st.info(
             "Henüz önbelleklenmiş veri yok - ilk otomatik çalıştırma bekleniyor "
-            f"(bkz. `{CACHE_FILE}`, GitHub Actions ile günde 3 kez güncellenir)."
+            f"(bkz. `{CACHE_FILE}`, sunucuda günde 3 kez - 09:00, 13:00 ve 19:10 TSİ - güncellenir)."
         )
         return
 

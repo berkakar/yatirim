@@ -147,9 +147,9 @@ def render_relative_strength(username: str):
         stop_algorithm_ids, index=stop_algorithm_ids.index(current_stop_algorithm),
         format_func=lambda k: STOP_ALGORITHMS[k].label, key="rs_stop_algorithm",
         help="Sıralamadan düşme (rank-based exit) ASIL çıkış disiplinidir - bu stop sadece iki "
-             "yeniden dengeleme arasında fiyat çökerse diye bir güvenlik ağıdır. Trailing Stop "
-             "GitHub Action'ı bu modülün elindeki pozisyonları da (Premium Buy Point'ten AYRI olarak) "
-             "bu seçili algoritmayla yönetir.",
+             "yeniden dengeleme arasında fiyat çökerse diye bir güvenlik ağıdır. Sunucudaki stop "
+             "botu bu modülün elindeki pozisyonları da (Premium Buy Point'ten AYRI olarak) bu seçili "
+             "algoritmayla yönetir.",
     )
     st.info(
         "🎯 **Bu strateji için varsayılan neden \"Breakeven + Yapısal Trail\"?** \"Açılış Aralığı "
@@ -166,7 +166,7 @@ def render_relative_strength(username: str):
     st.subheader("🕐 Haftalık Otomatik Çalıştırma")
     st.caption(
         "Etkinleştirilirse, yukarıdaki ayarlarla haftada 1 kez (her Pazartesi) gerçek satış/alım "
-        "emirleri GitHub Actions üzerinden verilir. Manuel önizleme butonu her zaman kullanılabilir "
+        "emirleri sunucudaki zamanlanmış iş tarafından verilir. Manuel önizleme butonu her zaman kullanılabilir "
         "kalır ama HİÇBİR ZAMAN gerçek emir vermez - sadece ne olacağını gösterir."
     )
     automated = st.checkbox(

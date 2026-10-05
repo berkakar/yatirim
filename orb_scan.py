@@ -166,8 +166,8 @@ def render_orb_scan(username: str):
 
     st.subheader("🕐 Günlük Otomatik Çalıştırma")
     st.caption(
-        "Etkinleştirilirse, yukarıdaki ayarlarla her gün piyasa açılışından bir süre sonra "
-        "GitHub Actions üzerinden evren taranır, en yüksek puanlı top N market emriyle alınır ve "
+        "Etkinleştirilirse, yukarıdaki ayarlarla her işlem günü 10:30 ve 10:45 ET'de sunucudaki "
+        "zamanlanmış iş tarafından evren taranır, en yüksek puanlı top N market emriyle alınır ve "
         "anında stop kurulur. Manuel önizleme butonu her zaman kullanılabilir kalır ama HİÇBİR ZAMAN "
         "gerçek emir vermez - sadece ne olacağını gösterir."
     )

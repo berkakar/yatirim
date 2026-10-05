@@ -68,8 +68,8 @@ def _render_notification_settings(username: str) -> None:
     st.caption(
         "Takip ettiğiniz fonların en büyük 10 hissesinden biri günlük bazda belirlediğiniz "
         "eşiğin altına düşerse Telegram üzerinden bildirim alırsınız - bildirim, o an eşiği "
-        "aşan TÜM hisseleri birlikte listeler. Kontrol, GitHub Actions ile BIST işlem "
-        "saatlerinde 5 dakikada bir yapılır; bu liste bir önceki bildirimle birebir aynıysa "
+        "aşan TÜM hisseleri birlikte listeler. Kontrol, sunucuda BIST işlem "
+        "saatlerinde (10:00-17:55 TSİ) 5 dakikada bir yapılır; bu liste bir önceki bildirimle birebir aynıysa "
         "tekrar gönderilmez, en ufak bir değişiklik (yeni bir hisse eklenmesi, biri "
         "toparlanması ya da bir yüzdenin değişmesi) olursa güncel tam liste yeniden gönderilir."
     )
