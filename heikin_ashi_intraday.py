@@ -162,9 +162,10 @@ def render_heikin_ashi_intraday(username: str):
 
     st.subheader("🕐 Otomatik Çalıştırma (yarım saatte bir)")
     st.caption(
-        "Etkinleştirilirse seans boyunca her 30 dakikalık bar kapanışından sonra GitHub Actions üzerinden: "
-        "çıkış sinyali veren pozisyonlar satılır, boş slotlar için evren taranıp alım yapılır. GitHub "
-        "Actions zamanlaması birkaç dakika gecikebilir. Önizleme butonu HİÇBİR ZAMAN gerçek emir vermez."
+        "Etkinleştirilirse seans boyunca her 30 dakikalık bar kapanışından 2 dakika sonra (09:32-15:32 ET) "
+        "sunucudaki zamanlanmış iş tarafından: çıkış sinyali veren pozisyonlar satılır, boş slotlar için "
+        "evren taranıp alım yapılır. Elde kalan pozisyonlar 15:45 ET'de kapatılır. Önizleme butonu HİÇBİR "
+        "ZAMAN gerçek emir vermez."
     )
     automated = st.checkbox(
         "Bu süreci otomatik çalıştır (seans boyunca yarım saatte bir)", value=bool(config.get("enabled")),

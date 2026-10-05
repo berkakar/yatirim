@@ -126,8 +126,8 @@ def _render_buy_point_table(
         "Her algoritma sütunu, o hissenin kendi mum periyodundaki (\"Mum Periyodu\" sütunu) fiyatı gösterir "
         "(\"—\" = sinyal yok). 'Kullanılan Algoritma', 'Stop Loss Algoritması' ve 'Kullanılacak Fiyat', o "
         "hisse için yukarıda (Hisse Bazlı Algoritma Seçimi) seçtiğiniz - yoksa aşağıdaki (Varsayılan "
-        "Algoritma / Risk Yönetimi) varsayılanlara göredir - gerçek alım GitHub Action "
-        "tarafından 5 dakikalık taramada bu fiyat/algoritma/periyot ile yapılır. \"Zarar Kesildi\", Zarar Kes "
+        "Algoritma / Risk Yönetimi) varsayılanlara göredir - gerçek alım sunucudaki zamanlanmış "
+        "işin 5 dakikalık taramasında bu fiyat/algoritma/periyot ile yapılır. \"Zarar Kesildi\", Zarar Kes "
         "etkinken o hissenin kendi bütçesine göre gerçekleşen zararının eşiğe ulaştığı, yeni alım yapılmadığı "
         "anlamına gelir."
     )
