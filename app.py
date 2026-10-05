@@ -935,6 +935,8 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             st.caption(msg + ".")
             if val_summary["failed"]:
                 st.warning(f"⚠️ Veri alınamayan hisseler: {', '.join(val_summary['failed'])}")
+            if val_summary["excluded"]:
+                st.info(f"ℹ️ ETF olduğu için değerlemeye dahil edilmeyenler: {', '.join(val_summary['excluded'])}")
             if val_summary["aborted"]:
                 st.warning("⚠️ Yahoo Finance çok fazla istek uyarısı verdi; bazı hisseler çekilemedi. Bir süre sonra tekrar deneyin.")
 
@@ -968,7 +970,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n💡 40 Altı Kırmızı: Zayıf/Pahalı"),
             "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı. Eksi değer, hissenin akranlarına göre PRİMLİ (daha pahalı) işlem gördüğü anlamına gelir."),
             "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="💡 Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
-            "PEG": st.column_config.NumberColumn("PEG [10p]", help="💡 Optimum: < 1.0 (F/K ÷ EPS Büyümesi)."),
+            "PEG": st.column_config.NumberColumn("PEG [10p]", help="💡 Optimum: < 1.0 (F/K ÷ EPS Büyümesi). Yalnızca F/K > 0 olan hisselerde hesaplanır; F/K yoksa veya negatifse Y."),
             "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="💡 Optimum: > %10."),
             "Gelir Büyümesi %": st.column_config.NumberColumn("Gelir Büyümesi % [10p]", help="💡 Optimum: > %10."),
             "Öz Sermaye Getirisi (ROE) %": st.column_config.NumberColumn("Öz Sermaye Getirisi % [10p]", help="💡 Optimum: > %10."),
@@ -993,7 +995,10 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "olduğu için sektör ortalaması ve iskontosu anlamlı değil. Diğer hesaplar bozulmasın diye iskonto "
             "hesaba **1** olarak girer (5 puan).  \n"
             "**Y** — *Veri yok:* Yahoo Finance bu hisse için ilgili veriyi sağlamıyor. Eksik veri o kriterden puan "
-            "almaz ve sektör ortalamasına katılmaz."
+            "almaz ve sektör ortalamasına katılmaz.  \n"
+            "**ETF'ler** (örn. XLF, XLV) bilanço ve kârlılık verisi olmadığı için değerleme analizine dahil edilmez; "
+            "tabloda gösterilmez ve alt sektör ortalamalarına katılmaz.  \n"
+            "**PEG** yalnızca F/K > 0 olan hisselerde hesaplanır."
         )
 
         st.divider()
@@ -1006,7 +1011,7 @@ yani düşük skor her zaman "kötü şirket" anlamına gelmez, bazen sadece "ek
 | # | Kriter | Ağırlık | Ne anlama gelir? | Puanlama |
 |---|---|---|---|---|
 | 1 | **İş Modeli İskontosu %** | 15p | Hissenin F/K'sı, aynı mikro iş modelindeki (alt sektör) şirketlerin medyan F/K'sına göre ne kadar ucuz/pahalı. **Eksi değer = akranlarına göre daha pahalı (prim)**, bir hata değildir. | ≥30: 15p · 15-30: 10p · 0-15: 5p · <0 (prim): 0p · U (≤3 hisseli alt sektör, 1 kabul): 5p · Y: 0p |
-| 2 | **PEG** | 10p | F/K ÷ EPS büyüme oranı. 1'in altı, büyümesine göre ucuz demektir. | ≤1.0: 10p · 1.0-1.5: 5p |
+| 2 | **PEG** | 10p | F/K ÷ EPS büyüme oranı. 1'in altı, büyümesine göre ucuz demektir. **Yalnızca F/K > 0 olan hisselerde hesaplanır**; F/K negatif (zarar) veya yoksa PEG yanıltıcı olacağından **Y** gösterilir ve puan almaz. | ≤1.0: 10p · 1.0-1.5: 5p |
 | 3 | **EPS Büyümesi %** | 10p | Yıllık kâr büyümesi. Negatifse şirketin kârı küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
 | 4 | **Gelir Büyümesi %** | 10p | Yıllık ciro büyümesi. Negatifse ciro küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
 | 5 | **Öz Sermaye Getirisi (ROE) %** | 10p | Özsermayenin ne kadar verimli kullanıldığı. | ≥10: 10p · 5-10: 5p |

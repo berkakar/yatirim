@@ -25,8 +25,9 @@ def make_raw(ticker, pe=20.0, sub="Semis"):
 
 
 class FakeFetcher:
-    def __init__(self, pe=None, rate_limited=(), missing=()):
+    def __init__(self, pe=None, rate_limited=(), missing=(), etf=()):
         self.calls = []
+        self.etf = set(etf)
         self.pe = pe or {}
         self.rate_limited = set(rate_limited)
         self.missing = set(missing)
@@ -38,6 +39,8 @@ class FakeFetcher:
             raise valuation.YahooRateLimited("429 Too Many Requests")
         if ticker in self.missing:
             return None
+        if ticker in self.etf:
+            return {"Hisse": ticker, "_excluded": "ETF"}
         return make_raw(ticker, pe=self.pe.get(ticker, 20.0))
 
 
@@ -343,8 +346,9 @@ class SmallSectorAndMissingDataTest(unittest.TestCase):
         self.assertEqual(rows["S1"]["Alt Sektör İskontosu %"], 1.0)   # gerçek iskonto %81.8 değil
         self.assertEqual(rows["S2"]["Alt Sektör İskontosu %"], 1.0)
         self.assertIsNone(rows["NOPE"]["Alt Sektör İskontosu %"])
-        # Aynı veriler, tek fark iskonto: 1 -> 5p, Y -> 0p.
-        self.assertEqual(rows["S1"]["Nihai Skor"] - rows["NOPE"]["Nihai Skor"], 5)
+        # Fark: iskonto 1 -> 5p / Y -> 0p, ve F/K yokken PEG de hesaplanmaz (10p).
+        self.assertEqual(rows["S1"]["Nihai Skor"] - rows["NOPE"]["Nihai Skor"], 15)
+        self.assertIsNone(rows["NOPE"]["PEG"])
         # Eksik F/K medyana katılmadı: Big medyanı 20.
         self.assertEqual(rows["A"]["Alt Sektör Ort. F/K"], 20.0)
 
@@ -364,6 +368,55 @@ class SmallSectorAndMissingDataTest(unittest.TestCase):
         self.assertEqual(cell(nope["F/K"]), "Y")
         self.assertEqual(cell(s1["F/K"]), "5")
         self.assertEqual(cell(s1["Bilanço Tarihi"]), "2026-06-30")
+
+
+class PegAndEtfTest(ValuationServiceTestCase):
+    def test_peg_only_when_pe_positive(self):
+        import valuation
+        base = {"sector": "Technology", "industry": "Semis", "marketCap": 1, "pegRatio": 0.8}
+        with mock.patch.object(valuation, "is_info_meaningful", return_value=True):
+            self.assertEqual(valuation._raw_from_info("A", {**base, "trailingPE": 15}, {})["PEG"], 0.8)
+            self.assertIsNone(valuation._raw_from_info("B", {**base, "trailingPE": -4}, {})["PEG"])
+            self.assertIsNone(valuation._raw_from_info("C", base, {})["PEG"])
+            tp = {**base, "pegRatio": None, "trailingPegRatio": 1.2, "trailingPE": 15}
+            self.assertEqual(valuation._raw_from_info("D", tp, {})["PEG"], 1.2)
+        # Kural öncesi kaydedilmiş satır: F/K yok ama PEG var -> skorlamada PEG yok sayılır.
+        old = make_raw("OLD", pe=None)
+        rows = valuation.calculate_sector_relative_scores([old, make_raw("NEW")])
+        self.assertIsNone(rows[0]["PEG"])
+        self.assertEqual(rows[1]["PEG"], 0.9)
+
+    def test_etf_detected_from_quote_type(self):
+        import valuation
+        raw = valuation._raw_from_info("XLF", {"quoteType": "ETF", "sector": None}, {})
+        self.assertTrue(valuation.is_excluded(raw))
+
+    def test_etf_not_scored_not_in_medians_and_reported(self):
+        import valuation_db
+        storage.write("custom_tickers", "u2", {"NASDAQ 100": ["MSFT", "NVDA", "XLF"]})
+        fetcher = FakeFetcher(pe={"AAPL": 10.0, "MSFT": 20.0, "NVDA": 20.0, "AMD": 40.0}, etf={"XLF"})
+        self.run_market(fetcher)
+        rows = valuation_db.get_rows("NASDAQ 100")
+        self.assertEqual(rows["XLF"]["scored"], {"Hisse": "XLF", "_excluded": "ETF"})
+        self.assertIsNone(rows["XLF"]["score"])
+        self.assertEqual(rows["AAPL"]["scored"]["Alt Sektör Ort. F/K"], 20.0)
+
+        again = FakeFetcher()
+        out, summary = self.svc.get_scores_for_selection(
+            "NASDAQ 100", ["AAPL", "XLF"], fetcher=again, sleep=self.sleeps.append, now=self.clock)
+        self.assertEqual([r["Hisse"] for r in out], ["AAPL"])
+        self.assertEqual(summary["excluded"], ["XLF"])
+        self.assertEqual(again.calls, [])  # ETF kaydı veritabanında, tekrar çekilmez
+
+    def test_on_demand_etf_saved_as_excluded(self):
+        import valuation_db
+        self.run_market(FakeFetcher())
+        out, summary = self.svc.get_scores_for_selection(
+            "NASDAQ 100", ["SPY", "AAPL"], fetcher=FakeFetcher(etf={"SPY"}),
+            sleep=self.sleeps.append, now=self.clock)
+        self.assertEqual(summary["excluded"], ["SPY"])
+        self.assertEqual([r["Hisse"] for r in out], ["AAPL"])
+        self.assertTrue(valuation_db.get_rows("NASDAQ 100")["SPY"]["scored"]["_excluded"])
 
 
 class RateLimitDetectionTest(unittest.TestCase):

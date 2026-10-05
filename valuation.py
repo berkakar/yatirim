@@ -22,6 +22,10 @@ SMALL_SECTOR_MAX = 3
 SMALL_SECTOR_DISCOUNT = 1.0
 MARK_SMALL_SECTOR = "U"
 MARK_NO_DATA = "Y"
+# Değerleme analizine alınmayan Yahoo menkul türleri (quoteType). ETF'lerin bilanço/kârlılık
+# verisi yok, F/K ve iskonto kıyası anlamsız - çekilir ama skorlanmaz, tabloda gösterilmez.
+EXCLUDED_QUOTE_TYPES = {"ETF": "ETF"}
+EXCLUDED_KEY = "_excluded"
 SECTOR_COLUMNS = ("Alt Sektör Ort. F/K", "Alt Sektör İskontosu %")
 # "Y" (veri yok) gösterilecek veri sütunları - eksik değer bu kriterden puan almaz.
 DATA_COLUMNS = (
@@ -85,7 +89,18 @@ def _epoch_to_date(ts):
         return None
 
 
+def is_excluded(raw) -> bool:
+    """Ham kayıt değerleme dışı bir menkule (ETF) mi ait?"""
+    return bool(raw and raw.get(EXCLUDED_KEY))
+
+
 def _raw_from_info(ticker, info, sub_sectors_map=None):
+    # ETF'ler değerleme dışı: skorlanmaz ama "ETF olduğu için hariç" diye işaretli
+    # bir kayıt döner ki her seferinde yeniden çekilmesin ve kullanıcıya söylensin.
+    quote_type = (info or {}).get('quoteType')
+    if quote_type in EXCLUDED_QUOTE_TYPES:
+        return {"Hisse": ticker, EXCLUDED_KEY: EXCLUDED_QUOTE_TYPES[quote_type]}
+
     # Delisted/durdurulmuş/geçersiz bir sembol için Yahoo neredeyse boş
     # bir .info sözlüğü döndürebilir - bunu, tüm oranları None olan
     # "sahte" bir satır olarak tabloya sokmak yerine baştan reddet.
@@ -105,7 +120,7 @@ def _raw_from_info(ticker, info, sub_sectors_map=None):
     pb = info.get('priceToBook', None)
     ev_ebitda = info.get('enterpriseToEbitda', None)
 
-    peg = info.get('pegRatio', None)
+    peg = info.get('pegRatio') or info.get('trailingPegRatio')
     eps_growth = info.get('earningsGrowth', None)
     if eps_growth is not None: eps_growth = round(eps_growth * 100, 2)
     
@@ -169,7 +184,8 @@ def _raw_from_info(ticker, info, sub_sectors_map=None):
         "F/K": round(pe, 2) if pe and pe > 0 else None,
         "PD/DD": round(pb, 2) if pb and pb > 0 else None,
         "FD/FAVÖK": round(ev_ebitda, 2) if ev_ebitda and ev_ebitda > 0 else None,
-        "PEG": round(peg, 2) if peg and peg > 0 else None,
+        # PEG yalnızca F/K > 0 olan hisselerde anlamlı (negatif/eksik F/K'da PEG yanıltıcı).
+        "PEG": round(peg, 2) if peg and peg > 0 and pe and pe > 0 else None,
         "EPS Büyümesi %": eps_growth,
         "Gelir Büyümesi %": rev_growth,
         "Öz Sermaye Getirisi (ROE) %": roe,
@@ -194,7 +210,14 @@ def calculate_sector_relative_scores(raw_data_list):
     if not raw_data_list:
         return []
 
+    # ETF'ler skorlanmaz ve akranların medyanına katılmaz.
+    raw_data_list = [r for r in raw_data_list if not is_excluded(r)]
+    if not raw_data_list:
+        return []
     df = pd.DataFrame(raw_data_list)
+    # PEG yalnızca F/K > 0 olanlarda (bu kural eklenmeden önce kaydedilmiş satırlar için de).
+    df['F/K'] = pd.to_numeric(df['F/K'], errors='coerce')
+    df['PEG'] = pd.to_numeric(df['PEG'], errors='coerce').where(df['F/K'] > 0)
     # Bilanço tarihleri bu alanlar eklenmeden önce kaydedilmiş satırlarda yok.
     for col in ("_most_recent_quarter", "_next_earnings"):
         if col not in df.columns:

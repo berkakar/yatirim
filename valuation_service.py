@@ -211,14 +211,21 @@ def fetch_in_batches(tickers, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH
 
 def score_records(records):
     """records: [{"ticker", "raw", ...}] -> her kayda "scored" (skor satırı) eklenmiş liste.
-    Skorlar (alt sektör medyanı dahil) listenin tamamı üzerinden hesaplanır."""
+    Skorlar (alt sektör medyanı dahil) listenin tamamı üzerinden hesaplanır.
+    ETF gibi değerleme dışı kayıtlar skorlanmaz, akranların medyanına katılmaz;
+    "scored" alanları yalnızca hariç tutulma nedenini taşır.
+    """
     records = [r for r in records if r.get("raw")]
-    if not records:
-        return []
-    scored = valuation.calculate_sector_relative_scores([r["raw"] for r in records])
-    for record, row in zip(records, scored):
-        record["scored"] = row
-    return records
+    included = [r for r in records if not valuation.is_excluded(r["raw"])]
+    excluded = [r for r in records if valuation.is_excluded(r["raw"])]
+    if included:
+        scored = valuation.calculate_sector_relative_scores([r["raw"] for r in included])
+        for record, row in zip(included, scored):
+            record["scored"] = row
+    for record in excluded:
+        record["scored"] = {"Hisse": record["ticker"],
+                            valuation.EXCLUDED_KEY: record["raw"][valuation.EXCLUDED_KEY]}
+    return included + excluded
 
 
 # ------------------------------------------------------------------------------
@@ -279,8 +286,9 @@ def _finalize(market, universe, base_set, fetched, reusable, failed, removed, ab
                  if aborted else None),
     }
     db.record_run(market, **summary)
+    n_excluded = sum(1 for r in records if r["scored"].get(valuation.EXCLUDED_KEY))
     log(f"{market}: {len(fetched)} çekildi, {len(reusable)} başka piyasadan alındı, "
-        f"{len(failed)} veri gelmedi, {len(records)} satır yazıldı.")
+        f"{len(failed)} veri gelmedi, {len(records)} satır yazıldı ({n_excluded} ETF, skorlanmadı).")
     summary["written"] = len(records)
     return summary
 
@@ -441,8 +449,8 @@ def get_scores_for_selection(market: str, tickers, progress_callback=None, fetch
 
     if new_records:
         peers = [{"ticker": t, "raw": r["raw"]} for t, r in market_rows.items()]
-        # Yeni kayıtların hepsinde ham veri var, skor listesinin sonunda yer alırlar.
-        new_scored = score_records(peers + new_records)[-len(new_records):]
+        new_tickers = {r["ticker"] for r in new_records}
+        new_scored = [r for r in score_records(peers + new_records) if r["ticker"] in new_tickers]
         scored_at = db.to_iso(now())
         db.upsert_rows(
             {"market": market, "ticker": r["ticker"], "raw": r["raw"], "scored": r["scored"],
@@ -453,17 +461,22 @@ def get_scores_for_selection(market: str, tickers, progress_callback=None, fetch
             market_rows[r["ticker"]] = {"scored": r["scored"], "fetched_at": r["fetched_at"],
                                         "source": db.SOURCE_ON_DEMAND}
 
-    rows = []
+    rows, excluded = [], []
     for ticker in tickers:
         row = market_rows.get(ticker)
-        if row:
-            rows.append({**row["scored"], "_fetched_at": row["fetched_at"], "_source": row["source"]})
+        if not row:
+            continue
+        if row["scored"].get(valuation.EXCLUDED_KEY):
+            excluded.append(ticker)
+            continue
+        rows.append({**row["scored"], "_fetched_at": row["fetched_at"], "_source": row["source"]})
 
     summary = {
         "from_db": len(found),
         "fetched": len(fetched),
         "reused": len([t for t in missing if t in reusable]),
         "failed": failed,
+        "excluded": excluded,
         "aborted": aborted,
         "last_run": db.get_run(market),
     }
