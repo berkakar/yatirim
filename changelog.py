@@ -28,6 +28,21 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "17",
+        "date": "2026-10-05",
+        "title": "Alpaca hesap türü rozeti: Sanal Para (Paper Trading) / Gerçek Para",
+        "problem": "Arayüzde işlemlerin sanal parayla mı gerçek parayla mı yapıldığı hiçbir yerde görünmüyordu.",
+        "change": (
+            "- Giriş Sayfası'nda ve Algoritmik Ticaret kategorisindeki her sayfanın en üstünde hesap türü "
+            "rozeti: paper uç noktasında 🧪 Sanal Para, canlı uç noktada kırmızı 💰 Gerçek Para.\n"
+            "- Tür, emirlerin gönderildiği Alpaca uç noktasından (paper-api / api) belirlenir."
+        ),
+        "where": "alpaca_client.py (is_paper_url, AlpacaClient.is_paper), alpaca_dashboard.py "
+                 "(render_account_mode_badge), app.py, tests/test_account_mode.py",
+        "settings": "Ayar yok - kullanıcıya Alpaca anahtarı tanımlıysa gösterilir.",
+        "track": "Gerçek hesaba geçildiğinde rozetin Gerçek Para'ya döndüğü kontrol edilmeli.",
+    },
+    {
         "id": "16",
         "date": "2026-10-05",
         "title": "BackTest sonuç tablosuna Al-Tut karşılaştırması, kazanma oranı, maksimum düşüş ve profit factor",

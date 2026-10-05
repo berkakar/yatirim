@@ -34,7 +34,9 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
+from alpaca_dashboard import (
+    render_alpaca_dashboard, render_account_summary, render_positions_summary_table, render_account_mode_badge,
+)
 from premium_buy_portfolio import render_premium_buy_portfolio
 from otomatik_alim_satim import render_otomatik_alim_satim
 from relative_strength import render_relative_strength
@@ -385,6 +387,12 @@ def render_chart_for(ticker):
     st.session_state.selected_ticker = ticker
     st.session_state.show_chart = True
 
+
+# Sanal Para / Gerçek Para rozeti: Giriş Sayfası'nda ve Algoritmik Ticaret
+# kategorisindeki her sayfanın en üstünde. Arayüzdeki tüm Alpaca istemcileri
+# DEFAULT_TRADING_URL ile oluşturulduğu için rozet de onu gösterir.
+if (module == NAV_HOME or category == "🤖 Algoritmik Ticaret") and all(get_user_alpaca_creds(username)):
+    render_account_mode_badge()
 
 # ==============================================================================
 # 0. MODÜL: GİRİŞ SAYFASI (ANA SAYFA)

@@ -4,11 +4,12 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
-from alpaca_client import AlpacaClient
+from alpaca_client import DEFAULT_TRADING_URL, AlpacaClient, is_paper_url
 from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
 from config import load_initial_capital, save_initial_capital
 from stop_tags import parse_shield_real_stop
+from theme import get_palette
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -133,6 +134,25 @@ def rebuy_row_style(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(
         [["color: orange;" if row.get("Açıklama") else "" for _ in df.columns] for _, row in df.iterrows()],
         index=df.index, columns=df.columns,
+    )
+
+
+def render_account_mode_badge(trading_url: str = DEFAULT_TRADING_URL):
+    """Alpaca hesabının Sanal Para (Paper Trading) mı Gerçek Para mı
+    olduğunu gösteren rozet - Giriş Sayfası'nda ve Algoritmik Ticaret
+    sayfalarının en üstünde. Etiket, uygulamanın emir gönderdiği uç noktadan
+    (trading_url) belirlenir; yanlış hesapta işlem yapıldığı fark edilsin diye
+    Gerçek Para kırmızı gösterilir."""
+    p = get_palette()
+    if is_paper_url(trading_url):
+        icon, label, detail, color = "🧪", "Sanal Para", "Alpaca Paper Trading hesabı", p["info"]
+    else:
+        icon, label, detail, color = "💰", "Gerçek Para", "Alpaca canlı hesap - emirler gerçek parayla gerçekleşir", p["negative"]
+    st.markdown(
+        f'<div style="display:inline-block; padding:0.3rem 0.8rem; margin-bottom:0.6rem; '
+        f'border:2px solid {color}; border-radius:999px; color:{color}; font-weight:700;">'
+        f'{icon} {label} <span style="font-weight:400; opacity:0.85;">· {detail}</span></div>',
+        unsafe_allow_html=True,
     )
 
 
