@@ -79,7 +79,13 @@ CHANGES = [
             "anlamlı biçimde iyi (+0.082% vs +0.031%, fark +0.051%, %95 GA +0.013 … +0.093; tüm giriş türlerinde "
             "aynı yönde), ancak eğitim yarısında taranan ayar testte bu farkı vermedi ve veri yalnız 1 yıl - "
             "daha uzun 30dk geçmişle teyit edilmeden canlıya alınmamalı. Rapor: "
-            "reports/adaptive_stop_validation_5y_2026-10-05.md."
+            "reports/adaptive_stop_validation_5y_2026-10-05.md.\n"
+            "- **Güncelleme (30dk, 5 yıl, normal seans):** test 2024-04 → 2026-10'da Akıllı Dinamik canlı kurallardan "
+            "anlamlı biçimde iyi (Breakeven+Yapısal'a göre +0.021%, PBP'nin kullandığı ATR Stop'a göre +0.018% / "
+            "işlem); eğitim yarısında seçilen ayar da aynı yönde. Ancak 2021-2025 yıllarında Breakeven+Yapısal ile "
+            "toplamda başa baş (2022-2023 geride, 2021/2024/2025 önde) - avantaj küçük ve döneme bağlı. Günlükte ATR "
+            "Stop, hem Breakeven+Yapısal'dan (+0.180%) hem Akıllı Dinamik'ten (+0.108%) anlamlı biçimde kötü. Rapor: "
+            "reports/adaptive_stop_validation_30m_5y_2026-10-05.md."
         ),
         "where": "stop_algorithms.py (adaptive_dynamic_*), stop_loss_settings.py (🧠 sekmesi), "
                  "scripts/backtest_adaptive_stop.py, tests/test_adaptive_stop.py",
