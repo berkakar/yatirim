@@ -34,7 +34,7 @@ Streamlit arayüzü de isteğe bağlı olarak aynı Droplet'e taşınabilir (bkz
 | `valuation-bist100` | — (yeni) | Hafta içi 18:40 TRT |
 | `valuation-nasdaq100` | — (yeni) | Hafta içi 17:15 ET |
 | `valuation-nyse` | — (yeni) | Hafta içi 18:45 ET |
-| `valuation-russell2000` | — (yeni) | Hafta içi 20:30 ET (~70 dk sürer) |
+| `valuation-russell2000` | — (yeni) | Haftada 1 döngü: Cumartesi 00:05 ET başlar, saatte 1 paket (timer saat başı +5 dk tetiklenir, döngü yoksa boşta çıkar) |
 
 Sadece elle tetiklenen `kap_refresh_holdings.yml`, `orb_stop_status.yml` ve ORB'nin
 `reconcile_symbols` girişi GitHub Actions'ta kaldı. `update_version.yml` de orada kaldı.
@@ -78,9 +78,13 @@ Droplet commit'leri `[skip ci]` taşıdığı için onu tetiklemez.
 2. Veritabanında o piyasaya ait olup artık ne piyasa listesinde ne de herhangi bir
    kullanıcının hisselerinde (grupları, kayıtlı seçimleri) olan satırları siler.
 3. Yahoo'dan 50'lik paketler halinde çeker (paketler arası ~30 sn; 429 gelirse
-   60/120/240 sn bekleyip tekrar dener, sonra bırakır).
+   60/120/240 sn bekleyip tekrar dener, sonra bırakır). **Russell 2000** istisna:
+   haftada 1 döngü, her saat yalnızca 1 paket; ~2000 hisse ≈ 40 saat. Ara veriler
+   `valuation_cycles` tablosunda birikir, skorlar son paketten sonra yazılır. Elle
+   tek seferde doldurmak için: `python valuation_service.py --market russell2000 --full`.
 4. Çekim bitince skorları mevcut kriterlerle hesaplar ve `valuation_scores` tablosuna
-   tarih/saatle yazar (varsa üzerine).
+   tarih/saatle yazar (varsa üzerine). Yahoo'da varsa bilanço dönem tarihi ve bir sonraki
+   bilanço açıklama tarihi de kaydedilir.
 
 Arayüz seçilen portföyü bu tablodan okur; tabloda olmayan bir hisse Yahoo'dan anlık
 çekilir, piyasanın kayıtlı hisseleriyle birlikte skorlanır ve kaydedilir. Bu işler

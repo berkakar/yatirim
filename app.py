@@ -23,7 +23,7 @@ from backtest_data import append_results, new_run_id
 from stoploss import get_stoploss_data
 from valuation import style_valuation_df
 import valuation_db
-from valuation_service import get_scores_for_selection
+from valuation_service import get_scores_for_selection, SERVICES, SERVICE_BY_MARKET, MODE_WEEKLY_HOURLY, cycle_progress, next_start
 from dtw_analysis import (
     fetch_and_cache_5m_data,
     compute_dtw_similarity,
@@ -867,16 +867,49 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         dt = valuation_db.parse_iso(iso_text)
         return f"{dt.astimezone(TR_TZ):%d.%m.%Y %H:%M}" if dt else "-"
 
+    _now_utc = datetime.now(timezone.utc)
+    _service = SERVICE_BY_MARKET.get(base_market)
     _last_run = valuation_db.get_run(base_market)
+    _info_parts = []
+    if _service:
+        _info_parts.append(f"⏱️ **{base_market}** servisi: **{_service['frequency']}**.")
     if _last_run and _last_run.get("finished_at"):
         _run_note = " ⚠️ Son çalıştırmada Yahoo çekimi yarıda kaldı." if _last_run.get("aborted") else ""
-        st.caption(
-            f"🗄️ **{base_market}** servisi en son {_fmt_trt(_last_run['finished_at'])} TRT'de çalıştı "
+        _info_parts.append(
+            f"Son tamamlanan çalışma {_fmt_trt(_last_run['finished_at'])} TRT "
             f"({_last_run.get('universe_size') or 0} hisse).{_run_note}"
         )
     else:
+        _info_parts.append("Henüz tamamlanmış bir çalışma yok; seçtiğiniz hisseler Yahoo Finance'ten anlık çekilip veritabanına kaydedilecek.")
+    _progress = cycle_progress(base_market) if _service and _service["mode"] == MODE_WEEKLY_HOURLY else None
+    if _progress:
+        _info_parts.append(
+            f"🔄 Haftalık döngü sürüyor ({_fmt_trt(_progress['started_at'])} TRT'de başladı): "
+            f"{_progress['done']}/{_progress['total']} hisse çekildi; skorlar döngü bitince güncellenecek."
+        )
+    elif _service:
+        _next = next_start(_service, _now_utc)
+        if _next:
+            _info_parts.append(f"Sonraki çalışma: {_fmt_trt(valuation_db.to_iso(_next))} TRT.")
+    st.caption(" ".join(_info_parts))
+
+    with st.expander("🗓️ Servis çalışma takvimi (tüm piyasalar)"):
+        _sched_rows = []
+        for _svc in SERVICES.values():
+            _lr = valuation_db.get_run(_svc["market"])
+            _nx = next_start(_svc, _now_utc)
+            _sched_rows.append({
+                "Piyasa": _svc["market"],
+                "Çalışma Sıklığı": _svc["frequency"],
+                "Nasıl Çalışır": _svc["detail"],
+                "Son Tamamlanan (TRT)": _fmt_trt(_lr.get("finished_at")) if _lr else "-",
+                "Sonraki Başlangıç (TRT)": _fmt_trt(valuation_db.to_iso(_nx)) if _nx else "-",
+            })
+        st.dataframe(pd.DataFrame(_sched_rows), use_container_width=True, hide_index=True)
         st.caption(
-            f"🗄️ **{base_market}** servisi henüz çalışmadı; seçtiğiniz hisseler Yahoo Finance'ten anlık çekilip veritabanına kaydedilecek."
+            "Servisler Yahoo Finance tarafından engellenmemek için farklı saatlerde ve 50 hisselik paketler halinde çalışır. "
+            "Her çalışmadan önce, artık ne piyasa listesinde ne de herhangi bir kullanıcının hisselerinde olan kayıtlar silinir. "
+            "Veritabanında olmayan bir hisse seçtiğinizde anlık çekilir ve sonraki çalışmalarda güncellenir."
         )
 
     if st.button("🚀 Değerleme Sonuçlarını Getir", type="primary"):
@@ -948,6 +981,8 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="💡 Optimum: 1.0 - 2.0."),
             "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="💡 Optimum: > 1.0."),
             "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="💡 Optimum: 1.0 - 2.0."),
+            "Bilanço Tarihi": st.column_config.TextColumn("Bilanço Tarihi", help="💡 Son açıklanan bilançonun dönem sonu (Yahoo Finance 'mostRecentQuarter'). Boşsa Yahoo'da bu bilgi yok."),
+            "Sonraki Bilanço": st.column_config.TextColumn("Sonraki Bilanço", help="💡 Yahoo Finance'e göre bir sonraki bilanço açıklama tarihi (tahmini olabilir)."),
             "Veri Zamanı": st.column_config.TextColumn("Veri Zamanı (TRT)", help="💡 Hissenin verisinin Yahoo Finance'ten çekildiği tarih ve saat."),
         }
 

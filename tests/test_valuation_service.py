@@ -20,6 +20,7 @@ def make_raw(ticker, pe=20.0, sub="Semis"):
         "Varlık Getirisi (ROA) %": 7.0, "Borç / Özsermaye": 0.4, "Borç / Varlık %": 30.0,
         "Cari Oran": 1.5, "Likidite Oranı": 1.2, "Varlık Devir Hızı": 1.1,
         "_most_recent_quarter": "2026-06-30",
+        "_next_earnings": "2026-10-29",
     }
 
 
@@ -224,6 +225,108 @@ class SelectionTest(ValuationServiceTestCase):
         self.run_market(fetcher)
         self.assertIn("TSLA", fetcher.calls)
         self.assertEqual(valuation_db.get_rows("NASDAQ 100")["TSLA"]["raw"]["F/K"], 99.0)
+
+
+class BalanceSheetDateTest(ValuationServiceTestCase):
+    def test_dates_are_stored_and_old_rows_without_them_still_score(self):
+        import valuation
+        info = {"sector": "Technology", "industry": "Semis", "trailingPE": 20, "marketCap": 1,
+                "regularMarketPrice": 1, "mostRecentQuarter": 1782777600,
+                "earningsTimestampStart": 1793232000}
+        with mock.patch.object(valuation, "is_info_meaningful", return_value=True):
+            raw = valuation._raw_from_info("AAPL", info, {})
+        self.assertEqual(raw["_most_recent_quarter"], "2026-06-30")
+        self.assertEqual(raw["_next_earnings"], "2026-10-29")
+
+        old = make_raw("OLD")
+        del old["_most_recent_quarter"], old["_next_earnings"]
+        rows = valuation.calculate_sector_relative_scores([make_raw("AAPL"), old])
+        self.assertEqual(rows[0]["Bilanço Tarihi"], "2026-06-30")
+        self.assertEqual(rows[0]["Sonraki Bilanço"], "2026-10-29")
+        self.assertIsNone(rows[1]["Bilanço Tarihi"])
+
+    def test_service_writes_dates_into_scores(self):
+        import valuation_db
+        self.run_market(FakeFetcher())
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["scored"]["Bilanço Tarihi"], "2026-06-30")
+
+
+class WeeklyHourlyCycleTest(ValuationServiceTestCase):
+    """Russell 2000: haftada 1 döngü, her saat 1 paket."""
+
+    def setUp(self):
+        super().setUp()
+        storage.write("custom_tickers", "u1", {"NASDAQ 100": ["AAPL"],
+                                               "Russell 2000": [f"R{i}" for i in range(5)]})
+        storage.write("custom_tickers", "u2", {"NASDAQ 100": ["MSFT", "NVDA"], "Russell 2000": []})
+        self.service = self.svc.SERVICES["russell2000"]
+
+    def step(self, fetcher, when):
+        self.clock.t = when
+        return self.svc.run_cycle_step(self.service, batch_size=2, ticker_delay_s=None,
+                                       fetcher=fetcher, sleep=self.sleeps.append, now=self.clock)
+
+    def test_one_batch_per_step_and_scores_written_after_last(self):
+        import valuation_db
+        sat = datetime(2026, 10, 10, 4, 5, tzinfo=timezone.utc)  # Cumartesi 00:05 ET
+        fetcher = FakeFetcher()
+
+        first = self.step(fetcher, sat)
+        self.assertEqual(first["action"], "step")
+        self.assertEqual(len(fetcher.calls), 2)
+        self.assertEqual(valuation_db.get_rows("Russell 2000"), {})  # skorlar henüz yazılmadı
+        progress = self.svc.cycle_progress("Russell 2000")
+        self.assertEqual((progress["done"], progress["total"]), (2, 5))
+
+        self.step(fetcher, sat + timedelta(hours=1))
+        last = self.step(fetcher, sat + timedelta(hours=2))
+        self.assertEqual(last["action"], "finished")
+        self.assertEqual(len(fetcher.calls), 5)
+        self.assertEqual(len(valuation_db.get_rows("Russell 2000")), 5)
+        self.assertIsNone(valuation_db.get_cycle("Russell 2000"))
+        self.assertEqual(self.sleeps, [])  # paketler arası bekleme yok; aralık timer'ın 1 saati
+
+        # Aynı hafta içinde yeni döngü başlamaz.
+        self.assertEqual(self.step(fetcher, sat + timedelta(hours=3))["action"], "idle")
+        self.assertEqual(self.step(fetcher, sat + timedelta(days=3))["action"], "idle")
+        # Bir sonraki Cumartesi başlar.
+        self.assertEqual(self.step(fetcher, sat + timedelta(days=7))["action"], "step")
+
+    def test_not_started_on_weekdays(self):
+        tue = datetime(2026, 10, 6, 14, 5, tzinfo=timezone.utc)
+        fetcher = FakeFetcher()
+        self.assertEqual(self.step(fetcher, tue)["action"], "idle")
+        self.assertEqual(fetcher.calls, [])
+
+    def test_rate_limited_tickers_retried_next_hour(self):
+        sat = datetime(2026, 10, 10, 4, 5, tzinfo=timezone.utc)
+        self.step(FakeFetcher(rate_limited={"R0"}), sat)
+        self.assertEqual(self.svc.cycle_progress("Russell 2000")["done"], 0)
+        fetcher = FakeFetcher()
+        self.step(fetcher, sat + timedelta(hours=1))
+        self.assertEqual(fetcher.calls, ["R0", "R1"])
+
+    def test_main_runs_step_for_weekly_service(self):
+        with mock.patch.object(self.svc, "run_cycle_step", return_value={"action": "idle"}) as step, \
+                mock.patch.object(self.svc, "run_market") as full:
+            self.assertEqual(self.svc.main(["--market", "russell2000"]), 0)
+        step.assert_called_once()
+        full.assert_not_called()
+
+
+class ScheduleTest(unittest.TestCase):
+    def test_next_start(self):
+        import valuation_service as svc
+        mon = datetime(2026, 10, 5, 12, 0, tzinfo=timezone.utc)  # Pazartesi 15:00 TRT
+        self.assertEqual(svc.next_start(svc.SERVICES["bist100"], mon),
+                         datetime(2026, 10, 5, 15, 40, tzinfo=timezone.utc))
+        self.assertEqual(svc.next_start(svc.SERVICES["nasdaq100"], mon),
+                         datetime(2026, 10, 5, 21, 15, tzinfo=timezone.utc))
+        self.assertEqual(svc.next_start(svc.SERVICES["russell2000"], mon),
+                         datetime(2026, 10, 10, 4, 5, tzinfo=timezone.utc))
+        fri_night = datetime(2026, 10, 9, 22, 0, tzinfo=timezone.utc)  # Cuma, BIST saati geçti
+        self.assertEqual(svc.next_start(svc.SERVICES["bist100"], fri_night),
+                         datetime(2026, 10, 12, 15, 40, tzinfo=timezone.utc))
 
 
 class RateLimitDetectionTest(unittest.TestCase):

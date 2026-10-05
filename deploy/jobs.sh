@@ -106,7 +106,8 @@ job_define() {
       # (YATIRIM_DB_PATH gerekir); commit'lenecek dosya yok.
       JOB_CMDS=("python valuation_service.py --market ${1#valuation-}")
       JOB_TIMEOUT=1800
-      [ "$1" = "valuation-russell2000" ] && JOB_TIMEOUT=6600  # ~2000 hisse, 40 paket
+      # Russell 2000 saatte yalnızca 1 paket (50 hisse) çeker - bkz. SERVICES.
+      [ "$1" = "valuation-russell2000" ] && JOB_TIMEOUT=900
       ;;
     *)
       return 1

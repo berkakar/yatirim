@@ -46,6 +46,11 @@ CREATE TABLE IF NOT EXISTS valuation_runs (
     aborted       INTEGER NOT NULL DEFAULT 0,
     note          TEXT
 );
+CREATE TABLE IF NOT EXISTS valuation_cycles (
+    market     TEXT PRIMARY KEY,
+    state      TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 """
 
 _initialized_paths = set()
@@ -196,3 +201,28 @@ def get_run(market: str):
             return None
         names = [d[0] for d in cur.description]
     return dict(zip(names, row))
+
+
+# --------------------------------------------------------------------------
+# Paket paket ilerleyen (örn. Russell 2000: saatte 1 paket) servis döngüsünün
+# ara durumu: evren, bekleyen hisseler ve o ana kadar çekilen ham veriler.
+# Skorlar döngü bitince hesaplanıp valuation_scores'a yazılır, kayıt silinir.
+# --------------------------------------------------------------------------
+
+def get_cycle(market: str):
+    with _connect() as conn:
+        row = conn.execute("SELECT state FROM valuation_cycles WHERE market = ?", (market,)).fetchone()
+    return json.loads(row[0]) if row else None
+
+
+def save_cycle(market: str, state: dict, now=None) -> None:
+    with _connect() as conn, storage.write_transaction(conn):
+        conn.execute(
+            "INSERT OR REPLACE INTO valuation_cycles (market, state, updated_at) VALUES (?, ?, ?)",
+            (market, json.dumps(state, ensure_ascii=False), to_iso(now or utc_now())),
+        )
+
+
+def delete_cycle(market: str) -> None:
+    with _connect() as conn, storage.write_transaction(conn):
+        conn.execute("DELETE FROM valuation_cycles WHERE market = ?", (market,))

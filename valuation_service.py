@@ -19,9 +19,16 @@ gidilmesin diye. Bir servis çalıştığında:
    calculate_sector_relative_scores) evrenin tamamı üzerinden hesaplar.
 5. Sonuçları tarih/saatle veritabanına yazar; satır varsa üzerine yazar.
 
+Russell 2000 servisi farklıdır: haftada 1 döngü çalışır ve her saat yalnızca bir
+paket (50 hisse) çeker (timer saat başı çağırır, döngü yoksa hiçbir şey yapmaz).
+Ham veriler döngü boyunca valuation_cycles tablosunda birikir; skorlar son
+paketten sonra hesaplanır. Takvim: SERVICES.
+
 Kullanım:
     python valuation_service.py --market nasdaq100
     python valuation_service.py --market bist100 --batch-size 50 --pause 30
+    python valuation_service.py --market russell2000          # saatlik adım
+    python valuation_service.py --market russell2000 --full   # elle, tek seferde
 
 Arayüz tarafı (seçilen portföyün veritabanından getirilmesi, eksik hisselerin
 anlık çekilmesi) get_scores_for_selection() fonksiyonundadır.
@@ -33,18 +40,47 @@ import os
 import random
 import sys
 import time
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import config
 import storage
 import valuation
 import valuation_db as db
 
-MARKET_SLUGS = {
-    "nasdaq100": "NASDAQ 100",
-    "nyse": "NYSE",
-    "bist100": "BIST 100",
-    "russell2000": "Russell 2000",
+MODE_DAILY = "daily"                  # tek çalıştırmada tüm paketler, paketler arası ~30 sn
+MODE_WEEKLY_HOURLY = "weekly_hourly"  # haftada 1 döngü, her saat 1 paket
+
+# Servislerin çalışma takvimi. Saatler deploy/systemd/yatirim-valuation-*.timer
+# dosyalarıyla AYNI olmalı; arayüz "Servis çalışma takvimi" tablosunu buradan gösterir.
+SERVICES = {
+    "bist100": {
+        "market": "BIST 100", "mode": MODE_DAILY, "days": (0, 1, 2, 3, 4), "time": (18, 40),
+        "tz": "Europe/Istanbul", "frequency": "Hafta içi her gün (haftada 5 kez)",
+        "detail": "BIST kapanışından sonra; tüm hisseler tek seferde, 50'lik paketler arasında ~30 sn beklenerek.",
+    },
+    "nasdaq100": {
+        "market": "NASDAQ 100", "mode": MODE_DAILY, "days": (0, 1, 2, 3, 4), "time": (17, 15),
+        "tz": "America/New_York", "frequency": "Hafta içi her gün (haftada 5 kez)",
+        "detail": "ABD kapanışından sonra; tüm hisseler tek seferde, 50'lik paketler arasında ~30 sn beklenerek.",
+    },
+    "nyse": {
+        "market": "NYSE", "mode": MODE_DAILY, "days": (0, 1, 2, 3, 4), "time": (18, 45),
+        "tz": "America/New_York", "frequency": "Hafta içi her gün (haftada 5 kez)",
+        "detail": "NASDAQ 100 servisinden 1,5 saat sonra; 50'lik paketler arasında ~30 sn beklenerek.",
+    },
+    "russell2000": {
+        "market": "Russell 2000", "mode": MODE_WEEKLY_HOURLY, "start_days": (5, 6), "time": (0, 5),
+        "tz": "America/New_York", "frequency": "Haftada 1 kez",
+        "detail": "Cumartesi başlar; her saat 1 paket (50 hisse) çekilir, ~2000 hisse yaklaşık 40 saatte "
+                  "tamamlanır. Skorlar son paketten sonra hesaplanıp yazılır; o zamana kadar bir önceki "
+                  "haftanın verisi gösterilir.",
+    },
 }
+MARKET_SLUGS = {slug: svc["market"] for slug, svc in SERVICES.items()}
+SERVICE_BY_MARKET = {svc["market"]: svc for svc in SERVICES.values()}
+# Haftalık döngü, son döngü başlangıcından en az bu kadar gün sonra yeniden başlar.
+CYCLE_MIN_GAP_DAYS = 6
 
 BATCH_SIZE = int(os.environ.get("VALUATION_BATCH_SIZE", "50"))
 # Servis: paketler arası bekleme (sn) ve hisseler arası rastgele kısa bekleme aralığı.
@@ -189,16 +225,12 @@ def score_records(records):
 # Servis
 # ------------------------------------------------------------------------------
 
-def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_PAUSE_S,
-               ticker_delay_s=SERVICE_TICKER_DELAY_S, fetcher=None, sleep=time.sleep, now=None):
-    """Bir piyasa servisinin tek çalıştırması. Özet sözlüğü döner."""
-    now = now or db.utc_now
-    started_at = db.to_iso(now())
-
+def _prepare(market: str, now):
+    """Çalıştırma/döngü başı: evreni kurar, artık kimsenin kullanmadığı satırları siler.
+    Döner: (evren, piyasa+grup kümesi, silinen satır sayısı)."""
     base, user_stocks = build_universe(market)
     base_set = set(base)
     existing = db.get_rows(market)
-
     # Ne piyasa/grup evreninde ne de herhangi bir kullanıcının hisselerinde olanlar silinir.
     stale = sorted(t for t in existing if t not in base_set and t not in user_stocks)
     removed = db.delete_rows(market, stale)
@@ -206,27 +238,26 @@ def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_P
     universe = base + kept_extra
     log(f"{market}: evren {len(universe)} hisse ({len(base)} piyasa+grup, {len(kept_extra)} "
         f"kullanıcı hissesi), {removed} artık kullanılmayan satır silindi.")
+    return universe, base_set, removed
 
-    reusable = db.get_recent_raw(universe, SERVICE_REUSE_HOURS, exclude_market=market, now=now())
-    to_fetch = [t for t in universe if t not in reusable]
-    fetched, failed, aborted = fetch_in_batches(
-        to_fetch, batch_size=batch_size, batch_pause_s=batch_pause_s,
-        ticker_delay_s=ticker_delay_s, fetcher=fetcher, sleep=sleep,
-    )
-    fetched_at = db.to_iso(now())
 
+def _finalize(market, universe, base_set, fetched, reusable, failed, removed, aborted, started_at, now):
+    """Çekim bittikten sonra: evrenin tamamını skorlar, veritabanına yazar, özeti kaydeder.
+    fetched / reusable: {hisse: (ham_veri, fetched_at)}."""
+    existing = db.get_rows(market)
     records = []
     for ticker in universe:
         source = db.SOURCE_SERVICE if ticker in base_set else db.SOURCE_ON_DEMAND
         if ticker in fetched:
-            records.append({"ticker": ticker, "raw": fetched[ticker], "fetched_at": fetched_at, "source": source})
+            raw, ts = fetched[ticker]
         elif ticker in reusable:
             raw, ts = reusable[ticker]
-            records.append({"ticker": ticker, "raw": raw, "fetched_at": ts, "source": source})
         elif ticker in existing:
             # Bu sefer veri gelmedi (geçici hata / çekim bırakıldı) - eski veriyle skorlanmaya devam eder.
-            old = existing[ticker]
-            records.append({"ticker": ticker, "raw": old["raw"], "fetched_at": old["fetched_at"], "source": source})
+            raw, ts = existing[ticker]["raw"], existing[ticker]["fetched_at"]
+        else:
+            continue
+        records.append({"ticker": ticker, "raw": raw, "fetched_at": ts, "source": source})
 
     records = score_records(records)
     scored_at = db.to_iso(now())
@@ -235,7 +266,6 @@ def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_P
          "fetched_at": r["fetched_at"], "scored_at": scored_at, "source": r["source"]}
         for r in records
     )
-
     summary = {
         "started_at": started_at,
         "finished_at": db.to_iso(now()),
@@ -253,6 +283,121 @@ def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_P
         f"{len(failed)} veri gelmedi, {len(records)} satır yazıldı.")
     summary["written"] = len(records)
     return summary
+
+
+def run_market(market: str, batch_size=BATCH_SIZE, batch_pause_s=SERVICE_BATCH_PAUSE_S,
+               ticker_delay_s=SERVICE_TICKER_DELAY_S, fetcher=None, sleep=time.sleep, now=None):
+    """Bir piyasa servisinin tek seferlik çalıştırması (tüm paketler arka arkaya). Özet döner."""
+    now = now or db.utc_now
+    started_at = db.to_iso(now())
+    universe, base_set, removed = _prepare(market, now)
+    reusable = db.get_recent_raw(universe, SERVICE_REUSE_HOURS, exclude_market=market, now=now())
+    to_fetch = [t for t in universe if t not in reusable]
+    results, failed, aborted = fetch_in_batches(
+        to_fetch, batch_size=batch_size, batch_pause_s=batch_pause_s,
+        ticker_delay_s=ticker_delay_s, fetcher=fetcher, sleep=sleep,
+    )
+    fetched_at = db.to_iso(now())
+    fetched = {t: (raw, fetched_at) for t, raw in results.items()}
+    return _finalize(market, universe, base_set, fetched, reusable, failed, removed, aborted, started_at, now)
+
+
+def cycle_due(service: dict, now_utc) -> bool:
+    """Haftalık döngü başlatılmalı mı? Başlangıç gününde (yerel saatle) olup son
+    döngü en az CYCLE_MIN_GAP_DAYS önce başlamışsa evet."""
+    local = now_utc.astimezone(ZoneInfo(service["tz"]))
+    if local.weekday() not in service["start_days"]:
+        return False
+    last = db.get_run(service["market"])
+    last_start = db.parse_iso(last["started_at"]) if last else None
+    return last_start is None or now_utc - last_start >= timedelta(days=CYCLE_MIN_GAP_DAYS)
+
+
+def run_cycle_step(service: dict, batch_size=BATCH_SIZE, ticker_delay_s=SERVICE_TICKER_DELAY_S,
+                   fetcher=None, sleep=time.sleep, now=None):
+    """Paket paket ilerleyen servisin (Russell 2000) saatlik adımı. Timer her saat
+    çağırır; döngü yoksa ve zamanı gelmemişse hiçbir şey yapmaz. Her adımda bir paket
+    (50 hisse) çekilir; son paketten sonra skorlar hesaplanıp yazılır.
+    Döner: {"action": "idle" | "step" | "finished", ...}."""
+    now = now or db.utc_now
+    market = service["market"]
+    state = db.get_cycle(market)
+    if state is None:
+        if not cycle_due(service, now()):
+            log(f"{market}: döngü zamanı değil, yapılacak iş yok.")
+            return {"action": "idle"}
+        started_at = db.to_iso(now())
+        universe, base_set, removed = _prepare(market, now)
+        reusable = db.get_recent_raw(universe, SERVICE_REUSE_HOURS, exclude_market=market, now=now())
+        state = {
+            "started_at": started_at,
+            "universe": universe,
+            "base": sorted(base_set),
+            "pending": [t for t in universe if t not in reusable],
+            "fetched": {},
+            "reused": {t: list(v) for t, v in reusable.items()},
+            "failed": [],
+            "removed": removed,
+            "batches_done": 0,
+        }
+        log(f"{market}: yeni haftalık döngü başladı, {len(state['pending'])} hisse "
+            f"~{-(-len(state['pending']) // batch_size)} pakette çekilecek.")
+
+    batch = state["pending"][:batch_size]
+    aborted = False
+    if batch:
+        results, failed, aborted = fetch_in_batches(
+            batch, batch_size=batch_size, batch_pause_s=0, ticker_delay_s=ticker_delay_s,
+            fetcher=fetcher, sleep=sleep,
+        )
+        fetched_at = db.to_iso(now())
+        for t, raw in results.items():
+            state["fetched"][t] = [raw, fetched_at]
+        state["failed"] += failed
+        tried = set(results) | set(failed)
+        state["pending"] = [t for t in state["pending"] if t not in tried]
+        state["batches_done"] += 1
+        if aborted:
+            log(f"{market}: Yahoo 429 - bu paketin kalan {len([t for t in batch if t not in tried])} "
+                "hissesi bir sonraki saatte tekrar denenecek.")
+
+    if state["pending"]:
+        db.save_cycle(market, state, now=now())
+        log(f"{market}: {len(state['fetched'])} hisse çekildi, {len(state['pending'])} bekliyor.")
+        return {"action": "step", "fetched": len(state["fetched"]), "pending": len(state["pending"]),
+                "aborted": aborted}
+
+    summary = _finalize(
+        market, state["universe"], set(state["base"]),
+        {t: tuple(v) for t, v in state["fetched"].items()},
+        {t: tuple(v) for t, v in state["reused"].items()},
+        state["failed"], state["removed"], False, state["started_at"], now,
+    )
+    db.delete_cycle(market)
+    return {"action": "finished", **summary}
+
+
+def cycle_progress(market: str):
+    """Süren döngünün ilerlemesi (arayüz için) ya da döngü yoksa None."""
+    state = db.get_cycle(market)
+    if not state:
+        return None
+    total = len(state["universe"]) - len(state["reused"])
+    return {"started_at": state["started_at"], "done": total - len(state["pending"]), "total": total}
+
+
+def next_start(service: dict, now_utc):
+    """Servisin bir sonraki planlı (başlangıç) zamanı, UTC."""
+    tz = ZoneInfo(service["tz"])
+    local = now_utc.astimezone(tz)
+    hour, minute = service["time"]
+    days = service["days"] if service["mode"] == MODE_DAILY else service["start_days"][:1]
+    for offset in range(0, 8):
+        day = (local + timedelta(days=offset)).date()
+        candidate = datetime(day.year, day.month, day.day, hour, minute, tzinfo=tz)
+        if candidate.weekday() in days and candidate > local:
+            return candidate.astimezone(timezone.utc)
+    return None
 
 
 # ------------------------------------------------------------------------------
@@ -334,11 +479,20 @@ def main(argv=None):
     parser.add_argument("--batch-size", type=int, default=BATCH_SIZE)
     parser.add_argument("--pause", type=float, default=SERVICE_BATCH_PAUSE_S,
                         help="paketler arası bekleme (sn)")
+    parser.add_argument("--full", action="store_true",
+                        help="haftalık/saatlik servisi de tek seferde baştan sona çalıştır (elle doldurma)")
     args = parser.parse_args(argv)
 
     if not storage.enabled():
         log(f"UYARI: YATIRIM_DB_PATH tanımlı değil - sonuçlar yerel {storage.db_path()} dosyasına yazılacak.")
-    summary = run_market(MARKET_SLUGS[args.market], batch_size=args.batch_size, batch_pause_s=args.pause)
+    service = SERVICES[args.market]
+    if service["mode"] == MODE_WEEKLY_HOURLY and not args.full:
+        result = run_cycle_step(service, batch_size=args.batch_size)
+        if result["action"] != "finished":
+            return 0  # 429 olsa bile paket bir sonraki saatte tekrar denenir
+        summary = result
+    else:
+        summary = run_market(service["market"], batch_size=args.batch_size, batch_pause_s=args.pause)
     # Hiç satır yazılamadıysa (örn. Yahoo baştan engelledi) iş başarısız sayılsın, Telegram'a bildirilsin.
     if summary["written"] == 0 and summary["universe_size"] > 0:
         log("HATA: hiçbir hisse için veri yazılamadı.")

@@ -60,6 +60,16 @@ def fetch_single_ticker_raw(ticker, sub_sectors_map=None, raise_on_rate_limit=Fa
         return None
 
 
+def _epoch_to_date(ts):
+    """Yahoo'nun saniye cinsinden zaman damgasını 'YYYY-MM-DD' metnine çevirir; yoksa None."""
+    if not ts:
+        return None
+    try:
+        return datetime.fromtimestamp(int(ts), tz=timezone.utc).date().isoformat()
+    except Exception:
+        return None
+
+
 def _raw_from_info(ticker, info, sub_sectors_map=None):
     # Delisted/durdurulmuş/geçersiz bir sembol için Yahoo neredeyse boş
     # bir .info sözlüğü döndürebilir - bunu, tüm oranları None olan
@@ -131,14 +141,11 @@ def _raw_from_info(ticker, info, sub_sectors_map=None):
     if total_revenue and total_assets and total_assets > 0:
         asset_turnover = round(total_revenue / total_assets, 2)
 
-    # En son bilinen bilanço (çeyrek rapor) tarihi - bilgi amaçlı saklanır.
-    most_recent_quarter = None
-    mrq_ts = info.get('mostRecentQuarter')
-    if mrq_ts:
-        try:
-            most_recent_quarter = datetime.fromtimestamp(mrq_ts, tz=timezone.utc).date().isoformat()
-        except Exception:
-            most_recent_quarter = None
+    # Bilanço tarihleri (Yahoo'da varsa): son açıklanan bilançonun dönem sonu
+    # (mostRecentQuarter) ve bir sonraki bilanço açıklama tarihi (earningsTimestampStart,
+    # yoksa earningsTimestamp). Tabloda "Bilanço Tarihi" / "Sonraki Bilanço" olarak görünür.
+    most_recent_quarter = _epoch_to_date(info.get('mostRecentQuarter'))
+    next_earnings = _epoch_to_date(info.get('earningsTimestampStart') or info.get('earningsTimestamp'))
 
     return {
         "Hisse": ticker,
@@ -160,7 +167,8 @@ def _raw_from_info(ticker, info, sub_sectors_map=None):
         "Cari Oran": current_ratio,
         "Likidite Oranı": quick_ratio,
         "Varlık Devir Hızı": asset_turnover,
-        "_most_recent_quarter": most_recent_quarter
+        "_most_recent_quarter": most_recent_quarter,
+        "_next_earnings": next_earnings,
     }
 
 
@@ -172,6 +180,12 @@ def calculate_sector_relative_scores(raw_data_list):
         return []
 
     df = pd.DataFrame(raw_data_list)
+    # Bilanço tarihleri bu alanlar eklenmeden önce kaydedilmiş satırlarda yok.
+    for col in ("_most_recent_quarter", "_next_earnings"):
+        if col not in df.columns:
+            df[col] = None
+    df['Bilanço Tarihi'] = df['_most_recent_quarter']
+    df['Sonraki Bilanço'] = df['_next_earnings']
 
     # 1. Alt Sektöre (İş Modeline) Göre F/K Medyanını Hesapla
     sub_sector_medians = df.groupby('Alt Sektör (İş Modeli)')['F/K'].transform('median')
@@ -297,10 +311,13 @@ def calculate_sector_relative_scores(raw_data_list):
         "Borç / Varlık %",             # 4 Puan
         "Cari Oran",                   # 3 Puan
         "Likidite Oranı",              # 3 Puan
-        "Varlık Devir Hızı"            # 2 Puan
+        "Varlık Devir Hızı",           # 2 Puan
+        "Bilanço Tarihi",              # Bilgi (puan yok)
+        "Sonraki Bilanço",             # Bilgi (puan yok)
     ]
-    
-    return df[output_cols].to_dict('records')
+
+    out = df[output_cols].astype(object).where(df[output_cols].notna(), None)
+    return out.to_dict('records')
 
 
 def style_valuation_df(df):
