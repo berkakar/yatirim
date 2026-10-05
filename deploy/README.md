@@ -27,7 +27,7 @@ Streamlit arayüzü de isteğe bağlı olarak aynı Droplet'e taşınabilir (bkz
 | `heikin-ashi` | heikin_ashi_intraday.yml | 09:02–15:32 ET, :02 ve :32'de + 15:45 gün sonu |
 | `orb-scan` | orb_scan.yml | 10:30 ET (+10:45 yedek) |
 | `otomatik-alim-satim` | otomatik_alim_satim.yml | Hafta içi 03:00 ET |
-| `relative-strength` | relative_strength.yml | Pazartesi 03:15 ET |
+| `relative-strength` | relative_strength.yml | Pazartesi 10:00 ET (piyasa açıkken çalışmalı) |
 | `tefas` | tefas_fonlari.yml | Hafta içi 09:00, 13:00, 19:10 TRT |
 | `fon-hisse-uyari` | fon_hisse_uyari.yml | Hafta içi 10:00–17:55 TRT, 5 dk'da bir |
 | `russell2000` | update_russell2000.yml | Her ayın 1'i 06:00 UTC |
