@@ -1,3 +1,4 @@
+# 2026-10-05: sunucudaki eski app_sync.sh yalnızca bu dosya değişince Streamlit'i yeniden başlatıyor
 streamlit
 streamlit-authenticator
 pandas
