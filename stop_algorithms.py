@@ -26,8 +26,9 @@ alan hiç değiştirilmemiş) ilgili fonksiyonun kod-varsayılanı geçerli olur
 yeni bir algoritma/parametre eklendiğinde resolve_kwargs'ta HİÇBİR değişiklik
 gerekmez.
 
-Beş algoritma var (beşincisi, "atr_volatility", 2026-09-28 emir analizinin
-1-2. önerileriyle eklendi - dosyanın sonundaki bölüm notuna bakın):
+Altı algoritma var (beşincisi, "atr_volatility", 2026-09-28 emir analizinin
+1-2. önerileriyle; altıncısı, "adaptive_dynamic", 2026-10-05'te eklendi -
+dosyanın sonundaki bölüm notlarına bakın):
   - "breakeven_atr_structure" (DEFAULT_STOP_ALGORITHM): sabit-% ilk stop +
     breakeven floor + günlük EMA trend filtresiyle gate'lenen ATR-buffered
     break-of-structure trail.
@@ -53,6 +54,10 @@ Beş algoritma var (beşincisi, "atr_volatility", 2026-09-28 emir analizinin
     heikin_ashi_stoch_signal ile eşleşir - sinyal barının low'una yapısal
     ilk stop; ilk kırmızı HA mumu / Stokastik aşırı alım kesişiminde stop
     son kapanışın hemen altına çekilir (bkz. aşağıdaki bölüm notu).
+  - "atr_volatility" ("Oynaklık (ATR) Stop"): ATR bazlı ilk stop, R bazlı
+    breakeven, sabit çarpanlı chandelier trail.
+  - "adaptive_dynamic" ("Akıllı Dinamik Stop"): swing low'a dayalı, ATR
+    bandına sıkıştırılmış ilk stop + kâr büyüdükçe daralan chandelier.
 """
 
 import inspect
@@ -62,7 +67,7 @@ from typing import Callable
 
 from heikin_ashi import long_exit_reason as heikin_ashi_long_exit_reason
 from indicators import atr, ema
-from structure import Bar, validated_trailing_level
+from structure import Bar, find_pivots, validated_trailing_level
 
 
 @dataclass(frozen=True)
@@ -102,7 +107,8 @@ class StopAlgorithm:
 
 
 _CTX_PARAM_NAMES = frozenset({"ctx", "entry_price", "side", "bars"})
-_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order", "stoch_k_period", "stoch_d_period", "exit_red_candles"})
+_INT_PARAM_NAMES = frozenset({"atr_period", "trend_ema_period", "swing_order", "stoch_k_period", "stoch_d_period", "exit_red_candles",
+                              "structure_lookback", "er_period"})
 
 
 def resolve_kwargs(fn: Callable, settings_for_algo: dict, shared_settings: dict) -> dict:
@@ -691,6 +697,182 @@ def atr_volatility_trail(
     return StopDecision(price=best_price, reason=reason)
 
 
+# ---- Altıncı algoritma: "Akıllı Dinamik Stop" (adaptive_dynamic).
+#
+# Neden: Sabit-% stop (breakeven_atr_structure) hissenin oynaklığını
+# görmüyor; atr_volatility oynaklığı görüyor ama yapıyı (destek) görmüyor ve
+# chandelier çarpanı işlem boyunca sabit - büyük trendlerden erken çıkıyor.
+# Bu algoritma üç bilgiyi birleştirir:
+#   1. İlk stop YAPIYA göre: girişin altındaki en yakın onaylı swing low'un
+#      structure_buffer_atr x ATR altı - ama mesafe [min_atr_mult, max_atr_mult]
+#      x ATR bandına sıkıştırılır (destek çok yakınsa gürültüde patlamasın,
+#      çok uzaksa risk şişmesin). Swing low yoksa initial_atr_mult x ATR.
+#   2. Trail çarpanı KÂRA göre daralır: en yüksek fiyat trail_start_r'ye
+#      ulaşınca chandelier (en yüksek - k x ATR) başlar; k, trail_atr_mult'tan
+#      başlayıp trail_start_r'nin ötesindeki her R için tighten_per_r kadar
+#      azalır, min_trail_atr_mult'ın altına inmez - kâr büyüdükçe daha çok
+#      kilitlenir, başlangıçta trend nefes alır.
+#   3. Trail çarpanı TRENDİN KALİTESİNE göre ayarlanır: Kaufman verimlilik
+#      oranı (ER, 0 = yatay/gürültülü, 1 = dümdüz trend) er_period bar
+#      üzerinden; k x (1 + er_weight x (ER - 0.5)). Temiz trendde stop geniş
+#      kalır, testereye dönmüş fiyatta kâr daha erken korunur.
+# Ek olarak (varsayılan KAPALI): R bazlı breakeven (atr_volatility ile aynı,
+# kapanmış bara göre) ve use_structure > 0 ise breakeven_atr_structure'ın
+# yapısal trail adayı.
+#
+# Varsayılanlar (5xATR trail, 1.5R'den başlar, R başına 0.25 daralır, ilk stop
+# en fazla 2xATR, breakeven ve ER kapalı) scripts/backtest_adaptive_stop.py'nin
+# walk-forward taramasında EĞİTİM yarısında seçilip TEST yarısında doğrulandı.
+# Adaylardan en sıkı olanı seçilir; stop asla gevşemez (çağıran taraf).
+# Doğrulama: scripts/backtest_adaptive_stop.py (walk-forward + eşleştirilmiş
+# bootstrap) - sonuçlar Değişiklik Günlüğü'nde.
+
+ADAPTIVE_INITIAL_ATR_MULT = 2.0
+ADAPTIVE_MIN_ATR_MULT = 1.0
+ADAPTIVE_MAX_ATR_MULT = 2.0
+ADAPTIVE_STRUCTURE_BUFFER_ATR = 0.25
+ADAPTIVE_STRUCTURE_LOOKBACK = 20
+# 0 = kapalı. Walk-forward taramasında 1R/2R breakeven, test döneminde
+# özsermaye katkısını düşürdü (2026-09-28 analizindeki erken breakeven bulgusuyla aynı).
+ADAPTIVE_BREAKEVEN_R = 0.0
+ADAPTIVE_BREAKEVEN_BUFFER_ATR = 0.1
+ADAPTIVE_TRAIL_START_R = 1.5
+ADAPTIVE_TRAIL_ATR_MULT = 5.0
+ADAPTIVE_MIN_TRAIL_ATR_MULT = 2.0
+ADAPTIVE_TIGHTEN_PER_R = 0.25
+ADAPTIVE_ER_PERIOD = 20
+# Taramada katkısı ölçülemedi (0 ile 0.5 arası fark gürültü düzeyinde) - kapalı.
+ADAPTIVE_ER_WEIGHT = 0.0
+ADAPTIVE_USE_STRUCTURE = 0.0
+
+
+def efficiency_ratio(closes: list[float], period: int) -> float | None:
+    """Kaufman verimlilik oranı: |net değişim| / toplam mutlak değişim, son
+    `period` bar üzerinden. 1 = tek yönlü hareket, 0'a yakın = gürültü."""
+    if period <= 0 or len(closes) < period + 1:
+        return None
+    window = closes[-(period + 1):]
+    path = sum(abs(b - a) for a, b in zip(window, window[1:]))
+    if path <= 0:
+        return 0.0
+    return abs(window[-1] - window[0]) / path
+
+
+def _nearest_swing(bars: list[Bar], side: str, entry_price: float, swing_order: int, lookback: int):
+    """Son `lookback` barda, girişin doğru tarafındaki (long: altındaki) en
+    güncel onaylı swing low (short: high)."""
+    pivots = find_pivots(bars[-lookback:], swing_order) if lookback > 0 else []
+    kind = "low" if side == "long" else "high"
+    for pivot in reversed(pivots):
+        if pivot.kind != kind:
+            continue
+        if (side == "long" and pivot.price < entry_price) or (side == "short" and pivot.price > entry_price):
+            return pivot
+    return None
+
+
+def adaptive_dynamic_initial_stop(
+    entry_price: float, side: str, bars: list[Bar] | None = None,
+    initial_atr_mult: float = ADAPTIVE_INITIAL_ATR_MULT, min_atr_mult: float = ADAPTIVE_MIN_ATR_MULT,
+    max_atr_mult: float = ADAPTIVE_MAX_ATR_MULT, structure_buffer_atr: float = ADAPTIVE_STRUCTURE_BUFFER_ATR,
+    structure_lookback: int = ADAPTIVE_STRUCTURE_LOOKBACK, swing_order: int = SWING_ORDER,
+    atr_period: int = ATR_PERIOD, max_stop_pct: float = ATR_VOL_MAX_STOP_PCT,
+    fallback_pct: float = ATR_VOL_FALLBACK_PCT,
+) -> float:
+    """Yapısal (swing low) ilk stop, ATR bandına sıkıştırılmış - bkz. bölüm
+    notu. ATR hesaplanamazsa fallback_pct; mesafe max_stop_pct ile sınırlı."""
+    atr_value = atr(bars, atr_period) if bars else None
+    if not atr_value:
+        distance = entry_price * fallback_pct
+    else:
+        pivot = _nearest_swing(bars, side, entry_price, swing_order, structure_lookback)
+        if pivot is None:
+            distance = initial_atr_mult * atr_value
+        else:
+            distance = abs(entry_price - pivot.price) + structure_buffer_atr * atr_value
+            distance = min(max(distance, min_atr_mult * atr_value), max_atr_mult * atr_value)
+    distance = min(distance, entry_price * max_stop_pct)
+    return entry_price - distance if side == "long" else entry_price + distance
+
+
+def adaptive_dynamic_trail(
+    ctx: StopContext,
+    initial_atr_mult: float = ADAPTIVE_INITIAL_ATR_MULT,
+    atr_period: int = ATR_PERIOD,
+    max_stop_pct: float = ATR_VOL_MAX_STOP_PCT,
+    fallback_pct: float = ATR_VOL_FALLBACK_PCT,
+    breakeven_r: float = ADAPTIVE_BREAKEVEN_R,
+    breakeven_buffer_atr: float = ADAPTIVE_BREAKEVEN_BUFFER_ATR,
+    trail_start_r: float = ADAPTIVE_TRAIL_START_R,
+    trail_atr_mult: float = ADAPTIVE_TRAIL_ATR_MULT,
+    min_trail_atr_mult: float = ADAPTIVE_MIN_TRAIL_ATR_MULT,
+    tighten_per_r: float = ADAPTIVE_TIGHTEN_PER_R,
+    er_period: int = ADAPTIVE_ER_PERIOD,
+    er_weight: float = ADAPTIVE_ER_WEIGHT,
+    use_structure: float = ADAPTIVE_USE_STRUCTURE,
+    atr_multiplier: float = ATR_MULTIPLIER,
+    stale_reference_days: float = STALE_REFERENCE_DAYS,
+    swing_order: int = SWING_ORDER,
+    fallback_buffer_pct: float = FALLBACK_BUFFER_PCT,
+) -> StopDecision | None:
+    """R bazlı breakeven + kâra ve trend kalitesine göre daralan chandelier
+    (+ opsiyonel yapısal trail) - bkz. bölüm notu."""
+    if not ctx.bars:
+        return None
+    side = ctx.side
+    sign = 1 if side == "long" else -1
+    last_price = ctx.bars[-1].c
+    atr_value = _atr_from_context(ctx.bars, ctx.history_bars, atr_period)
+
+    if ctx.initial_stop_price is not None and ctx.initial_stop_price != ctx.entry_price:
+        one_r = abs(ctx.entry_price - ctx.initial_stop_price)
+    elif atr_value is not None:
+        one_r = min(initial_atr_mult * atr_value, ctx.entry_price * max_stop_pct)
+    else:
+        one_r = ctx.entry_price * fallback_pct
+    if one_r <= 0:
+        return None
+
+    closed = _closed_bars(ctx.bars)
+    last_close = closed[-1].c if closed else last_price
+    candidates: list[tuple[float, str]] = []
+
+    if breakeven_r > 0 and sign * (last_close - ctx.entry_price) >= breakeven_r * one_r:
+        buffer_amount = breakeven_buffer_atr * atr_value if atr_value is not None else 0.0
+        candidates.append((ctx.entry_price + sign * buffer_amount, f"breakeven (+{breakeven_r:g}R)"))
+
+    extreme = max(b.h for b in ctx.bars) if side == "long" else min(b.l for b in ctx.bars)
+    mfe_r = sign * (extreme - ctx.entry_price) / one_r
+    if mfe_r >= trail_start_r and atr_value is not None:
+        k = trail_atr_mult - tighten_per_r * (mfe_r - trail_start_r)
+        source = ctx.history_bars or ctx.bars
+        er = efficiency_ratio([b.c for b in source], er_period)
+        if er is not None:
+            k *= 1 + er_weight * (er - 0.5)
+        k = max(k, min_trail_atr_mult)
+        candidates.append((extreme - sign * k * atr_value, f"adaptif chandelier ({k:.2f}xATR, {mfe_r:.1f}R)"))
+
+    if use_structure > 0:
+        structure_candidate = _structure_trail_candidate(
+            ctx, atr_period, atr_multiplier, stale_reference_days, 0, swing_order, fallback_buffer_pct,
+        )
+        if structure_candidate is not None:
+            candidates.append(structure_candidate)
+
+    valid = [c for c in candidates if (c[0] < last_price if side == "long" else c[0] > last_price)]
+    if not valid:
+        return None
+    if side == "long":
+        best_price, reason = max(valid, key=lambda c: c[0])
+        improves = best_price > ctx.current_stop_price
+    else:
+        best_price, reason = min(valid, key=lambda c: c[0])
+        improves = best_price < ctx.current_stop_price
+    if not improves:
+        return None
+    return StopDecision(price=best_price, reason=reason)
+
+
 STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
     "breakeven_atr_structure": StopAlgorithm(
         label="Breakeven + Yapısal Trail (ATR tamponlu)",
@@ -716,6 +898,11 @@ STOP_ALGORITHMS: dict[str, StopAlgorithm] = {
         label="Oynaklık (ATR) Stop + R Bazlı Breakeven",
         initial_stop=atr_volatility_initial_stop,
         trail=atr_volatility_trail,
+    ),
+    "adaptive_dynamic": StopAlgorithm(
+        label="Akıllı Dinamik Stop (Yapı + Adaptif ATR)",
+        initial_stop=adaptive_dynamic_initial_stop,
+        trail=adaptive_dynamic_trail,
     ),
 }
 DEFAULT_STOP_ALGORITHM = "breakeven_atr_structure"

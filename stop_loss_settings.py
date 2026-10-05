@@ -1,4 +1,4 @@
-"""Stop Loss Ayarları modülü - beş stop-loss algoritmasının (stop_algorithms.py)
+"""Stop Loss Ayarları modülü - altı stop-loss algoritmasının (stop_algorithms.py)
 parametrelerini kullanıcı bazında ayarlamayı ve GitHub'a kalıcı olarak
 kaydetmeyi sağlar (bkz. github_config.py - premium_buy_portfolio.py'nin
 portföy config'i için kullandığı aynı okuma/yazma deseni,
@@ -19,7 +19,9 @@ import storage
 from github_config import read_json_from_github, write_json_to_github
 from alpaca_trailing_stop import EXECUTION_DEFAULTS
 from stop_algorithms import (
-    ATR_MULTIPLIER, ATR_PERIOD, ATR_VOL_BREAKEVEN_BUFFER_ATR, ATR_VOL_BREAKEVEN_R, ATR_VOL_FALLBACK_PCT,
+    ADAPTIVE_BREAKEVEN_R, ADAPTIVE_ER_WEIGHT, ADAPTIVE_INITIAL_ATR_MULT, ADAPTIVE_MAX_ATR_MULT,
+    ADAPTIVE_MIN_ATR_MULT, ADAPTIVE_MIN_TRAIL_ATR_MULT, ADAPTIVE_STRUCTURE_BUFFER_ATR, ADAPTIVE_TIGHTEN_PER_R,
+    ADAPTIVE_TRAIL_ATR_MULT, ADAPTIVE_TRAIL_START_R, ATR_MULTIPLIER, ATR_PERIOD, ATR_VOL_BREAKEVEN_BUFFER_ATR, ATR_VOL_BREAKEVEN_R, ATR_VOL_FALLBACK_PCT,
     ATR_VOL_INITIAL_ATR_MULT, ATR_VOL_MAX_STOP_PCT, ATR_VOL_TRAIL_ATR_MULT, ATR_VOL_TRAIL_START_R,
     BREAKEVEN_BUFFER_PCT, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
     HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_MIN_ATR_MULT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
@@ -125,7 +127,7 @@ def _live_note(algo_id: str, usage: dict[str, list[str]]) -> None:
 
 def render_stop_loss_settings(username: str):
     st.caption(
-        "Beş stop-loss algoritmasının ve emir yürütme ayarlarının parametreleri. Kutular kod-varsayılanlarıyla "
+        "Altı stop-loss algoritmasının ve emir yürütme ayarlarının parametreleri. Kutular kod-varsayılanlarıyla "
         "dolu gelir; değiştirmeden kaydetmek davranışı değiştirmez. 🟢 işaretli sekmeler şu an canlı "
         "botlarda kullanılan algoritmalardır. Kaydet düğmesi tüm sekmelerdeki değerleri birlikte kaydeder."
     )
@@ -141,6 +143,7 @@ def render_stop_loss_settings(username: str):
     algo3 = existing.get("opening_range") or {}
     algo4 = existing.get("heikin_ashi_exit") or {}
     algo5 = existing.get("atr_volatility") or {}
+    algo6 = existing.get("adaptive_dynamic") or {}
     execution = {**EXECUTION_DEFAULTS, **(existing.get("execution") or {})}
 
     usage = _live_stop_usage(username)
@@ -152,14 +155,15 @@ def render_stop_loss_settings(username: str):
 
     # ATR/swing/trend ayarlarını kullanan algoritmalar - paylaşılan sekme bunlardan biri canlıysa 🟢.
     shared_users = sorted({u for a in ("breakeven_atr_structure", "wait_then_trail", "opening_range",
-                                       "heikin_ashi_exit", "atr_volatility") for u in usage.get(a, [])})
-    (tab_algo1, tab_shared, tab_algo2, tab_algo3, tab_algo4, tab_algo5, tab_exec) = st.tabs([
+                                       "heikin_ashi_exit", "atr_volatility", "adaptive_dynamic") for u in usage.get(a, [])})
+    (tab_algo1, tab_shared, tab_algo2, tab_algo3, tab_algo4, tab_algo5, tab_algo6, tab_exec) = st.tabs([
         _tab_label("breakeven_atr_structure", "🎯", usage),
         f"{'🟢 ' if shared_users else ''}🔧 Paylaşılan Trail Ayarları",
         _tab_label("wait_then_trail", "⏳", usage),
         _tab_label("opening_range", "🔓", usage),
         _tab_label("heikin_ashi_exit", "🕯️", usage),
         _tab_label("atr_volatility", "📏", usage),
+        _tab_label("adaptive_dynamic", "🧠", usage),
         "🟢 🌅 Emir Yürütme",
     ])
 
@@ -378,6 +382,74 @@ def render_stop_loss_settings(username: str):
             help="Chandelier trail: girişten beri en yüksek fiyat − bu çarpan × ATR.",
         )
 
+    with tab_algo6:
+        _live_note("adaptive_dynamic", usage)
+        st.caption("İlk stop girişin altındaki son swing low'a (tampon payıyla) kurulur, mesafe Min-Maks ATR "
+                   "bandına sıkıştırılır (swing low yoksa İlk Stop ATR Çarpanı). En yüksek fiyat Trail "
+                   "Başlangıcı R'ye ulaşınca chandelier trail başlar; çarpanı ötesindeki her R için Daralma kadar "
+                   "azalır (Min. Trail Çarpanı'na kadar) ve trend verimliliğine (ER) göre ayarlanır. ATR "
+                   "Periyodu ve Swing Order paylaşılan sekmeden gelir. Doğrulama: "
+                   "`scripts/backtest_adaptive_stop.py`.")
+        a6c1, a6c2, a6c3, a6c4 = st.columns(4)
+        algo6_initial_atr_mult = a6c1.number_input(
+            "İlk Stop ATR Çarpanı (swing yoksa)", min_value=0.5, max_value=10.0,
+            value=float(algo6.get("initial_atr_mult", ADAPTIVE_INITIAL_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo6_initial_atr_mult",
+        )
+        algo6_min_atr_mult = a6c2.number_input(
+            "İlk Stop Min. Mesafe (×ATR)", min_value=0.25, max_value=10.0,
+            value=float(algo6.get("min_atr_mult", ADAPTIVE_MIN_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo6_min_atr_mult",
+            help="Swing low girişe bundan yakınsa stop bu mesafeye genişletilir (gürültüde patlamasın).",
+        )
+        algo6_max_atr_mult = a6c3.number_input(
+            "İlk Stop Maks. Mesafe (×ATR)", min_value=0.5, max_value=10.0,
+            value=float(algo6.get("max_atr_mult", ADAPTIVE_MAX_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo6_max_atr_mult",
+            help="Swing low bundan uzaksa stop bu mesafeye daraltılır (risk şişmesin).",
+        )
+        algo6_structure_buffer_atr = a6c4.number_input(
+            "Swing Low Tamponu (×ATR)", min_value=0.0, max_value=2.0,
+            value=float(algo6.get("structure_buffer_atr", ADAPTIVE_STRUCTURE_BUFFER_ATR)), step=0.05,
+            format="%.2f", key="sls_algo6_structure_buffer_atr",
+        )
+        a6c5, a6c6, a6c7, a6c8 = st.columns(4)
+        algo6_trail_start_r = a6c5.number_input(
+            "Trail Başlangıcı (R)", min_value=0.25, max_value=20.0,
+            value=float(algo6.get("trail_start_r", ADAPTIVE_TRAIL_START_R)), step=0.25, format="%.2f",
+            key="sls_algo6_trail_start_r",
+        )
+        algo6_trail_atr_mult = a6c6.number_input(
+            "Trail ATR Çarpanı (başlangıç)", min_value=0.5, max_value=15.0,
+            value=float(algo6.get("trail_atr_mult", ADAPTIVE_TRAIL_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo6_trail_atr_mult",
+        )
+        algo6_tighten_per_r = a6c7.number_input(
+            "Daralma (her R için ×ATR)", min_value=0.0, max_value=3.0,
+            value=float(algo6.get("tighten_per_r", ADAPTIVE_TIGHTEN_PER_R)), step=0.05, format="%.2f",
+            key="sls_algo6_tighten_per_r",
+            help="Kâr trail başlangıcının her 1R ötesine geçtiğinde chandelier çarpanı bu kadar azalır.",
+        )
+        algo6_min_trail_atr_mult = a6c8.number_input(
+            "Min. Trail Çarpanı", min_value=0.5, max_value=10.0,
+            value=float(algo6.get("min_trail_atr_mult", ADAPTIVE_MIN_TRAIL_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo6_min_trail_atr_mult",
+        )
+        a6c9, a6c10 = st.columns(2)
+        algo6_er_weight = a6c9.number_input(
+            "Trend Verimliliği Ağırlığı (ER)", min_value=0.0, max_value=2.0,
+            value=float(algo6.get("er_weight", ADAPTIVE_ER_WEIGHT)), step=0.1, format="%.2f",
+            key="sls_algo6_er_weight",
+            help="Çarpan × (1 + ağırlık × (ER − 0.5)): temiz trendde geniş, testerede dar. 0 = kapalı "
+                 "(doğrulama taramasında katkısı ölçülemedi).",
+        )
+        algo6_breakeven_r = a6c10.number_input(
+            "Breakeven Tetiği (R, 0 = kapalı)", min_value=0.0, max_value=10.0,
+            value=float(algo6.get("breakeven_r", ADAPTIVE_BREAKEVEN_R)), step=0.25, format="%.2f",
+            key="sls_algo6_breakeven_r",
+            help="Doğrulama taramasında 1R/2R breakeven test döneminde sonucu kötüleştirdi - varsayılan kapalı.",
+        )
+
     with tab_exec:
         st.success("🟢 **Canlı botları etkiler** - seçilen stop algoritmasından bağımsız olarak tüm modüllerde "
                    "(PBP, ORB, RS, HA) geçerlidir.")
@@ -456,6 +528,18 @@ def render_stop_loss_settings(username: str):
                 "breakeven_buffer_atr": float(algo5_breakeven_buffer_atr),
                 "trail_start_r": float(algo5_trail_start_r),
                 "trail_atr_mult": float(algo5_trail_atr_mult),
+            },
+            "adaptive_dynamic": {
+                "initial_atr_mult": float(algo6_initial_atr_mult),
+                "min_atr_mult": float(algo6_min_atr_mult),
+                "max_atr_mult": float(algo6_max_atr_mult),
+                "structure_buffer_atr": float(algo6_structure_buffer_atr),
+                "trail_start_r": float(algo6_trail_start_r),
+                "trail_atr_mult": float(algo6_trail_atr_mult),
+                "tighten_per_r": float(algo6_tighten_per_r),
+                "min_trail_atr_mult": float(algo6_min_trail_atr_mult),
+                "er_weight": float(algo6_er_weight),
+                "breakeven_r": float(algo6_breakeven_r),
             },
             "execution": {
                 "opening_shield_enabled": bool(exec_shield_enabled),
