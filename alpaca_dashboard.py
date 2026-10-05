@@ -290,7 +290,8 @@ def render_alpaca_dashboard(username):
 
         freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
         st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
-        st.caption("Stoplar, structure-based trailing-stop GitHub Action tarafından 5 dakikada bir güncellenir.")
+        st.caption("Stoplar, sunucudaki stop botu tarafından her hissenin seçili stop-loss algoritmasıyla seans içinde "
+                   "5 dakikada bir güncellenir.")
 
         with st.expander("🛡️ Stop-Loss Mantığı Nasıl Çalışır?"):
             st.markdown(
@@ -320,8 +321,8 @@ def render_alpaca_dashboard(username):
                 "sonraki çalışmada koruma otomatik yeniden kurulur.\n"
                 "- Seans dışında düşük hacimli barlarla stop sıkılaştırma (eski davranış) varsayılan "
                 "olarak kapalı - Stop Loss Ayarları sayfasından açılabilir.\n"
-                "- Tüm bu kontroller GitHub Actions üzerinden normal seansta 5 dakikada, seans "
-                "dışında ~10 dakikada bir otomatik çalışır - manuel müdahale gerekmez."
+                "- Tüm bu kontroller sunucuda (Droplet) normal seansta 5 dakikada, seans dışında "
+                "10 dakikada bir otomatik çalışır - manuel müdahale gerekmez."
             )
 
     orders = client.get_recent_orders(days=HISTORY_DAYS)
