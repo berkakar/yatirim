@@ -7,17 +7,19 @@ yansıtır). Sonuçlar backtest_data.py ile kalıcı olarak saklanır ve
 algoritma bazlı sekmelerde gösterilir - varsayılan görünüm yalnızca en son
 çalıştırmadır, eski çalıştırmalar (hiç silinmez) bir seçiciyle açılır.
 """
+import math
 from datetime import datetime, timedelta, timezone
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import get_bars_for_timeframe
 from backtest_data import append_results, group_by_algorithm, load_results, new_run_id
 import backtest_data_pack
-from backtest_engine import run_backtest
+from backtest_engine import run_backtest, trade_stats
 from bicak_kanali import find_kilavuz
 from bicak_kanali_test import render_bicak_kanali_chart
 from buy_algorithms import ALGORITHMS
@@ -87,11 +89,23 @@ def _tr_qty(v) -> str:
     return _tr_number(v, 4).rstrip("0").rstrip(",")
 
 
+def _tr_profit_factor(v) -> str:
+    # Hiç zararlı işlem yoksa brüt kâr / 0 = sonsuz.
+    if v is not None and not pd.isna(v) and math.isinf(float(v)):
+        return "∞"
+    return _tr_number(v)
+
+
 _SUMMARY_FORMATTERS = {
     "Başlangıç Bütçe": _tr_number,
     "Bitiş Değeri": _tr_number,
     "K/Z": _tr_number,
     "K/Z %": _tr_number,
+    "Al-Tut %": _tr_number,
+    "Al-Tut Farkı": _tr_number,
+    "Kazanma Oranı %": _tr_number,
+    "Maks. Düşüş %": _tr_number,
+    "Profit Factor": _tr_profit_factor,
     "Veri (gün)": _tr_int,
     "İşlem Başlangıcı (gün)": _tr_int,
     "İşlem Sayısı": _tr_int,
@@ -135,7 +149,7 @@ def _style_summary(df: pd.DataFrame):
     zebra_style'ın satır bandını uygular."""
     def apply_styles(data):
         style_df = pd.DataFrame("", index=data.index, columns=data.columns)
-        for col in ("K/Z", "K/Z %"):
+        for col in ("K/Z", "K/Z %", "Al-Tut Farkı"):
             if col not in data.columns:
                 continue
             for idx in data.index:
@@ -509,6 +523,8 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, stop
             "final_value": result.final_value,
             "pnl": result.pnl,
             "pnl_pct": result.pnl_pct,
+            "buy_hold_pct": result.buy_hold_pct,
+            "max_drawdown_pct": result.max_drawdown_pct,
             "stop_loss_enabled": stop_loss_enabled,
             "max_loss_pct": effective_max_loss_pct,
             "stop_loss_triggered": result.stop_loss_triggered,
@@ -524,6 +540,15 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, stop
 
 
 RESULTS_BATCH_KEY = "bt_results_batch"
+METRIC_NOTES = """
+**📝 Tablo notları**
+- **Al-Tut %:** İşlem başlangıcındaki ilk mumun açılışında hisseyi alıp test sonuna kadar hiç satmadan tutmanın getirisi. Stratejinin, sadece hisseyi tutmaktan daha iyi olup olmadığını gösteren kıyas noktasıdır.
+- **Al-Tut Farkı:** K/Z % − Al-Tut % (yüzde puan). Pozitifse strateji al-tut'u geçmiş, negatifse hisseyi alıp beklemek daha kârlı olurdu.
+- **Kazanma Oranı %:** Kapanmış işlemlerin (alış → satış) kaçta kaçının kârla kapandığı. Tek başına yeterli değildir: düşük oranla da, kazançlar kayıplardan büyükse sistem kârlı olabilir.
+- **Maks. Düşüş %:** Portföy değerinin (nakit + açık pozisyonun mum kapanışındaki değeri) test boyunca bir zirveden gördüğü en büyük yüzde düşüş. Stratejiyi uygularken katlanılması gereken en kötü geri çekilmeyi gösterir; ne kadar düşükse o kadar iyi.
+- **Profit Factor:** Kârlı işlemlerin toplam kazancı / zararlı işlemlerin toplam kaybı. 1'in üzeri kârlı, 1'in altı zararlı demektir; 1,5+ genelde iyi kabul edilir. Hiç zararlı işlem yoksa ∞ gösterilir.
+- Kapanmış işlem yoksa Kazanma Oranı ve Profit Factor boş (—) görünür. Al-Tut ve Maks. Düşüş, bu alanlar eklenmeden önce kaydedilmiş eski çalıştırmalarda boştur (mum verisi saklanmadığı için sonradan hesaplanamaz).
+"""
 ALL_BATCHES = "__all__"
 
 
@@ -592,6 +617,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 runs = sorted(runs, key=lambda r: r.get("pnl_pct") or 0, reverse=True)
             summary_rows = []
             for r in runs:
+                stats = trade_stats(r.get("trades"))
                 row = {"Çalıştırma": _fmt_run_at(r.get("run_at"))} if show_all else {}
                 row.update({
                     "Hisse": r.get("symbol", ""),
@@ -607,11 +633,18 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                     "Bitiş Değeri": r.get("final_value"),
                     "K/Z": r.get("pnl"),
                     "K/Z %": r.get("pnl_pct"),
+                    "Al-Tut %": r.get("buy_hold_pct"),
+                    "Al-Tut Farkı": (round(r["pnl_pct"] - r["buy_hold_pct"], 2)
+                                     if r.get("pnl_pct") is not None and r.get("buy_hold_pct") is not None else None),
+                    "Kazanma Oranı %": stats["win_rate"],
+                    "Maks. Düşüş %": r.get("max_drawdown_pct"),
+                    "Profit Factor": stats["profit_factor"],
                     "İşlem Sayısı": len(r.get("trades") or []),
                     "Zarar Kes": _format_stop_loss(r),
                 })
                 summary_rows.append(row)
             st.dataframe(_style_summary(pd.DataFrame(summary_rows)), use_container_width=True, hide_index=True)
+            st.caption(METRIC_NOTES)
 
             # Seçim anahtarı gösterilen çalıştırmaya özel: yeni bir backtest
             # sonrası önceki bir seçim (ör. eski bir MSFT çalıştırması) taşınmaz,
@@ -765,14 +798,12 @@ def _render_data_pack(key_id: str, secret_key: str):
 
 
 def render_backtest(target_list: list[str], username: str):
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id = user_alpaca.get("key_id")
-    secret_key = user_alpaca.get("secret_key")
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`). Backtest, geçmiş fiyat verisi için Alpaca'nın veri API'sini kullanır.")
+        missing_keys_warning(username, " Backtest, geçmiş fiyat verisi için Alpaca'nın veri API'sini kullanır.")
         return
 
-    client = AlpacaClient(key_id, secret_key)
+    client = AlpacaClient(key_id, secret_key, trading_url)
 
     selected_symbol = _render_symbol_picker(client, key_id, secret_key, target_list)
     st.divider()

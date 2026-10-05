@@ -147,7 +147,8 @@ from dotenv import load_dotenv
 
 import storage
 from alpaca_bars_cache import DAILY_BARS_CACHE_PATH, INTRADAY_BARS_CACHE_PATH, get_cached_raw_bars, parse_iso
-from alpaca_client import AlpacaClient, DEFAULT_TRADING_URL, DEFAULT_DATA_URL
+from alpaca_client import AlpacaClient
+from alpaca_account import build_job_client
 from alpaca_realized_pnl_cache import get_cached_realized_loss
 from alpaca_trailing_stop import (
     extended_hours_session, get_bars_for_timeframe, load_stop_loss_settings, load_telegram_settings,
@@ -1072,11 +1073,9 @@ def run_once(client: AlpacaClient) -> None:
 
 
 def build_client() -> AlpacaClient:
-    key_id = os.environ["APCA_API_KEY_ID"]
-    secret_key = os.environ["APCA_API_SECRET_KEY"]
-    trading_url = os.environ.get("APCA_API_BASE_URL", DEFAULT_TRADING_URL)
-    data_url = os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL)
-    return AlpacaClient(key_id, secret_key, trading_url, data_url)
+    # Adres ve anahtarlar kullanıcının hesap türü ayarından (Sanal Para / Gerçek Para) -
+    # bkz. alpaca_account.build_job_client.
+    return build_job_client("berkakar")
 
 
 if __name__ == "__main__":

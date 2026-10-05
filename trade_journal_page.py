@@ -17,6 +17,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import TR_TZ
 from changelog import ANALYSIS_SUMMARY, CHANGES, VERIFICATION_NOTES
@@ -40,27 +41,26 @@ CUMULATIVE_MAX_SERIES = 8
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def _fetch_orders(key_id: str, secret_key: str, days: int) -> list[dict]:
-    return AlpacaClient(key_id, secret_key).get_recent_orders(days=days, limit=500, nested=True)
+def _fetch_orders(key_id: str, secret_key: str, trading_url: str, days: int) -> list[dict]:
+    return AlpacaClient(key_id, secret_key, trading_url).get_recent_orders(days=days, limit=500, nested=True)
 
 
 @st.cache_data(ttl=60, show_spinner=False)
-def _fetch_positions(key_id: str, secret_key: str) -> list[dict]:
-    return AlpacaClient(key_id, secret_key).get_all_positions()
+def _fetch_positions(key_id: str, secret_key: str, trading_url: str) -> list[dict]:
+    return AlpacaClient(key_id, secret_key, trading_url).get_all_positions()
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
-def _fetch_symbol_orders(key_id: str, secret_key: str, symbol: str) -> list[dict]:
-    return AlpacaClient(key_id, secret_key).get_recent_orders(
+def _fetch_symbol_orders(key_id: str, secret_key: str, trading_url: str, symbol: str) -> list[dict]:
+    return AlpacaClient(key_id, secret_key, trading_url).get_recent_orders(
         days=OPEN_ENTRY_LOOKBACK_DAYS, limit=500, nested=True, symbols=symbol)
 
 
-def _credentials(username: str) -> tuple[str | None, str | None]:
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id, secret_key = user_alpaca.get("key_id"), user_alpaca.get("secret_key")
+def _credentials(username: str) -> tuple[str | None, str | None, str]:
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
-    return key_id, secret_key
+        missing_keys_warning(username)
+    return key_id, secret_key, trading_url
 
 
 def _rules_since(username: str) -> tuple[datetime | None, str | None]:
@@ -107,7 +107,7 @@ def _count_table(counts: dict, label: str) -> pd.DataFrame:
 
 
 def _render_journal(username: str):
-    key_id, secret_key = _credentials(username)
+    key_id, secret_key, trading_url = _credentials(username)
     if not key_id or not secret_key:
         return
     rules_since, rules_since_raw = _rules_since(username)
@@ -121,7 +121,7 @@ def _render_journal(username: str):
     )
 
     try:
-        orders = _fetch_orders(key_id, secret_key, int(days))
+        orders = _fetch_orders(key_id, secret_key, trading_url, int(days))
     except Exception as e:
         st.error(f"Alpaca emir geçmişi alınamadı: {e}")
         return
@@ -328,7 +328,7 @@ def _initial_capital(username: str) -> float | None:
 
 
 def _render_analysis(username: str):
-    key_id, secret_key = _credentials(username)
+    key_id, secret_key, trading_url = _credentials(username)
     if not key_id or not secret_key:
         return
     rules_since, rules_since_raw = _rules_since(username)
@@ -347,8 +347,8 @@ def _render_analysis(username: str):
     include_manual = c5.toggle("Elle / bilinmeyen işlemleri dahil et", value=True, key="tja_manual")
 
     try:
-        orders = _fetch_orders(key_id, secret_key, int(days))
-        positions = _fetch_positions(key_id, secret_key)
+        orders = _fetch_orders(key_id, secret_key, trading_url, int(days))
+        positions = _fetch_positions(key_id, secret_key, trading_url)
     except Exception as e:
         st.error(f"Alpaca verisi alınamadı: {e}")
         return
@@ -357,7 +357,7 @@ def _render_analysis(username: str):
     missing = [p["symbol"] for p in positions if p.get("symbol") not in lots]
     for sym in missing:
         try:
-            _, sym_lots = walk_fills(_fetch_symbol_orders(key_id, secret_key, sym))
+            _, sym_lots = walk_fills(_fetch_symbol_orders(key_id, secret_key, trading_url, sym))
         except Exception:
             continue
         if sym in sym_lots:

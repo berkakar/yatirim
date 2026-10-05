@@ -71,6 +71,35 @@ PALETTES = {
 }
 
 
+# Gerçek Para hesabıyla Algoritmik Ticaret sayfalarında zemin açık turuncuya
+# döner (bkz. set_live_accent) - gerçek parayla işlem yapıldığı her an fark
+# edilsin. Metin renkleri aynı kalır; zeminler AA kontrastını korur.
+LIVE_ACCENT_OVERRIDES = {
+    DAY: dict(
+        bg="#fff3e6",
+        bg_elevated="#fffaf4",
+        bg_subtle="#ffe4c7",
+        sidebar_bg="#ffead3",
+        border="#f2c594",
+    ),
+    NIGHT: dict(
+        bg="#1f1408",
+        bg_elevated="#2a1b0b",
+        bg_subtle="#3a2610",
+        sidebar_bg="#24170a",
+        border="#6b4520",
+    ),
+}
+_LIVE_ACCENT_KEY = "app_live_accent"
+
+
+def set_live_accent(enabled: bool) -> None:
+    """Açık turuncu (Gerçek Para) zeminini bu çizim için aç/kapat - app.py
+    her çalıştırmada önce kapatır, Gerçek Para + Algoritmik Ticaret
+    sayfasında açar."""
+    st.session_state[_LIVE_ACCENT_KEY] = bool(enabled)
+
+
 def _init_mode():
     if _STATE_KEY not in st.session_state:
         qp_val = st.query_params.get(_QUERY_KEY)
@@ -84,7 +113,10 @@ def get_mode():
 
 
 def get_palette(mode=None):
-    return PALETTES[mode or get_mode()]
+    mode = mode or get_mode()
+    if st.session_state.get(_LIVE_ACCENT_KEY):
+        return {**PALETTES[mode], **LIVE_ACCENT_OVERRIDES[mode]}
+    return PALETTES[mode]
 
 
 def get_plotly_template(mode=None):

@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
@@ -45,19 +46,17 @@ def _load_holdings(repo: str, token: str, username: str) -> dict:
 
 
 def render_orb_scan(username: str):
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id = user_alpaca.get("key_id")
-    secret_key = user_alpaca.get("secret_key")
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     github_token = st.secrets.get("GITHUB_TOKEN")
 
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
+        missing_keys_warning(username)
         return
     if not github_token:
         st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - ayarlar kaydedilemez.")
         return
 
-    client = AlpacaClient(key_id, secret_key)
+    client = AlpacaClient(key_id, secret_key, trading_url)
     config = _load_config(GITHUB_REPO, github_token, username)
 
     try:

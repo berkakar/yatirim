@@ -309,7 +309,7 @@ def backup(dest_path: str) -> None:
 KNOWN_NAMES = frozenset({
     # Arayüzün yazdığı ayarlar
     "selected_tickers", "custom_tickers", "custom_stock_groups", "custom_stock_group_markets",
-    "initial_capital", "stop_loss_settings", "bildirim_ayarlari", "takip_fonlari",
+    "initial_capital", "stop_loss_settings", "bildirim_ayarlari", "takip_fonlari", "alpaca_account_mode",
     # Strateji config'leri (arayüz + işler)
     "portfolio_config", "otomatik_alim_satim_config", "orb_scan_config",
     "relative_strength_config", "ha_intraday_config", "backtest_results",

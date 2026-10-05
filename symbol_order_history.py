@@ -22,18 +22,16 @@ sadece ORB holdings'ine bakıyor; bu script herhangi bir sembol için:
 """
 
 import argparse
-import os
 from datetime import datetime, timedelta, timezone
 
-from alpaca_client import AlpacaClient, DEFAULT_DATA_URL, DEFAULT_TRADING_URL
+from alpaca_client import AlpacaClient
+from alpaca_account import build_job_client
 
 
 def build_client() -> AlpacaClient:
-    return AlpacaClient(
-        os.environ["APCA_API_KEY_ID"], os.environ["APCA_API_SECRET_KEY"],
-        os.environ.get("APCA_API_BASE_URL", DEFAULT_TRADING_URL),
-        os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL),
-    )
+    # Adres ve anahtarlar kullanıcının hesap türü ayarından (Sanal Para / Gerçek Para) -
+    # bkz. alpaca_account.build_job_client.
+    return build_job_client("berkakar")
 
 
 def _flatten(orders: list[dict]) -> list[dict]:

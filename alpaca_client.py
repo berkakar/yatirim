@@ -59,6 +59,12 @@ DEFAULT_TRADING_URL = "https://paper-api.alpaca.markets/v2"
 DEFAULT_DATA_URL = "https://data.alpaca.markets/v2"
 
 
+def is_paper_url(trading_url: str) -> bool:
+    """Alpaca'nın paper (sanal para) uç noktası paper-api.alpaca.markets;
+    gerçek para hesabı api.alpaca.markets."""
+    return "paper-api." in (trading_url or "")
+
+
 def _match_fifo_pnl(fills: list[dict]) -> tuple[float, int, float, float]:
     """`fills`: tek bir sembol için, zaman sırasına göre artan sırada dolan
     (filled) emirler. Aynı anda tek pozisyon açıldığı varsayımıyla, alış ve
@@ -92,6 +98,10 @@ class AlpacaClient:
         self.headers = {"APCA-API-KEY-ID": key_id, "APCA-API-SECRET-KEY": secret_key}
         self.trading_url = trading_url
         self.data_url = data_url
+
+    @property
+    def is_paper(self) -> bool:
+        return is_paper_url(self.trading_url)
 
     def _get(self, path: str, params: dict | None = None) -> requests.Response:
         return requests.get(f"{self.trading_url}{path}", headers=self.headers, params=params)

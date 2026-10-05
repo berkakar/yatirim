@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import streamlit as st
 
+from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
@@ -243,14 +244,12 @@ def render_realized_pnl_table(client: AlpacaClient, orders: list[dict], history_
 
 
 def render_alpaca_dashboard(username):
-    user_alpaca = st.secrets.get("alpaca", {}).get(username, {})
-    key_id = user_alpaca.get("key_id")
-    secret_key = user_alpaca.get("secret_key")
+    key_id, secret_key, trading_url = get_user_alpaca(username)
     if not key_id or not secret_key:
-        st.warning(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
+        missing_keys_warning(username)
         return
 
-    client = AlpacaClient(key_id, secret_key)
+    client = AlpacaClient(key_id, secret_key, trading_url)
     try:
         positions = client.get_all_positions()
         render_account_summary(client, username, positions)
