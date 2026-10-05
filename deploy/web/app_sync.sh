@@ -10,12 +10,21 @@ BASE=/opt/yatirim
 APP="$BASE/app"
 VENV="$BASE/venv"
 BRANCH=main
+# Kod güncellendi ama Streamlit henüz yeniden başlatılmadıysa bu dosya durur:
+# bir adım yarıda kesilirse (pip hatası, zaman aşımı) sonraki çalıştırma
+# "HEAD zaten güncel" diye çıkmaz, yeniden başlatmayı tamamlar.
+RESTART_PENDING="$BASE/.app_restart_pending"
 as_user() { runuser -u yatirim -- env GIT_SSH_COMMAND="ssh -i $BASE/.ssh/deploy_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$BASE/.ssh/known_hosts" "$@"; }
 
 cd "$APP"
 as_user git fetch --quiet origin "$BRANCH"
 # git komutları da yatirim kullanıcısıyla - root olarak çalışsa "dubious ownership" hatası verir.
-[ "$(as_user git rev-parse HEAD)" = "$(as_user git rev-parse "origin/$BRANCH")" ] && exit 0
+if [ "$(as_user git rev-parse HEAD)" = "$(as_user git rev-parse "origin/$BRANCH")" ]; then
+  [ -f "$RESTART_PENDING" ] || exit 0
+  systemctl restart yatirim-streamlit.service
+  rm -f "$RESTART_PENDING"
+  exit 0
+fi
 
 old_head="$(as_user git rev-parse HEAD)"
 
@@ -32,6 +41,16 @@ if ! cmp -s deploy/web/app_sync.sh "$BASE/bin/app_sync.sh"; then
 fi
 
 restart=0
+# Streamlit her çalıştırmada sadece app.py'yi yeniden yürütür; içe aktarılan
+# modüller (valuation.py, backtest.py, ...) bellekte eski kalabiliyor - app.py
+# yeni bir fonksiyonu import edince "cannot import name" hatası verir. Herhangi
+# bir .py değiştiyse servis yeniden başlatılır (birkaç saniyelik kesinti).
+# (app.py de değişen modülleri kendisi yeniden yükler - bkz.
+# _purge_stale_project_modules; bu yeniden başlatma ikinci güvence.)
+if [ -n "$(as_user git diff --name-only "$old_head" HEAD -- '*.py')" ]; then
+  restart=1
+  touch "$RESTART_PENDING"
+fi
 want_hash="$(sha256sum requirements.txt | cut -d' ' -f1)"
 if [ "$(cat "$VENV/.requirements.sha256" 2>/dev/null)" != "$want_hash" ]; then
   # run_job.sh ile aynı kilit ve damga - paylaşılan venv'e aynı anda iki pip yazmasın.
@@ -39,13 +58,7 @@ if [ "$(cat "$VENV/.requirements.sha256" 2>/dev/null)" != "$want_hash" ]; then
     "'$VENV/bin/pip' install --quiet --upgrade -r requirements.txt && echo '$want_hash' > '$VENV/.requirements.sha256'"
   restart=1
 fi
-# Streamlit her çalıştırmada sadece app.py'yi yeniden yürütür; içe aktarılan
-# modüller (valuation.py, backtest.py, ...) bellekte eski kalabiliyor - app.py
-# yeni bir fonksiyonu import edince "cannot import name" hatası verir. Herhangi
-# bir .py değiştiyse servis yeniden başlatılır (birkaç saniyelik kesinti).
-if as_user git diff --name-only "$old_head" HEAD -- '*.py' | grep -q .; then
-  restart=1
-fi
 if [ "$restart" = 1 ]; then
   systemctl restart yatirim-streamlit.service
+  rm -f "$RESTART_PENDING"
 fi
