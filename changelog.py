@@ -71,7 +71,15 @@ CHANGES = [
             "işlem hariç +251 (canlı +152), PF 1.99 (1.76), maks. düşüş 76 (216). Fark istatistiksel olarak "
             "anlamlı DEĞİL (GA −0.16 … +0.22). Trend girişlerinde canlı kural daha iyi. 30dk barda tüm kurallar "
             "negatif, adaptif kural canlı kuraldan biraz kötü (anlamlı değil) - gün içi için önerilmez.\n"
-            "- Tam rapor: reports/adaptive_stop_validation_2026-10-05.md."
+            "- Tam rapor: reports/adaptive_stop_validation_2026-10-05.md.\n"
+            "- **Güncelleme (uzun veri, 📦 veri paketi):** 30 hisse, günlük 2021-10 → 2026-10, 30dk 1 yıl (normal "
+            "seans). Günlük: test dönemi 2024-05 → 2026-10'da canlı kural daha iyi (işlem başına özsermaye +0.289% "
+            "vs +0.217%, R farkı anlamlı biçimde canlı kural lehine); kısa verideki düşük düşüş avantajı "
+            "tekrarlanmadı - günlük periyotta önerilmez. 30dk (normal seans): Akıllı Dinamik canlı kuraldan "
+            "anlamlı biçimde iyi (+0.082% vs +0.031%, fark +0.051%, %95 GA +0.013 … +0.093; tüm giriş türlerinde "
+            "aynı yönde), ancak eğitim yarısında taranan ayar testte bu farkı vermedi ve veri yalnız 1 yıl - "
+            "daha uzun 30dk geçmişle teyit edilmeden canlıya alınmamalı. Rapor: "
+            "reports/adaptive_stop_validation_5y_2026-10-05.md."
         ),
         "where": "stop_algorithms.py (adaptive_dynamic_*), stop_loss_settings.py (🧠 sekmesi), "
                  "scripts/backtest_adaptive_stop.py, tests/test_adaptive_stop.py",
