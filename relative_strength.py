@@ -165,7 +165,7 @@ def render_relative_strength(username: str):
 
     st.subheader("🕐 Haftalık Otomatik Çalıştırma")
     st.caption(
-        "Etkinleştirilirse, yukarıdaki ayarlarla haftada 1 kez (her Pazartesi) gerçek satış/alım "
+        "Etkinleştirilirse, yukarıdaki ayarlarla haftada 1 kez (her Pazartesi 10:00 ET) gerçek satış/alım "
         "emirleri sunucudaki zamanlanmış iş tarafından verilir. Manuel önizleme butonu her zaman kullanılabilir "
         "kalır ama HİÇBİR ZAMAN gerçek emir vermez - sadece ne olacağını gösterir."
     )

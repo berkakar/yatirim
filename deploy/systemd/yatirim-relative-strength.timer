@@ -2,7 +2,11 @@
 Description=Relative Strength Rotasyonu (haftalık, Pazartesi)
 
 [Timer]
-OnCalendar=Mon *-*-* 03:15:00 America/New_York
+# Piyasa AÇIKKEN çalışmalı: relative_strength_runner.py piyasa kapalıysa hiçbir şey
+# yapmadan çıkar. 03:15 ET'de (GitHub'daki eski 07:15 UTC cron'u) her hafta boşa
+# çalışıyordu - GitHub'da ancak cron saatlerce geciktiğinde rotasyon yapılabiliyordu.
+# 10:00 ET: açılıştaki ilk dakikaların oynaklığından ve 10:30'daki ORB taramasından uzak.
+OnCalendar=Mon *-*-* 10:00:00 America/New_York
 Unit=yatirim-job@relative-strength.service
 # Varsayılan 1 dk'lık birleştirme payını kapat - tam saniyesinde tetiklensin.
 AccuracySec=1s
