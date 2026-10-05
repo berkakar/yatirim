@@ -101,6 +101,42 @@ class CommitFilesTest(unittest.TestCase):
         self.assertEqual(commit[2]["parents"], ["data1"])
 
 
+class BackgroundJobTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.path = os.path.join(self.tmp.name, "status.json")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_success_writes_done_status(self):
+        pack.run_job(_Client(), "tok", ["AAA", "BBB"], {"1Day": 10}, self.path,
+                     commit=lambda repo, token, files, msg: "abc1234567")
+        status = pack.read_status(self.path)
+        self.assertEqual(status["state"], "done")
+        self.assertEqual(status["sha"], "abc1234567")
+        self.assertEqual(status["missing"], ["BBB"])
+
+    def test_error_is_recorded_not_raised(self):
+        def boom(*a):
+            raise RuntimeError("403 Forbidden")
+        pack.run_job(_Client(), "tok", ["AAA"], {"1Day": 10}, self.path, commit=boom)
+        status = pack.read_status(self.path)
+        self.assertEqual(status["state"], "error")
+        self.assertIn("403", status["message"])
+
+    def test_dead_running_job_reads_as_error(self):
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump({"state": "running", "pid": 999999999}, f)
+        self.assertEqual(pack.read_status(self.path)["state"], "error")
+        self.assertFalse(pack.is_running(self.path))
+
+    def test_live_running_job(self):
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump({"state": "running", "pid": os.getpid()}, f)
+        self.assertTrue(pack.is_running(self.path))
+
+
 class ScriptLoadsPackTest(unittest.TestCase):
     def test_load_pack_reads_written_files(self):
         import backtest_adaptive_stop as script
