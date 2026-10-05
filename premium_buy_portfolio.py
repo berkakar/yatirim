@@ -614,7 +614,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             f"🧊 Mevcut kural sürümü: **{config['rules_version_since'][:10]}** tarihinden beri. Algoritma, stop, "
             f"risk ya da zamanlama ayarlarını değiştirmek yeni bir kural sürümü başlatır - sonuçların "
             f"ölçülebilmesi için en az {MIN_TRADES_FOR_EVALUATION} kapanan işlem birikmeden değiştirmemeniz "
-            "önerilir (sayaç: 📒 İşlem Günlüğü). Bütçe ve ağırlık değişiklikleri kural sürümünü sıfırlamaz."
+            "önerilir (sayaç: 🧠 Algo Analiz). Bütçe ve ağırlık değişiklikleri kural sürümünü sıfırlamaz."
         )
 
     if st.button("💾 Portföyü Kaydet", type="primary"):

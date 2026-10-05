@@ -15,5 +15,5 @@ python scripts/backtest_adaptive_stop.py --pack backtest_data --intraday
 ## Değişiklik günlüğü
 
 Sistemdeki davranış değişiklikleri (gerekçe, kod yeri, ayar, takip ölçütü) uygulamada
-**🤖 Algoritmik Ticaret > 📒 İşlem Günlüğü > 📝 Değişiklik Günlüğü** sekmesinde, kaynağı
+**🤖 Algoritmik Ticaret > 🧠 Algo Analiz > 📝 Değişiklik Günlüğü** sekmesinde, kaynağı
 `changelog.py` dosyasında. Kodda ilgili yerler `[2026-09-28 · Öneri N]` yorumuyla işaretli.

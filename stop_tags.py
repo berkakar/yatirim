@@ -33,7 +33,7 @@ _REASON_CODES = (
     ("top-up", "topup"),
 )
 
-# İşlem Günlüğü'nde gösterilen Türkçe açıklamalar.
+# Algo Analiz'de gösterilen Türkçe açıklamalar.
 REASON_LABELS = {
     "initial": "İlk stop",
     "breakeven": "Breakeven",

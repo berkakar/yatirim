@@ -84,7 +84,7 @@ from hisse_patern import render_hisse_patern
 from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
-from trade_journal_page import render_trade_journal
+from trade_journal_page import render_algo_analiz
 from version_info import get_version_label
 from connection_status import check_all_connections
 
@@ -105,7 +105,7 @@ MODULE_GROUPS = {
     "🤖 Algoritmik Ticaret": [
         "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
         "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🕯️ Heikin Ashi Gün İçi",
-        "🛡️ Stop Loss Ayarları", "📒 İşlem Günlüğü",
+        "🛡️ Stop Loss Ayarları", "🧠 Algo Analiz",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
 }
@@ -330,7 +330,9 @@ with st.sidebar.container(key="navhead_wrap_home"):
 
 for ci, (cat_name, modules_in_category) in enumerate(MODULE_GROUPS.items()):
     module_state_key = f"active_module_{cat_name}"
-    if module_state_key not in st.session_state:
+    # Yeniden adlandırılan bir modül (ör. İşlem Günlüğü -> Algo Analiz) oturumda
+    # eski adıyla kalmışsa boş sayfa yerine kategorinin ilk modülü açılır.
+    if st.session_state.get(module_state_key) not in modules_in_category:
         st.session_state[module_state_key] = modules_in_category[0]
 
     open_category = st.session_state["open_category"]
@@ -1659,18 +1661,17 @@ elif module == "🛡️ Stop Loss Ayarları":
     render_stop_loss_settings(username)
 
 # ==============================================================================
-# 11c. MODÜL: İŞLEM GÜNLÜĞÜ (2026-09-28 emir analizi · Öneri 6)
+# 11c. MODÜL: ALGO ANALİZ (eski adıyla İşlem Günlüğü; 2026-09-28 emir analizi · Öneri 6)
 # ==============================================================================
-elif module == "📒 İşlem Günlüğü":
-    st.header("📒 İşlem Günlüğü")
+elif module == "🧠 Algo Analiz":
+    st.header("🧠 Algo Analiz")
     st.caption(
-        "Tüm modüllerin (Premium Buy Point, ORB, Relative Strength, Heikin Ashi) kapanmış işlemleri: R çarpanı, "
-        "çıkış sebebi, açılış/seans dışı dağılımı ve mevcut kural sürümüyle kaç işlem biriktiği. "
-        "'İşlem Günlüğü Analizi' sekmesi kapanmış işlemleri Alpaca canlı pozisyonlarıyla birleştirip hangi hissenin "
-        "hangi algoritmayla ne kadar kazandırdığını/kaybettirdiğini gösterir. "
-        "'Değişiklik Günlüğü' sekmesi sistemde yapılan değişikliklerin gerekçesini ve nasıl takip edileceğini anlatır."
+        "Portföyün son durumu, açık pozisyonların şimdi satılırsa ve stop loss'lar devreye girerse oluşacak "
+        "kârlılığı, kapanan pozisyonlardan gerçekleşen kâr, algoritma ve birlikte kullanılan stop loss bazında "
+        "kârlılık, hisse hareketleri ve çıkış/seans istatistikleri. 'Değişiklik Günlüğü' sekmesi sistemde yapılan "
+        "değişikliklerin gerekçesini ve nasıl takip edileceğini anlatır."
     )
-    render_trade_journal(username)
+    render_algo_analiz(username)
 
 # ==============================================================================
 # 12. MODÜL: BIÇAK KANALI TESTİ

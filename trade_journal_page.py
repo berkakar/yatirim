@@ -1,14 +1,16 @@
-"""📒 İşlem Günlüğü sayfası - [2026-09-28 · Öneri 6].
+"""🧠 Algo Analiz sayfası (eski adıyla 📒 İşlem Günlüğü).
 
-Üç sekme:
-  - 📒 İşlem Günlüğü: Alpaca emir geçmişinden kapanmış işlemler, R çarpanı,
-    çıkış sebebi, seans dilimi ve kural sürümüne göre özet (trade_journal.py).
-  - 📊 İşlem Günlüğü Analizi: kapanmış işlemler + Alpaca canlı pozisyonları
-    birleşik; hangi hisse hangi algoritma ile ne kadar kazandırdı/kaybettirdi
-    (trade_journal_analysis.py).
-  - 📝 Değişiklik Günlüğü: 2026-09-28 emir analizi ve ondan çıkan
-    değişikliklerin gerekçeleri, kod yerleri, ayarları ve takip ölçütleri
-    (changelog.py).
+İki sekme:
+  - 🧠 Algo Analiz, yukarıdan aşağıya:
+      1. Portföyün son durumu: ilk giriş (yatırılan sermaye), güncel değer, K/Z
+      2. Karlılık: açık pozisyonlar şimdi satılırsa / stoplar devreye girerse
+         ve kapanan pozisyonlardan gerçekleşen K/Z
+      3. Algoritma ve birlikte kullanılan stop loss algoritmasının karlılığı
+      4. Hisse hareketleri tablosu (kapalı işlemler + açık pozisyonlar)
+      5. Çıkış sebebi, çıkış seans dilimi, giriş seans dilimi istatistikleri
+    Hesaplar: algo_analiz.py, trade_journal.py, trade_journal_analysis.py.
+  - 📝 Değişiklik Günlüğü: sistemde yapılan değişikliklerin gerekçeleri, kod
+    yerleri, ayarları ve takip ölçütleri (changelog.py).
 """
 
 from datetime import datetime
@@ -17,28 +19,39 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
+import storage
+from algo_analiz import (
+    apply_stop_scenario, count_by, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+)
 from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from alpaca_dashboard import TR_TZ
 from changelog import ANALYSIS_SUMMARY, CHANGES, VERIFICATION_NOTES
-from github_config import read_portfolio_config
+from github_config import DEFAULT_CONFIG, read_json_from_github
 from rules_version import MIN_TRADES_FOR_EVALUATION
+from stop_algorithms import STOP_ALGORITHMS
 from theme import get_palette, get_plotly_template
-from trade_journal import SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, build_round_trips, summarize, walk_fills
+from trade_journal import MODULE_LABELS, SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, walk_fills
 from trade_journal_analysis import (
-    STATUS_CLOSED, STATUS_OPEN, closed_records, cumulative_realized, filter_records, group_summary,
-    open_r_multiple, open_records, pnl_matrix,
+    STATUS_CLOSED, STATUS_OPEN, closed_records, filter_records, group_summary, open_r_multiple, open_records,
 )
 from ui_style import freshness_caption, zebra_style
 
+PAGE_TITLE = "🧠 Algo Analiz"
 GITHUB_REPO = "berkakar/yatirim"
-JOURNAL_DAYS_OPTIONS = [30, 60, 90, 180]
+JOURNAL_DAYS_OPTIONS = [30, 60, 90, 180, 365, 1095]
 # Açık pozisyonun giriş emri seçili pencerede yoksa o sembolün geçmişi bu
 # kadar geriye sorgulanır (sadece eksik semboller için, önbellekli).
 OPEN_ENTRY_LOOKBACK_DAYS = 1095
-HEATMAP_MAX_SYMBOLS = 25
-CUMULATIVE_MAX_SERIES = 8
 
+GROUP_ALGO_STOP = "Algoritma + Stop Loss"
+GROUP_ALGO = "Sadece Algoritma"
+GROUP_STOP = "Sadece Stop Loss"
+
+
+# ------------------------------------------------------------------------------
+# Veri
+# ------------------------------------------------------------------------------
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _fetch_orders(key_id: str, secret_key: str, trading_url: str, days: int) -> list[dict]:
@@ -48,6 +61,16 @@ def _fetch_orders(key_id: str, secret_key: str, trading_url: str, days: int) -> 
 @st.cache_data(ttl=60, show_spinner=False)
 def _fetch_positions(key_id: str, secret_key: str, trading_url: str) -> list[dict]:
     return AlpacaClient(key_id, secret_key, trading_url).get_all_positions()
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _fetch_account(key_id: str, secret_key: str, trading_url: str) -> dict:
+    return AlpacaClient(key_id, secret_key, trading_url).get_account()
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _fetch_open_orders(key_id: str, secret_key: str, trading_url: str) -> list[dict]:
+    return AlpacaClient(key_id, secret_key, trading_url).get_open_orders()
 
 
 @st.cache_data(ttl=1800, show_spinner=False)
@@ -63,127 +86,76 @@ def _credentials(username: str) -> tuple[str | None, str | None, str]:
     return key_id, secret_key, trading_url
 
 
+def _read_setting(path: str, default):
+    """SQLite / GitHub / repo içindeki JSON - hangisi kullanılıyorsa."""
+    try:
+        token = st.secrets.get("GITHUB_TOKEN")
+        if token or storage.db_key(path) is not None:
+            return read_json_from_github(GITHUB_REPO, token, path, default)
+        return storage.load_json(path, default)
+    except Exception:
+        return default
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _stop_configs(username: str) -> tuple[dict, dict[str, str], dict[str, set]]:
+    """PBP portföy ayarı, modül etiketi -> stop algoritması ve modül etiketi
+    -> modülün tuttuğu semboller (bkz. algo_analiz.resolve_stop_algorithm_id)."""
+    # Fonksiyon içi import: bkz. stop_loss_settings._live_stop_usage notu.
+    import heikin_ashi_intraday_core
+    import orb_core
+    import relative_strength_core
+
+    pbp = _read_setting(f"portfolio_config_{username}.json", DEFAULT_CONFIG) or {}
+    module_algos: dict[str, str] = {}
+    module_holdings: dict[str, set] = {}
+    # Sıra canlı botla aynı: RS, ORB, Heikin Ashi.
+    for prefix, core in (("rs", relative_strength_core), ("orb", orb_core), ("hai", heikin_ashi_intraday_core)):
+        label = MODULE_LABELS[prefix]
+        module_algos[label] = core.resolve_stop_algorithm(_read_setting(core.config_path(username), {}) or {})
+        module_holdings[label] = set((_read_setting(core.holdings_path(username), {}) or {}).keys())
+    return pbp, module_algos, module_holdings
+
+
 def _rules_since(username: str) -> tuple[datetime | None, str | None]:
-    token = st.secrets.get("GITHUB_TOKEN")
-    config = {}
-    if token:
-        try:
-            config = read_portfolio_config(GITHUB_REPO, token, username)
-        except Exception:
-            config = {}
-    raw = config.get("rules_version_since")
+    raw = (_read_setting(f"portfolio_config_{username}.json", {}) or {}).get("rules_version_since")
     return (datetime.fromisoformat(raw) if raw else None), raw
 
 
-def _trips_dataframe(trips) -> pd.DataFrame:
-    rows = []
-    for t in reversed(trips):
-        r = t.r_multiple
-        rows.append({
-            "Hisse": t.symbol,
-            "Giriş (TRT)": t.entry_time.astimezone(TR_TZ).strftime("%d.%m %H:%M"),
-            "Çıkış (TRT)": t.exit_time.astimezone(TR_TZ).strftime("%d.%m %H:%M"),
-            "Süre (saat)": round(t.holding_hours, 1),
-            "Adet": t.qty,
-            "Giriş $": round(t.entry_price, 2),
-            "Çıkış $": round(t.exit_price, 2),
-            "İlk Stop $": round(t.initial_stop, 2) if t.initial_stop is not None else None,
-            "K/Z $": round(t.pnl, 2),
-            "K/Z %": round(t.pnl_pct, 2),
-            "R": round(r, 2) if r is not None else None,
-            "Giriş Kaynağı": t.entry_source,
-            "Çıkış Sebebi": t.exit_reason,
-            "Giriş Dilimi": t.entry_session,
-            "Çıkış Dilimi": t.exit_session,
-        })
-    return pd.DataFrame(rows)
-
-
-def _count_table(counts: dict, label: str) -> pd.DataFrame:
-    total = sum(counts.values()) or 1
-    return pd.DataFrame(
-        [{label: k, "İşlem": v, "Pay %": round(v / total * 100, 1)} for k, v in sorted(counts.items(), key=lambda kv: -kv[1])]
-    )
-
-
-def _render_journal(username: str):
-    key_id, secret_key, trading_url = _credentials(username)
-    if not key_id or not secret_key:
-        return
-    rules_since, rules_since_raw = _rules_since(username)
-
-    c1, c2 = st.columns([1, 2])
-    days = c1.selectbox("Geriye dönük gün", JOURNAL_DAYS_OPTIONS, index=2, key="tj_days")
-    scope_options = ["all"] + (["rules"] if rules_since else [])
-    scope = c2.radio(
-        "Kapsam", scope_options, horizontal=True, key="tj_scope",
-        format_func=lambda v: "Tüm işlemler" if v == "all" else f"Mevcut kural sürümü ({rules_since_raw[:10]} sonrası)",
-    )
-
+def _initial_capital(username: str) -> float | None:
     try:
-        orders = _fetch_orders(key_id, secret_key, trading_url, int(days))
-    except Exception as e:
-        st.error(f"Alpaca emir geçmişi alınamadı: {e}")
-        return
-    trips = build_round_trips(orders)
-    rules_trips = [t for t in trips if rules_since and t.entry_time >= rules_since]
-    shown = rules_trips if scope == "rules" else trips
+        from config import load_initial_capital
+        v = load_initial_capital(username)
+        return float(v) if v else None
+    except Exception:
+        return None
 
-    if rules_since:
-        n_rules = len(rules_trips)
-        if n_rules < MIN_TRADES_FOR_EVALUATION:
-            st.warning(
-                f"🧊 Mevcut kural sürümü ({rules_since_raw[:10]}) ile **{n_rules}** işlem kapandı. Sonuçlar "
-                f"{MIN_TRADES_FOR_EVALUATION} işlem birikmeden istatistiksel olarak anlamlı değil - bu süre "
-                "zarfında algoritma/stop/risk ayarlarını değiştirmemeniz önerilir."
-            )
-        else:
-            st.success(f"🧊 Mevcut kural sürümü ile {n_rules} işlem kapandı - kurallar değerlendirilebilir.")
 
-    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca emir geçmişi, 5 dk önbellek).")
-    if not shown:
-        st.info("Bu kapsamda kapanmış işlem yok.")
-        return
-
-    s = summarize(shown)
-    m = st.columns(6)
-    m[0].metric("İşlem", s["trades"])
-    m[1].metric("İsabet", f"%{s['win_rate']:.0f}")
-    m[2].metric("Net K/Z", f"{s['total_pnl']:,.2f}$")
-    m[3].metric("Ort. kazanç / kayıp", f"{s['avg_win']:,.0f}$ / {s['avg_loss']:,.0f}$")
-    m[4].metric("Toplam R", f"{s['total_r']:+.2f}R" if s["r_count"] else "—")
-    m[5].metric("Beklenen değer", f"{s['expectancy_r']:+.2f}R" if s["expectancy_r"] is not None else "—",
-                help="İşlem başına ortalama R. Pozitifse sistem uzun vadede kazandırır. İlk stopu bilinen "
-                     f"{s['r_count']} işlem üzerinden.")
-
-    st.dataframe(zebra_style(_trips_dataframe(shown)), use_container_width=True, hide_index=True)
-
-    t1, t2 = st.columns(2)
-    with t1:
-        st.markdown("**Çıkış sebebi**")
-        st.dataframe(_count_table(s["exits_by_reason"], "Sebep"), use_container_width=True, hide_index=True)
-    with t2:
-        st.markdown("**Çıkış seans dilimi**")
-        st.dataframe(_count_table(s["exits_by_session"], "Dilim"), use_container_width=True, hide_index=True)
-        entry_sessions: dict[str, int] = {}
-        for t in shown:
-            entry_sessions[t.entry_session] = entry_sessions.get(t.entry_session, 0) + 1
-        st.markdown("**Giriş seans dilimi**")
-        st.dataframe(_count_table(entry_sessions, "Dilim"), use_container_width=True, hide_index=True)
-
-    st.caption(
-        f"'{SESSION_OPENING}': 09:30-09:45 ET · '{SESSION_REGULAR}': 09:45-16:00 ET · '{SESSION_EXTENDED}': "
-        "pre-market / after-hours. 28.09.2026 öncesi stop emirleri etiketsiz olduğu için sebepleri "
-        "'Stop (etiketsiz)' görünür. R, girişten sonra kurulan ilk stopa göre hesaplanır."
-    )
+def _stop_label(algo_id: str | None) -> str:
+    if not algo_id:
+        return "—"
+    algo = STOP_ALGORITHMS.get(algo_id)
+    return algo.label if algo else algo_id
 
 
 # ------------------------------------------------------------------------------
-# 📊 İşlem Günlüğü Analizi
+# Biçim
 # ------------------------------------------------------------------------------
 
-def _fmt_money(v: float | None) -> str:
-    return "—" if v is None else f"{v:+,.2f}$"
+def _fmt_money(v: float | None, sign: bool = True) -> str:
+    if v is None:
+        return "—"
+    return f"{v:+,.2f}$" if sign else f"{v:,.2f}$"
+
+
+def _fmt_pct(v: float | None) -> str:
+    # İşaret başta: st.metric delta'nın rengini/okunu baştaki işaretten seçer.
+    return "—" if v is None else f"{v:+.2f}%"
+
+
+def _md(text: str) -> str:
+    """Markdown'da iki '$' arası LaTeX sayılır - dolar işaretleri kaçışlanır."""
+    return text.replace("$", "\\$")
 
 
 def _fmt_pf(v: float | None) -> str:
@@ -202,23 +174,142 @@ def _pnl_color_style(cols: list[str]):
             if c not in frame.columns:
                 continue
             for i, v in frame[c].items():
-                if isinstance(v, (int, float)) and v != 0:
+                if isinstance(v, (int, float)) and not pd.isna(v) and v != 0:
                     styles.at[i, c] = f"color: {p['positive'] if v > 0 else p['negative']}; font-weight: 600"
         return styles
     return fn
 
 
-def _summary_dataframe(rows: list[dict], label: str, capital: float | None) -> pd.DataFrame:
+def _table(df: pd.DataFrame, pnl_cols: list[str] | None = None):
+    style = _pnl_color_style(pnl_cols) if pnl_cols else None
+    styler = zebra_style(df, style).format(precision=2, thousands=",", na_rep="—")
+    int_like = [c for c in ("Adet", "İşlem", "Kapalı", "Açık") if c in df.columns]
+    if int_like:
+        styler = styler.format("{:g}", subset=int_like, na_rep="—")
+    if "Pay %" in df.columns:
+        styler = styler.format("{:.1f}", subset=["Pay %"])
+    if "İsabet %" in df.columns:
+        styler = styler.format("{:.0f}", subset=["İsabet %"], na_rep="—")
+    st.dataframe(styler, use_container_width=True, hide_index=True)
+
+
+# ------------------------------------------------------------------------------
+# 1. Portföyün son durumu
+# ------------------------------------------------------------------------------
+
+def _render_portfolio(snap: dict, n_positions: int):
+    st.markdown("### 💼 Portföyün Son Durumu")
+    m = st.columns(4)
+    m[0].metric("İlk Giriş (Yatırılan Sermaye)", _fmt_money(snap["initial_capital"], sign=False),
+                help=None if snap["initial_capital"] else "İlk sermaye tanımlı değil - Giriş Sayfası > Alpaca hesap "
+                                                          "özetinden kaydedebilirsiniz.")
+    m[1].metric("Güncel Portföy Değeri", _fmt_money(snap["equity"], sign=False),
+                delta=f"{snap['day_pl']:+,.2f}$ bugün" if snap["day_pl"] is not None else None,
+                help="Nakit + tüm pozisyonların güncel piyasa değeri (Alpaca equity).")
+    m[2].metric("Toplam Kârlılık", _fmt_money(snap["pl"]),
+                delta=_fmt_pct(snap["pl_pct"]) if snap["pl_pct"] is not None else None,
+                help="Güncel portföy değeri − ilk giriş.")
+    m[3].metric("Nakit / Pozisyon", _md(f"{snap['cash']:,.0f}$ / {snap['long_value']:,.0f}$"),
+                help=f"{n_positions} açık pozisyon.")
+
+
+# ------------------------------------------------------------------------------
+# 2. Karlılık
+# ------------------------------------------------------------------------------
+
+def _render_profitability(snap: dict, all_open: list, records: list):
+    st.markdown("### 💰 Karlılık")
+    t = scenario_totals(records)
+    portfolio = scenario_totals(all_open)
+    initial = snap["initial_capital"]
+    stop_equity = snap["equity"] + portfolio["stop_giveback"]
+
+    def _vs_initial(equity: float) -> str:
+        if not initial:
+            return f"Portföy değeri: {equity:,.2f}$"
+        pl = equity - initial
+        return f"Portföy değeri: {equity:,.2f}$ · ilk girişe göre {pl:+,.2f}$ ({pl / initial * 100:+.2f}%)"
+
+    c1, c2, c3 = st.columns(3)
+    with c1.container(border=True):
+        st.markdown("**📍 Şu anki fiyattan satılırsa**")
+        st.metric("Açık pozisyonların K/Z'si", _fmt_money(t["unrealized"]), delta=_fmt_pct(t["unrealized_pct"]),
+                  help="Açık pozisyonların bugünkü fiyattan kapatılması halinde (Alpaca gerçekleşmemiş K/Z).")
+        st.caption(_md(f"{t['open_count']} açık pozisyon · maliyet {t['open_cost']:,.0f}$\n\n{_vs_initial(snap['equity'])}"))
+    with c2.container(border=True):
+        st.markdown("**🛡️ Stop loss'lar devreye girerse**")
+        st.metric("Açık pozisyonların K/Z'si", _fmt_money(t["stop_unrealized"]), delta=_fmt_pct(t["stop_unrealized_pct"]),
+                  help="Her pozisyonun açık stop emri tetiklenip stop seviyesinden kapanması halinde. Açılış kalkanının "
+                       "geçici felaket stopu yerine geri döneceği gerçek stop kullanılır.")
+        st.caption(_md(f"Şu ana göre fark: {t['stop_giveback']:+,.2f}$ (stop tetiklenirse geri verilecek)\n\n"
+                       f"{_vs_initial(stop_equity)}"))
+    with c3.container(border=True):
+        st.markdown("**✅ Kapanan pozisyonlar (gerçekleşen)**")
+        st.metric("Gerçekleşen K/Z", _fmt_money(t["closed_realized"] + t["partial_realized"]),
+                  help="Seçili penceredeki kapanmış işlemler + açık pozisyonlardaki kısmi satışlar.")
+        parts = [f"{t['closed_count']} kapalı işlem"]
+        if t["win_rate"] is not None:
+            parts.append(f"isabet %{t['win_rate']:.0f}")
+        if t["total_r"] is not None:
+            parts.append(f"toplam {t['total_r']:+.2f}R")
+        if t["expectancy_r"] is not None:
+            parts.append(f"işlem başı {t['expectancy_r']:+.2f}R")
+        partial = f"\n\nKısmi satışlardan: {t['partial_realized']:+,.2f}$" if abs(t["partial_realized"]) > 0.005 else ""
+        st.caption(_md(" · ".join(parts) + partial))
+
+    if t["stopless_count"]:
+        st.warning(f"⚠️ Stop emri olmayan {t['stopless_count']} açık pozisyon var ({', '.join(t['stopless_symbols'])}) - "
+                   "stop senaryosunda bu pozisyonlar anlık fiyattan sayıldı.")
+
+    opened = [r for r in records if r.status == STATUS_OPEN]
+    if opened:
+        with st.expander(f"📋 Açık pozisyonlar: şimdi satılırsa vs stop devreye girerse ({len(opened)})", expanded=True):
+            rows = []
+            for r in sorted(opened, key=lambda r: -r.unrealized):
+                cost = r.entry_price * r.qty
+                rows.append({
+                    "Hisse": r.symbol,
+                    "Algoritma": r.algorithm,
+                    "Stop Loss": _stop_label(r.stop_algorithm),
+                    "Adet": r.qty,
+                    "Maliyet $": round(r.entry_price, 2),
+                    "Son $": round(r.last_price, 2),
+                    "Stop $": round(r.current_stop, 2) if r.current_stop is not None else None,
+                    "Stopa uzaklık %": round((r.current_stop / r.last_price - 1) * 100, 2)
+                    if r.current_stop is not None and r.last_price else None,
+                    "Şimdi K/Z $": round(r.unrealized, 2),
+                    "Şimdi K/Z %": round(r.unrealized / cost * 100, 2) if cost else None,
+                    "Stop K/Z $": round(r.stop_unrealized, 2) if r.stop_unrealized is not None else None,
+                    "Stop K/Z %": round(r.stop_unrealized / cost * 100, 2) if r.stop_unrealized is not None and cost else None,
+                    "Fark $": round(r.stop_unrealized - r.unrealized, 2) if r.stop_unrealized is not None else None,
+                })
+            _table(pd.DataFrame(rows), ["Şimdi K/Z $", "Şimdi K/Z %", "Stop K/Z $", "Stop K/Z %", "Fark $"])
+            st.caption("Stop K/Z pozitifse stop kârı kilitlemiş demektir (breakeven/trail). 'Fark' = stop K/Z − şimdi K/Z: "
+                       "stop tetiklenirse bugünkü kârdan geri verilecek tutar.")
+
+
+# ------------------------------------------------------------------------------
+# 3. Algoritma ve stop loss karlılığı
+# ------------------------------------------------------------------------------
+
+def _group_dataframe(rows: list[dict], grouping: str, capital: float | None) -> pd.DataFrame:
     out = []
     for r in rows:
+        if grouping == GROUP_ALGO_STOP:
+            head = {"Algoritma": r["key"][0], "Stop Loss": r["key"][1]}
+        elif grouping == GROUP_ALGO:
+            head = {"Algoritma": r["key"]}
+        else:
+            head = {"Stop Loss": r["key"]}
         row = {
-            label: r["key"],
+            **head,
             "Kapalı": r["closed"],
             "Açık": r["open"],
             "İsabet %": round(r["win_rate"], 0) if r["win_rate"] is not None else None,
             "Gerçekleşen $": round(r["realized"], 2),
             "Açık K/Z $": round(r["unrealized"], 2),
-            "Toplam $": round(r["total"], 2),
+            "Toplam (şimdi) $": round(r["total"], 2),
+            "Toplam (stop) $": round(r["stop_total"], 2),
             "Getiri %": round(r["return_pct"], 2),
             "Ort. R": round(r["avg_r"], 2) if r["avg_r"] is not None else None,
             "Toplam R": round(r["total_r"], 2) if r["total_r"] is not None else None,
@@ -232,130 +323,188 @@ def _summary_dataframe(rows: list[dict], label: str, capital: float | None) -> p
     return pd.DataFrame(out)
 
 
-def _records_dataframe(records, split_timeframe: bool) -> pd.DataFrame:
+def _group_label(key) -> str:
+    return " · ".join(key) if isinstance(key, tuple) else str(key)
+
+
+def _group_chart(rows: list[dict]) -> go.Figure:
+    p = get_palette()
+    rows = list(reversed(rows))  # yatay çubukta en kârlı en üstte
+    labels = [_group_label(r["key"]) for r in rows]
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=[r["total"] for r in rows], y=labels, orientation="h", name="Şimdi satılırsa",
+        marker_color=p["accent"],
+        customdata=[[r["realized"], r["unrealized"], r["closed"], r["open"]] for r in rows],
+        hovertemplate="<b>%{y}</b><br>Şimdi: %{x:+,.2f}$<br>Gerçekleşen: %{customdata[0]:+,.2f}$"
+                      "<br>Açık K/Z: %{customdata[1]:+,.2f}$<br>Kapalı/Açık: %{customdata[2]} / %{customdata[3]}<extra></extra>",
+    ))
+    fig.add_trace(go.Bar(
+        x=[r["stop_total"] for r in rows], y=labels, orientation="h", name="Stoplar devreye girerse",
+        marker_color=p["text_muted"], opacity=0.55,
+        hovertemplate="<b>%{y}</b><br>Stop senaryosu: %{x:+,.2f}$<extra></extra>",
+    ))
+    fig.update_layout(template=get_plotly_template(), barmode="group",
+                      height=max(240, 48 * len(rows) + 90), margin=dict(l=10, r=10, t=10, b=30),
+                      xaxis_title="Toplam K/Z ($)", legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0))
+    fig.add_vline(x=0, line_width=1, line_color=p["text_muted"])
+    return fig
+
+
+def _render_algo_stop(records: list, split_tf: bool, capital: float | None):
+    st.markdown("### 🧠 Algoritma ve Stop Loss Karlılığı")
+    grouping = st.radio("Gruplama", [GROUP_ALGO_STOP, GROUP_ALGO, GROUP_STOP], horizontal=True, key="aa_grouping",
+                        label_visibility="collapsed")
+    if grouping == GROUP_ALGO_STOP:
+        key = lambda r: (r.algo_label(split_tf), _stop_label(r.stop_algorithm))  # noqa: E731
+    elif grouping == GROUP_ALGO:
+        key = lambda r: r.algo_label(split_tf)  # noqa: E731
+    else:
+        key = lambda r: _stop_label(r.stop_algorithm)  # noqa: E731
+    rows = group_summary(records, key)
+    st.plotly_chart(_group_chart(rows), use_container_width=True)
+    _table(_group_dataframe(rows, grouping, capital),
+           ["Gerçekleşen $", "Açık K/Z $", "Toplam (şimdi) $", "Toplam (stop) $", "Getiri %", "Sermaye %"])
+    st.caption(
+        "'Toplam (şimdi)' = gerçekleşen + açık pozisyonların anlık K/Z'si; 'Toplam (stop)' = açık pozisyonlar stop "
+        "seviyesinden kapanırsa. Algoritma, pozisyonu 0'dan açan alım emrinin etiketinden okunur. Stop loss algoritması "
+        "emir geçmişinde tutulmadığı için modüllerin güncel ayarından çözülür (RS / ORB / Heikin Ashi kendi ayarı, "
+        "diğerleri Premium Buy Point portföy/hisse ayarı) - ayar sonradan değiştiyse eski işlemler yeni algoritma "
+        "altında görünür. İsabet, R ve Profit Factor yalnızca kapalı işlemlerden hesaplanır."
+    )
+
+
+# ------------------------------------------------------------------------------
+# 4. Hisse hareketleri
+# ------------------------------------------------------------------------------
+
+def _movements_dataframe(records, split_timeframe: bool) -> pd.DataFrame:
     rows = []
-    for r in sorted(records, key=lambda r: (r.exit_time or r.entry_time or datetime.min.replace(tzinfo=TR_TZ)), reverse=True):
-        r_mult = r.r_multiple if r.status == STATUS_CLOSED else open_r_multiple(r)
+    for r in sorted(records, key=lambda r: (r.exit_time or r.entry_time or datetime.min.replace(tzinfo=TR_TZ)),
+                    reverse=True):
+        is_open = r.status == STATUS_OPEN
+        r_mult = open_r_multiple(r) if is_open else r.r_multiple
         rows.append({
             "Hisse": r.symbol,
-            "Algoritma": r.algo_label(split_timeframe),
             "Durum": r.status,
+            "Algoritma": r.algo_label(split_timeframe),
+            "Stop Loss": _stop_label(r.stop_algorithm),
             "Giriş (TRT)": r.entry_time.astimezone(TR_TZ).strftime("%d.%m.%y %H:%M") if r.entry_time else "—",
             "Çıkış (TRT)": r.exit_time.astimezone(TR_TZ).strftime("%d.%m.%y %H:%M") if r.exit_time else "—",
             "Adet": r.qty,
             "Giriş $": round(r.entry_price, 2),
             "Son/Çıkış $": round(r.last_price, 2),
             "İlk Stop $": round(r.initial_stop, 2) if r.initial_stop is not None else None,
+            "Güncel Stop $": round(r.current_stop, 2) if r.current_stop is not None else None,
             "Gerçekleşen $": round(r.realized, 2),
             "Açık K/Z $": round(r.unrealized, 2),
             "Toplam $": round(r.total, 2),
+            "Stop senaryosu $": round(r.stop_total, 2) if is_open else None,
             "K/Z %": round(r.pnl_pct, 2),
             "R": round(r_mult, 2) if r_mult is not None else None,
+            "Çıkış Sebebi": r.exit_reason or ("Açık" if is_open else "—"),
         })
     return pd.DataFrame(rows)
 
 
-def _algo_bar_chart(rows: list[dict]):
-    p = get_palette()
-    rows = list(reversed(rows))  # yatay çubukta en kârlı en üstte
-    fig = go.Figure(go.Bar(
-        x=[r["total"] for r in rows], y=[r["key"] for r in rows], orientation="h",
-        marker_color=[p["positive"] if r["total"] >= 0 else p["negative"] for r in rows],
-        customdata=[[r["realized"], r["unrealized"], r["closed"], r["open"]] for r in rows],
-        hovertemplate="<b>%{y}</b><br>Toplam: %{x:+,.2f}$<br>Gerçekleşen: %{customdata[0]:+,.2f}$"
-                      "<br>Açık K/Z: %{customdata[1]:+,.2f}$<br>Kapalı/Açık: %{customdata[2]} / %{customdata[3]}<extra></extra>",
-    ))
-    fig.update_layout(template=get_plotly_template(), height=max(220, 36 * len(rows) + 80),
-                      margin=dict(l=10, r=10, t=10, b=30), xaxis_title="Toplam K/Z ($)", showlegend=False)
-    fig.add_vline(x=0, line_width=1, line_color=p["text_muted"])
-    return fig
+def _render_movements(records: list, split_tf: bool):
+    st.markdown("### 📋 Hisse Hareketleri")
+    c1, c2 = st.columns([2, 3])
+    symbols = sorted({r.symbol for r in records})
+    pick = c1.selectbox("Hisse", ["Tümü"] + symbols, key="aa_symbol")
+    status_opt = c2.radio("Durum", ["Hepsi", STATUS_OPEN, STATUS_CLOSED], horizontal=True, key="aa_status")
+    shown = [r for r in records if (pick == "Tümü" or r.symbol == pick)
+             and (status_opt == "Hepsi" or r.status == status_opt)]
+    if not shown:
+        st.info("Bu seçimle gösterilecek hareket yok.")
+        return
+    _table(_movements_dataframe(shown, split_tf),
+           ["Gerçekleşen $", "Açık K/Z $", "Toplam $", "Stop senaryosu $", "K/Z %", "R"])
+    st.caption(
+        "Açık pozisyonun giriş emri seçili pencerede yoksa sembolün son "
+        f"{OPEN_ENTRY_LOOKBACK_DAYS} günlük geçmişi taranır; yine bulunamazsa algoritma 'Bilinmiyor' görünür. Açık "
+        "pozisyonlardaki R anlık fiyata göredir. R = (çıkış − giriş) / (giriş − ilk stop)."
+    )
 
 
-def _heatmap(matrix: dict) -> go.Figure | None:
-    if not matrix:
-        return None
-    p = get_palette()
-    sym_totals: dict[str, float] = {}
-    for (sym, _), v in matrix.items():
-        sym_totals[sym] = sym_totals.get(sym, 0.0) + v
-    symbols = sorted(sym_totals, key=lambda s: -abs(sym_totals[s]))[:HEATMAP_MAX_SYMBOLS]
-    symbols.sort(key=lambda s: -sym_totals[s])
-    algos = sorted({a for (_, a) in matrix}, key=lambda a: -sum(v for (s, x), v in matrix.items() if x == a))
-    z = [[matrix.get((s, a)) for a in algos] for s in symbols]
-    text = [[f"{v:+,.0f}" if v is not None else "" for v in row] for row in z]
-    vmax = max((abs(v) for row in z for v in row if v is not None), default=1.0) or 1.0
-    fig = go.Figure(go.Heatmap(
-        z=z, x=algos, y=symbols, text=text, texttemplate="%{text}", zmid=0, zmin=-vmax, zmax=vmax,
-        colorscale=[[0, p["negative"]], [0.5, p["bg_subtle"]], [1, p["positive"]]],
-        hovertemplate="<b>%{y}</b> · %{x}<br>Toplam K/Z: %{z:+,.2f}$<extra></extra>", xgap=2, ygap=2,
-        colorbar=dict(title="$"),
-    ))
-    fig.update_layout(template=get_plotly_template(), height=max(260, 26 * len(symbols) + 120),
-                      margin=dict(l=10, r=10, t=10, b=10), yaxis=dict(autorange="reversed"), xaxis=dict(side="top"))
-    return fig
+# ------------------------------------------------------------------------------
+# 5. Çıkış sebebi ve seans dilimi istatistikleri
+# ------------------------------------------------------------------------------
+
+def _count_table(counts: dict, label: str) -> pd.DataFrame:
+    total = sum(counts.values()) or 1
+    return pd.DataFrame(
+        [{label: k, "İşlem": v, "Pay %": round(v / total * 100, 1)} for k, v in sorted(counts.items(), key=lambda kv: -kv[1])]
+    )
 
 
-def _cumulative_chart(points) -> go.Figure | None:
-    if not points:
-        return None
-    finals: dict[str, float] = {}
-    for _, label, v in points:
-        finals[label] = v
-    # Seri sayısı sınırlı: en büyük mutlak sonuca sahip algoritmalar çizilir,
-    # renk algoritmanın adına göre sabit sırayla atanır (filtreyle değişmesin).
-    keep = sorted(finals, key=lambda k: -abs(finals[k]))[:CUMULATIVE_MAX_SERIES]
-    fig = go.Figure()
-    for label in sorted(keep):
-        xs = [t.astimezone(TR_TZ) for t, lab, _ in points if lab == label]
-        ys = [v for _, lab, v in points if lab == label]
-        fig.add_trace(go.Scatter(x=xs, y=ys, mode="lines+markers", name=label, line=dict(width=2, shape="hv"),
-                                 marker=dict(size=6),
-                                 hovertemplate=f"<b>{label}</b><br>%{{x|%d.%m.%y %H:%M}}<br>Birikimli: %{{y:+,.2f}}$<extra></extra>"))
-    fig.add_hline(y=0, line_width=1, line_color=get_palette()["text_muted"])
-    fig.update_layout(template=get_plotly_template(), height=360, margin=dict(l=10, r=10, t=10, b=10),
-                      yaxis_title="Birikimli gerçekleşen K/Z ($)", hovermode="closest",
-                      legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0))
-    return fig
+def _render_exit_stats(records: list):
+    closed = [r for r in records if r.status == STATUS_CLOSED]
+    st.markdown("### 🚪 Çıkış ve Seans İstatistikleri")
+    if not closed:
+        st.caption("Bu kapsamda kapanmış işlem yok.")
+        return
+    t1, t2 = st.columns(2)
+    with t1:
+        st.markdown("**Çıkış sebebi**")
+        _table(_count_table(count_by(closed, "exit_reason"), "Sebep"))
+    with t2:
+        st.markdown("**Çıkış seans dilimi**")
+        _table(_count_table(count_by(closed, "exit_session"), "Dilim"))
+        st.markdown("**Giriş seans dilimi**")
+        _table(_count_table(count_by(closed, "entry_session"), "Dilim"))
+    st.caption(
+        f"Kapanmış işlemler üzerinden. '{SESSION_OPENING}': 09:30-09:45 ET · '{SESSION_REGULAR}': 09:45-16:00 ET · "
+        f"'{SESSION_EXTENDED}': pre-market / after-hours. 28.09.2026 öncesi stop emirleri etiketsiz olduğu için "
+        "sebepleri 'Stop (etiketsiz)' görünür."
+    )
 
 
-def _initial_capital(username: str) -> float | None:
-    try:
-        from config import load_initial_capital
-        v = load_initial_capital(username)
-        return float(v) if v else None
-    except Exception:
-        return None
+# ------------------------------------------------------------------------------
+# Sayfa
+# ------------------------------------------------------------------------------
 
-
-def _render_analysis(username: str):
+def _render_algo_analiz(username: str):
     key_id, secret_key, trading_url = _credentials(username)
     if not key_id or not secret_key:
         return
-    rules_since, rules_since_raw = _rules_since(username)
 
-    c1, c2, c3 = st.columns([1, 2, 2])
-    days = c1.selectbox("Geriye dönük gün", JOURNAL_DAYS_OPTIONS, index=2, key="tja_days",
-                        help="Kapanmış işlemler için pencere. Açık pozisyonlar her zaman dahildir.")
-    scope_options = ["all"] + (["rules"] if rules_since else [])
-    scope = c2.radio(
-        "Kapsam", scope_options, horizontal=True, key="tja_scope",
-        format_func=lambda v: "Tüm işlemler" if v == "all" else f"Mevcut kural sürümü ({rules_since_raw[:10]} sonrası)",
-    )
-    status_opt = c3.radio("Durum", ["Hepsi", STATUS_OPEN, STATUS_CLOSED], horizontal=True, key="tja_status")
-    c4, c5 = st.columns(2)
-    split_tf = c4.toggle("Periyodu ayrı göster (ör. 1Day / 1Hour)", value=False, key="tja_split")
-    include_manual = c5.toggle("Elle / bilinmeyen işlemleri dahil et", value=True, key="tja_manual")
+    try:
+        account = _fetch_account(key_id, secret_key, trading_url)
+        positions = _fetch_positions(key_id, secret_key, trading_url)
+        open_orders = _fetch_open_orders(key_id, secret_key, trading_url)
+    except Exception as e:
+        st.error(f"Alpaca hesap verisi alınamadı: {e}")
+        return
+
+    snap = portfolio_snapshot(account, _initial_capital(username))
+    _render_portfolio(snap, len(positions))
+    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT "
+                      "(hesap/pozisyon/stoplar 1 dk, emir geçmişi 5 dk önbellek).")
+
+    rules_since, rules_since_raw = _rules_since(username)
+    with st.container(border=True):
+        c1, c2, c3, c4 = st.columns([1, 2, 1, 1])
+        days = c1.selectbox("Kapanan işlemler: geriye dönük gün", JOURNAL_DAYS_OPTIONS, index=2, key="aa_days",
+                            help="Kapanmış işlemler için pencere. Açık pozisyonlar her zaman dahildir.")
+        scope_options = ["all"] + (["rules"] if rules_since else [])
+        scope = c2.radio(
+            "Kapsam", scope_options, horizontal=True, key="aa_scope",
+            format_func=lambda v: "Tüm işlemler" if v == "all" else f"Mevcut kural sürümü ({rules_since_raw[:10]} sonrası)",
+        )
+        split_tf = c3.toggle("Periyodu ayrı göster", value=False, key="aa_split",
+                             help="Algoritmayı giriş periyoduyla birlikte gösterir (ör. 1Day / 1Hour).")
+        include_manual = c4.toggle("Elle işlemler dahil", value=True, key="aa_manual",
+                                   help="Elle açılan ya da giriş emri bulunamayan işlemler.")
 
     try:
         orders = _fetch_orders(key_id, secret_key, trading_url, int(days))
-        positions = _fetch_positions(key_id, secret_key, trading_url)
     except Exception as e:
-        st.error(f"Alpaca verisi alınamadı: {e}")
+        st.error(f"Alpaca emir geçmişi alınamadı: {e}")
         return
 
     trips, lots = walk_fills(orders)
-    missing = [p["symbol"] for p in positions if p.get("symbol") not in lots]
-    for sym in missing:
+    for sym in [p["symbol"] for p in positions if p.get("symbol") not in lots]:
         try:
             _, sym_lots = walk_fills(_fetch_symbol_orders(key_id, secret_key, trading_url, sym))
         except Exception:
@@ -363,68 +512,39 @@ def _render_analysis(username: str):
         if sym in sym_lots:
             lots[sym] = sym_lots[sym]
 
-    records = closed_records(trips) + open_records(positions, lots)
-    records = filter_records(
-        records, since=rules_since if scope == "rules" else None, include_manual=include_manual,
-        status=None if status_opt == "Hepsi" else status_opt,
-    )
+    all_records = closed_records(trips) + open_records(positions, lots)
+    apply_stop_scenario(all_records, open_stop_levels(open_orders))
+    pbp_config, module_algos, module_holdings = _stop_configs(username)
+    for r in all_records:
+        try:
+            r.stop_algorithm = resolve_stop_algorithm_id(r, pbp_config, module_algos, module_holdings)
+        except Exception:
+            r.stop_algorithm = None
+    all_open = [r for r in all_records if r.status == STATUS_OPEN]
+    records = filter_records(all_records, since=rules_since if scope == "rules" else None,
+                             include_manual=include_manual)
 
-    freshness_caption(
-        f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (pozisyonlar 1 dk, emir geçmişi 5 dk önbellek).")
+    if rules_since:
+        n_rules = sum(1 for r in all_records if r.status == STATUS_CLOSED and r.entry_time and r.entry_time >= rules_since)
+        if n_rules < MIN_TRADES_FOR_EVALUATION:
+            st.info(
+                f"🧊 Mevcut kural sürümü ({rules_since_raw[:10]}) ile **{n_rules}** işlem kapandı. Sonuçlar "
+                f"{MIN_TRADES_FOR_EVALUATION} işlem birikmeden istatistiksel olarak anlamlı değil - bu süre "
+                "zarfında algoritma/stop/risk ayarlarını değiştirmemeniz önerilir."
+            )
+        else:
+            st.success(f"🧊 Mevcut kural sürümü ile {n_rules} işlem kapandı - kurallar değerlendirilebilir.")
+
+    _render_profitability(snap, all_open, records)
+    st.divider()
     if not records:
         st.info("Bu filtrelerle gösterilecek işlem ya da pozisyon yok.")
         return
-
-    capital = _initial_capital(username)
-    realized = sum(r.realized for r in records)
-    unrealized = sum(r.unrealized for r in records)
-    n_closed = sum(1 for r in records if r.status == STATUS_CLOSED)
-    n_open = len(records) - n_closed
-    m = st.columns(5)
-    m[0].metric("Gerçekleşen K/Z", _fmt_money(realized), help="Kapanmış işlemler + açık pozisyonlardaki kısmi satışlar.")
-    m[1].metric("Açık K/Z", _fmt_money(unrealized), help="Alpaca canlı pozisyonlarının gerçekleşmemiş K/Z'si.")
-    m[2].metric("Toplam", _fmt_money(realized + unrealized))
-    m[3].metric("Sermayeye göre", f"%{(realized + unrealized) / capital * 100:+.2f}" if capital else "—",
-                help=f"İlk sermaye: {capital:,.0f}$" if capital else "İlk sermaye tanımlı değil (Genel Bakış).")
-    m[4].metric("Kapalı / Açık", f"{n_closed} / {n_open}")
-
-    algo_rows = group_summary(records, lambda r: r.algo_label(split_tf))
-    pnl_cols = ["Gerçekleşen $", "Açık K/Z $", "Toplam $", "Getiri %", "Sermaye %"]
-
-    st.markdown("#### 🧠 Algoritma bazında")
-    st.plotly_chart(_algo_bar_chart(algo_rows), use_container_width=True)
-    st.dataframe(zebra_style(_summary_dataframe(algo_rows, "Algoritma", capital), _pnl_color_style(pnl_cols)),
-                 use_container_width=True, hide_index=True)
-
-    st.markdown("#### 🗺️ Hisse × Algoritma")
-    fig = _heatmap(pnl_matrix(records, split_tf))
-    if fig is not None:
-        st.plotly_chart(fig, use_container_width=True)
-        st.caption(f"Toplam K/Z (gerçekleşen + açık). Mutlak sonucu en büyük {HEATMAP_MAX_SYMBOLS} hisse gösterilir.")
-    symbol_rows = group_summary(records, lambda r: r.symbol)
-    with st.expander(f"📋 Hisse bazında özet ({len(symbol_rows)} hisse)"):
-        st.dataframe(zebra_style(_summary_dataframe(symbol_rows, "Hisse", capital), _pnl_color_style(pnl_cols)),
-                     use_container_width=True, hide_index=True)
-
-    st.markdown("#### 📈 Birikimli gerçekleşen K/Z")
-    cfig = _cumulative_chart(cumulative_realized(records, split_tf))
-    if cfig is not None:
-        st.plotly_chart(cfig, use_container_width=True)
-        st.caption(f"Kapanmış işlemlerin çıkış anına göre. En çok etki eden {CUMULATIVE_MAX_SERIES} algoritma çizilir.")
-    else:
-        st.caption("Bu filtrelerle kapanmış işlem yok.")
-
-    st.markdown("#### 🔍 Hisse detayı")
-    symbols = [row["key"] for row in symbol_rows]
-    pick = st.selectbox("Hisse", ["Tümü"] + symbols, key="tja_symbol")
-    detail = records if pick == "Tümü" else [r for r in records if r.symbol == pick]
-    st.dataframe(zebra_style(_records_dataframe(detail, split_tf), _pnl_color_style(pnl_cols + ["K/Z %"])),
-                 use_container_width=True, hide_index=True)
-    st.caption(
-        "Algoritma, pozisyonu 0'dan açan alım emrinin etiketinden okunur (algo-/rebuy-/orb-/rs-/hai-). Açık pozisyonun "
-        f"giriş emri seçili pencerede yoksa sembolün son {OPEN_ENTRY_LOOKBACK_DAYS} günlük geçmişi taranır; yine "
-        "bulunamazsa 'Bilinmiyor' görünür. Açık pozisyonlardaki R anlık fiyata göredir ve Ort. R'ye katılmaz."
-    )
+    _render_algo_stop(records, split_tf, snap["initial_capital"])
+    st.divider()
+    _render_movements(records, split_tf)
+    st.divider()
+    _render_exit_stats(records)
 
 
 def _render_changelog():
@@ -443,12 +563,9 @@ def _render_changelog():
             st.markdown(VERIFICATION_NOTES)
 
 
-def render_trade_journal(username: str):
-    tab_journal, tab_analysis, tab_changes = st.tabs(
-        ["📒 İşlem Günlüğü", "📊 İşlem Günlüğü Analizi", "📝 Değişiklik Günlüğü"])
-    with tab_journal:
-        _render_journal(username)
+def render_algo_analiz(username: str):
+    tab_analysis, tab_changes = st.tabs([PAGE_TITLE, "📝 Değişiklik Günlüğü"])
     with tab_analysis:
-        _render_analysis(username)
+        _render_algo_analiz(username)
     with tab_changes:
         _render_changelog()

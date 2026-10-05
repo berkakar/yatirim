@@ -161,8 +161,9 @@ class AlpacaClient:
         """Hesaptaki TÜM açık emirler (herhangi bir sembol) - alpaca_buy_points.py
         bunu, portföy watchlist'inden çıkarılmış bir sembolde hâlâ resting
         kalmış (artık kimsenin yönetmediği) bir buy-limit emri olup olmadığını
-        kontrol etmek için kullanır."""
-        r = self._get("/orders", params={"status": "open"})
+        kontrol etmek için kullanır. limit=500: Alpaca'nın varsayılanı 50'dir,
+        çok pozisyonlu hesapta stop emirleri listeden taşmasın (Algo Analiz)."""
+        r = self._get("/orders", params={"status": "open", "limit": 500})
         r.raise_for_status()
         return r.json()
 
@@ -286,7 +287,7 @@ class AlpacaClient:
                          max_attempts: int = STOP_PLACE_MAX_ATTEMPTS) -> dict:
         """client_order_id: [2026-09-28 · Öneri 3/6] stop emrine bir etiket
         (bkz. stop_tags.py) - açılış kalkanının gerçek stop seviyesini ve
-        İşlem Günlüğü'nün çıkış sebebini Alpaca'nın kendi emir geçmişinde
+        Algo Analiz'in çıkış sebebini Alpaca'nın kendi emir geçmişinde
         taşır, ayrı bir state dosyasına gerek kalmaz.
 
         [2026-10-03] Stop her koşulda kurulmaya çalışılır - pozisyon korumasız

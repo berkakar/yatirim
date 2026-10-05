@@ -9,7 +9,7 @@ anlaşılamadı.
 Nasıl: Premium Buy Point portföyü her kaydedildiğinde, sonucu etkileyen
 kural alanlarından bir parmak izi hesaplanır. Parmak izi değiştiyse
 "rules_version_since" o ana güncellenir; değişmediyse (ör. sadece bütçe ya da
-hisse ağırlığı değiştiyse) eski tarih korunur. İşlem Günlüğü sayfası o
+hisse ağırlığı değiştiyse) eski tarih korunur. Algo Analiz sayfası o
 tarihten sonra kapanan işlemleri sayar ve MIN_TRADES_FOR_EVALUATION'a
 ulaşılmadan kuralların değiştirilmemesi için uyarır.
 

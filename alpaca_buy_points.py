@@ -126,7 +126,7 @@ unprotected. Top-up during extended hours isn't supported yet - its market
 order can't execute outside regular hours either, and would need the same
 kind of redesign.
 
-2026-09-28 emir analizi değişiklikleri (ayrıntı: 📒 İşlem Günlüğü > 📝 Değişiklik
+2026-09-28 emir analizi değişiklikleri (ayrıntı: 🧠 Algo Analiz > 📝 Değişiklik
 Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
   - Öneri 4: Seans dışında bekleyen pullback limit alışlar iptal edilir,
     pre-market'te giriş yapılmaz, seansın ilk 15 dakikasında hiç alım yapılmaz

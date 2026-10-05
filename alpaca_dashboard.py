@@ -296,7 +296,7 @@ def render_alpaca_dashboard(username):
             st.markdown(
                 "Yukarıdaki 'Stop Fiyatı' sütunu, elle değil, aşağıdaki kurallarla otomatik "
                 "yönetilen structure-based bir trailing-stop sistemini yansıtır:\n\n"
-                "**[2026-09-28 güncellemesi - ayrıntılar: 📒 İşlem Günlüğü > Değişiklik Günlüğü]**\n\n"
+                "**[2026-09-28 güncellemesi - ayrıntılar: 🧠 Algo Analiz > Değişiklik Günlüğü]**\n\n"
                 "- İlk stop, hisse için seçili stop-loss algoritmasına göre kurulur (varsayılan: girişin "
                 "%1.5 altı). Seçenek olarak eklenen **Oynaklık (ATR) Stop** seçilirse stop, giriş sinyalinin "
                 "mum periyodundaki ATR'nin 2 katı aşağıya kurulur.\n"

@@ -1,4 +1,4 @@
-"""Sistem Değişiklik Günlüğü - 📒 İşlem Günlüğü sayfasının "📝 Değişiklik
+"""Sistem Değişiklik Günlüğü - 🧠 Algo Analiz sayfasının "📝 Değişiklik
 Günlüğü" sekmesinde gösterilir (trade_journal_page.py).
 
 Her kayıt: ne sorunu çözdüğü (verideki kanıtıyla), ne değiştiği, kodda
@@ -333,7 +333,7 @@ CHANGES = [
                  "HEIKIN_ASHI_EXIT_RED_CANDLES), heikin_ashi.py (long_exit_reason), heikin_ashi_intraday_core.py, "
                  "scripts/compare_heikin_ashi_stop.py",
         "settings": "🛡️ Stop Loss Ayarları > Heikin Ashi Çıkışı > İlk Stop Oynaklık Tabanı (0 = kapalı).",
-        "track": "İşlem Günlüğü'nde Heikin Ashi Gün İçi işlemlerinde 'Stop: İlk stop' ile kapanan işlemlerin "
+        "track": "Algo Analiz'de Heikin Ashi Gün İçi işlemlerinde 'Stop: İlk stop' ile kapanan işlemlerin "
                  "payı düşmeli; ortalama kayıp (R değil $) risk bazlı adetle sabit kalmalı.",
     },
     {
@@ -362,7 +362,7 @@ CHANGES = [
                  "_stop_bars_for_timeframe, get_initial_stop_price), backtest_engine.py",
         "settings": "🛡️ Stop Loss Ayarları > Oynaklık (ATR) Stop; 🎯 Premium Buy Point > Giriş Zamanlaması ve "
                     "Stop Periyodu > Stop mum periyodu; hisse bazlı stop algoritması seçimi.",
-        "track": "İşlem Günlüğü'nde günlük sinyalli hisselerin (PBP: ... (1Day)) ortalama tutma süresi ve en "
+        "track": "Algo Analiz'de günlük sinyalli hisselerin (PBP: ... (1Day)) ortalama tutma süresi ve en "
                  "büyük R değerleri artmalı; 'Stop: Yapısal trail' ile kapanan kârlı işlemlerin payı yükselmeli.",
     },
     {
@@ -409,7 +409,7 @@ CHANGES = [
         "where": "alpaca_trailing_stop.py (EXECUTION_DEFAULTS, apply_opening_shield, restore_from_shield, "
                  "manage_position, guard_position), stop_tags.py, alpaca_dashboard.py",
         "settings": "🛡️ Stop Loss Ayarları > Emir Yürütme: Açılış Kalkanı.",
-        "track": "İşlem Günlüğü > 'Çıkış seans dilimi' tablosunda 'Açılış (ilk 15 dk)' payı sıfıra yakın "
+        "track": "Algo Analiz > 'Çıkış seans dilimi' tablosunda 'Açılış (ilk 15 dk)' payı sıfıra yakın "
                  "olmalı; 'Açılış kalkanı sonrası çıkış' satırları asıl stopun gerçekten kırıldığı günleri gösterir.",
     },
     {
@@ -432,7 +432,7 @@ CHANGES = [
         "where": "alpaca_buy_points.py (ENTRY_TIMING_DEFAULTS, cancel_pullback_limit_buys, check_symbol "
                  "in_entry_guard, run_extended_hours_entry_scan)",
         "settings": "🎯 Premium Buy Point > Giriş Zamanlaması ve Stop Periyodu.",
-        "track": "İşlem Günlüğü > 'Giriş seans dilimi' tablosunda 'Açılış (ilk 15 dk)' girişleri sıfır olmalı.",
+        "track": "Algo Analiz > 'Giriş seans dilimi' tablosunda 'Açılış (ilk 15 dk)' girişleri sıfır olmalı.",
     },
     {
         "id": "5",
@@ -458,7 +458,7 @@ CHANGES = [
         "where": "risk_sizing.py (risk_based_qty, apply_risk_cap), alpaca_buy_points.py (build_risk_context, "
                  "load_module_risk_context, check_symbol), orb_core.py, relative_strength_core.py, heikin_ashi_intraday_core.py",
         "settings": "🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü.",
-        "track": "İşlem Günlüğü'nde kayıpların dolar tutarı birbirine yakın olmalı (~özsermaye × %0.5); "
+        "track": "Algo Analiz'de kayıpların dolar tutarı birbirine yakın olmalı (~özsermaye × %0.5); "
                  "'Toplam R' ve 'Beklenen değer (R)' sistemin gerçek performansını gösterir.",
     },
     {
@@ -473,7 +473,7 @@ CHANGES = [
         "change": (
             "- Her stop emri etiketleniyor (`stop-<sebep>-<SEMBOL>-<zaman>`): initial, breakeven, structure, "
             "chandelier, profitlock, haexit, topup, restore.\n"
-            "- Bu sayfa (📒 İşlem Günlüğü): Alpaca emir geçmişinden kapanmış işlemleri, R çarpanını, çıkış "
+            "- Bu sayfa (🧠 Algo Analiz): Alpaca emir geçmişinden kapanmış işlemleri, R çarpanını, çıkış "
             "sebebini ve seans dilimini gösterir.\n"
             "- Kural sürümü: Premium Buy Point kaydedildiğinde algoritma/stop/risk/zamanlama ayarları "
             "değiştiyse yeni bir kural sürümü başlar; bu sayfa o tarihten beri kapanan işlemleri sayar ve "
@@ -488,4 +488,4 @@ CHANGES = [
 
 # tests/ klasöründeki birim testleri ve scripts/compare_stop_algorithms.py
 # çıktısının özeti - trade_journal_page.py'de gösterilir.
-VERIFICATION_NOTES = "**Birim ve entegrasyon testleri** (`python -m unittest discover -s tests -t .`): 53 test, hepsi geçti - ATR stop ve breakeven kuralları, risk bazlı adet/portföy ısısı, stop etiketleri, kural sürümü, açılış kalkanı (guard genişletme, ilk 15 dk bekleme, geri dönüş, kırılmışsa market çıkışı; sahte Alpaca istemcisiyle), açılış öncesi limit iptali, ORB/RS/Heikin Ashi girişlerinde risk tavanı ve işlem günlüğü (OTO bacağı, ilave alım, eşleşmeyen satış).\n\n**Karşılaştırma** (`python scripts/compare_stop_algorithms.py`, repo içindeki günlük bar önbelleğiyle, 28.09.2026):\n\n**1) Gerçek girişlerin yeniden oynatılması** (günlük bar; R = (çıkış − giriş) / (giriş − ilk stop); 'açık' = önbellek sonunda hâlâ açık, son kapanıştan)\n\n| Hisse | Giriş | Gerçekleşen K/Z | Aktif kural (günlük, 1R BE) | ATR stop |\n|---|---|---|---|---|\n| AMZN | 2026-09-01 @ 253.71 | +6.55$ (+0.43R) | 252.85 stop (-0.23R) | 249.95 açık (-0.32R) |\n| NOW | 2026-09-02 @ 138.95 | -16.85$ (-1.01R) | 139.23 stop (+0.13R) | 140.75 açık (+0.14R) |\n| MU | 2026-09-03 @ 930.63 | +59.49$ (+4.26R) | 906.05 stop (-1.76R) | 906.05 stop (-0.27R) |\n| SKHY | 2026-09-03 @ 158.30 | +131.75$ (+7.93R) | 193.57 açık (+14.86R) | 175.06 stop (+1.07R) |\n| NOW | 2026-09-08 @ 135.29 | -18.45$ (-1.01R) | 133.26 stop (-1.00R) | 140.75 açık (+0.41R) |\n| MU | 2026-09-14 @ 910.92 | +185.56$ (+1.13R) | 1082.93 açık (+12.59R) | 1082.93 açık (+1.97R) |\n| PAYX | 2026-09-17 @ 115.89 | -77.55$ (-0.99R) | 114.15 stop (-1.00R) | 109.44 stop (-1.29R) |\n| MSFT | 2026-09-18 @ 494.44 | -73.11$ (-0.26R) | 515.80 açık (+2.88R) | 515.80 açık (+1.06R) |\n| AMZN | 2026-09-18 @ 254.20 | +14.62$ (+0.21R) | 254.71 stop (+0.13R) | 249.95 açık (-0.35R) |\n| SKHY | 2026-09-18 @ 187.68 | -0.65$ (-0.05R) | 193.57 açık (+2.09R) | 193.57 açık (+0.32R) |\n| AMAT | 2026-09-24 @ 464.93 | -22.56$ (-0.40R) | 484.83 açık (+2.85R) | 484.83 açık (+0.53R) |\n\n11 işlem toplamı: gerçekleşen **+10.24R**, aktif kural **+31.55R**, ATR stop **+3.27R** (işlem başına 500$ riskle R × 500$).\n\n**2) Backtest motoru** - demand_zone (1 Gün) sinyali, stop günlük barlarda, 11 hisse (AMZN, MSFT, MU, NOW, PAYX, UROY, CUZ, GBCI, TREX, NHI, OMCL), ~6-13 aylık günlük önbellek. R bazlı (canlıdaki risk bazlı adetle karşılaştırılabilir):\n\n| Stop kuralı | İşlem | İsabet | Toplam R | En büyük 3 işlem hariç R | En büyük işlem |\n|---|---|---|---|---|---|\n| Eski: Breakeven+Yapısal (%1 BE, tampon yok) | 86 | %10 | +240.4R | -27.1R | +220.0R |\n| Yeni (aktif): Breakeven+Yapısal (%1.5 BE = 1R, %0.2 tampon) | 85 | %33 | +237.5R | -30.0R | +220.0R |\n| Opsiyonel: Oynaklık (ATR) Stop (2×ATR, 3×ATR chandelier) | 63 | %46 | -0.7R | -11.8R | +4.5R |\n| Opsiyonel: ATR Stop, geniş trail (8×ATR, 4R'den) | 41 | %51 | +8.7R | -11.4R | +10.5R |\n\n**Yorum ve sınırlar:**\n- Günlük barlarda izlenen mevcut kural, büyük trendleri (MU 230→990, MSFT, TREX, NOW) taşıyarak toplam R'nin neredeyse tamamını birkaç işlemden kazanıyor; en büyük 3 işlem hariç tüm kurallar negatif. Yani sistem 'çok sayıda küçük kayıp + nadir büyük kazanç' yapısında - bu yüzden (a) büyük kazancı erken kesen ATR chandelier varsayılan yapılmadı, (b) risk bazlı adet ile her küçük kaybın dolar tutarı sabitlendi.\n- Veri 2026'daki güçlü yükseliş dönemini kapsıyor (~6-13 ay, 11 hisse) ve sadece günlük barlarla; gün içi sıralama, açılış kalkanı ve komisyon/kayma modellenmedi. Sonuçlar yön göstericidir, kesin değildir - kural sürümü 30 işleme ulaşınca İşlem Günlüğü'ndeki gerçek sonuçlarla yeniden değerlendirilmeli.\n- Gerçek işlemlerin yeniden oynatılmasında 'açık' satırlar önbellek sonundaki kapanıştan değerlendi (gerçekleşmemiş kâr/zarar)."
+VERIFICATION_NOTES = "**Birim ve entegrasyon testleri** (`python -m unittest discover -s tests -t .`): 53 test, hepsi geçti - ATR stop ve breakeven kuralları, risk bazlı adet/portföy ısısı, stop etiketleri, kural sürümü, açılış kalkanı (guard genişletme, ilk 15 dk bekleme, geri dönüş, kırılmışsa market çıkışı; sahte Alpaca istemcisiyle), açılış öncesi limit iptali, ORB/RS/Heikin Ashi girişlerinde risk tavanı ve işlem günlüğü (OTO bacağı, ilave alım, eşleşmeyen satış).\n\n**Karşılaştırma** (`python scripts/compare_stop_algorithms.py`, repo içindeki günlük bar önbelleğiyle, 28.09.2026):\n\n**1) Gerçek girişlerin yeniden oynatılması** (günlük bar; R = (çıkış − giriş) / (giriş − ilk stop); 'açık' = önbellek sonunda hâlâ açık, son kapanıştan)\n\n| Hisse | Giriş | Gerçekleşen K/Z | Aktif kural (günlük, 1R BE) | ATR stop |\n|---|---|---|---|---|\n| AMZN | 2026-09-01 @ 253.71 | +6.55$ (+0.43R) | 252.85 stop (-0.23R) | 249.95 açık (-0.32R) |\n| NOW | 2026-09-02 @ 138.95 | -16.85$ (-1.01R) | 139.23 stop (+0.13R) | 140.75 açık (+0.14R) |\n| MU | 2026-09-03 @ 930.63 | +59.49$ (+4.26R) | 906.05 stop (-1.76R) | 906.05 stop (-0.27R) |\n| SKHY | 2026-09-03 @ 158.30 | +131.75$ (+7.93R) | 193.57 açık (+14.86R) | 175.06 stop (+1.07R) |\n| NOW | 2026-09-08 @ 135.29 | -18.45$ (-1.01R) | 133.26 stop (-1.00R) | 140.75 açık (+0.41R) |\n| MU | 2026-09-14 @ 910.92 | +185.56$ (+1.13R) | 1082.93 açık (+12.59R) | 1082.93 açık (+1.97R) |\n| PAYX | 2026-09-17 @ 115.89 | -77.55$ (-0.99R) | 114.15 stop (-1.00R) | 109.44 stop (-1.29R) |\n| MSFT | 2026-09-18 @ 494.44 | -73.11$ (-0.26R) | 515.80 açık (+2.88R) | 515.80 açık (+1.06R) |\n| AMZN | 2026-09-18 @ 254.20 | +14.62$ (+0.21R) | 254.71 stop (+0.13R) | 249.95 açık (-0.35R) |\n| SKHY | 2026-09-18 @ 187.68 | -0.65$ (-0.05R) | 193.57 açık (+2.09R) | 193.57 açık (+0.32R) |\n| AMAT | 2026-09-24 @ 464.93 | -22.56$ (-0.40R) | 484.83 açık (+2.85R) | 484.83 açık (+0.53R) |\n\n11 işlem toplamı: gerçekleşen **+10.24R**, aktif kural **+31.55R**, ATR stop **+3.27R** (işlem başına 500$ riskle R × 500$).\n\n**2) Backtest motoru** - demand_zone (1 Gün) sinyali, stop günlük barlarda, 11 hisse (AMZN, MSFT, MU, NOW, PAYX, UROY, CUZ, GBCI, TREX, NHI, OMCL), ~6-13 aylık günlük önbellek. R bazlı (canlıdaki risk bazlı adetle karşılaştırılabilir):\n\n| Stop kuralı | İşlem | İsabet | Toplam R | En büyük 3 işlem hariç R | En büyük işlem |\n|---|---|---|---|---|---|\n| Eski: Breakeven+Yapısal (%1 BE, tampon yok) | 86 | %10 | +240.4R | -27.1R | +220.0R |\n| Yeni (aktif): Breakeven+Yapısal (%1.5 BE = 1R, %0.2 tampon) | 85 | %33 | +237.5R | -30.0R | +220.0R |\n| Opsiyonel: Oynaklık (ATR) Stop (2×ATR, 3×ATR chandelier) | 63 | %46 | -0.7R | -11.8R | +4.5R |\n| Opsiyonel: ATR Stop, geniş trail (8×ATR, 4R'den) | 41 | %51 | +8.7R | -11.4R | +10.5R |\n\n**Yorum ve sınırlar:**\n- Günlük barlarda izlenen mevcut kural, büyük trendleri (MU 230→990, MSFT, TREX, NOW) taşıyarak toplam R'nin neredeyse tamamını birkaç işlemden kazanıyor; en büyük 3 işlem hariç tüm kurallar negatif. Yani sistem 'çok sayıda küçük kayıp + nadir büyük kazanç' yapısında - bu yüzden (a) büyük kazancı erken kesen ATR chandelier varsayılan yapılmadı, (b) risk bazlı adet ile her küçük kaybın dolar tutarı sabitlendi.\n- Veri 2026'daki güçlü yükseliş dönemini kapsıyor (~6-13 ay, 11 hisse) ve sadece günlük barlarla; gün içi sıralama, açılış kalkanı ve komisyon/kayma modellenmedi. Sonuçlar yön göstericidir, kesin değildir - kural sürümü 30 işleme ulaşınca Algo Analiz'deki gerçek sonuçlarla yeniden değerlendirilmeli.\n- Gerçek işlemlerin yeniden oynatılmasında 'açık' satırlar önbellek sonundaki kapanıştan değerlendi (gerçekleşmemiş kâr/zarar)."

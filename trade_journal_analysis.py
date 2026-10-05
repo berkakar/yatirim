@@ -10,13 +10,13 @@ Açık pozisyonun hangi algoritmayla açıldığı, emir geçmişinde pozisyonu 
 açan alım emrinin etiketinden okunur (OpenLot.entry_order).
 
 API çağrısı yapmaz (tests/test_trade_journal_analysis.py). Streamlit
-sekmesi: trade_journal_page._render_analysis.
+sayfası: trade_journal_page.py (🧠 Algo Analiz), stop senaryosu: algo_analiz.py.
 """
 
 from dataclasses import dataclass
 from datetime import datetime
 
-from trade_journal import MANUAL_SOURCE, OpenLot, RoundTrip, entry_source_parts
+from trade_journal import MANUAL_SOURCE, OpenLot, RoundTrip, entry_source_parts, session_bucket
 
 STATUS_CLOSED = "Kapalı"
 STATUS_OPEN = "Açık"
@@ -39,10 +39,27 @@ class Record:
     entry_price: float = 0.0
     last_price: float = 0.0
     initial_stop: float | None = None
+    exit_reason: str | None = None
+    entry_session: str | None = None
+    exit_session: str | None = None
+    # Algo Analiz (algo_analiz.py) doldurur: pozisyonu yöneten stop algoritması,
+    # açık pozisyonun güncel (etkin) stop seviyesi ve stoplar tetiklenirse
+    # oluşacak gerçekleşmemiş K/Z. Stopsuz açık pozisyonda stop_unrealized None.
+    stop_algorithm: str | None = None
+    current_stop: float | None = None
+    stop_unrealized: float | None = None
 
     @property
     def total(self) -> float:
         return self.realized + self.unrealized
+
+    @property
+    def stop_total(self) -> float:
+        """Stoplar devreye girerse toplam K/Z. Kapalı işlemde gerçekleşenin
+        kendisi; stopu olmayan açık pozisyonda anlık K/Z ile aynı kabul edilir."""
+        if self.status != STATUS_OPEN or self.stop_unrealized is None:
+            return self.total
+        return self.realized + self.stop_unrealized
 
     @property
     def pnl_pct(self) -> float:
@@ -68,6 +85,7 @@ def closed_records(trips: list[RoundTrip]) -> list[Record]:
             realized=t.pnl, unrealized=0.0, cost_basis=t.entry_price * t.qty,
             entry_time=t.entry_time, exit_time=t.exit_time, r_multiple=t.r_multiple,
             qty=t.qty, entry_price=t.entry_price, last_price=t.exit_price, initial_stop=t.initial_stop,
+            exit_reason=t.exit_reason, entry_session=t.entry_session, exit_session=t.exit_session,
         ))
     return records
 
@@ -95,6 +113,7 @@ def open_records(positions: list[dict], open_lots: dict[str, OpenLot]) -> list[R
             entry_time=lot.entry_time if lot else None,
             qty=qty, entry_price=avg_entry, last_price=_f(p.get("current_price")),
             initial_stop=lot.initial_stop if lot else None,
+            entry_session=session_bucket(lot.entry_time) if lot else None,
         ))
     return records
 
@@ -147,6 +166,8 @@ def group_summary(records: list[Record], key) -> list[dict]:
             "realized": realized,
             "unrealized": unrealized,
             "total": realized + unrealized,
+            "stop_total": sum(r.stop_total for r in recs),
+            "stopless": sum(1 for r in opened if r.stop_unrealized is None),
             "return_pct": (realized + unrealized) / cost * 100 if cost else 0.0,
             "avg_r": sum(rs) / len(rs) if rs else None,
             "total_r": sum(rs) if rs else None,

@@ -160,7 +160,7 @@ ATR_MULTIPLIER = 0.25
 # [2026-09-28 · Öneri 2] %1 -> %1.5 (= 1R, çünkü ilk stop %1.5): eskiden stop,
 # fiyat daha 0.67R kâr görmeden girişe çekiliyordu; MSFT/NOW/SKHY/NVDA'da
 # +%2-4.6 kâr görmüş işlemler normal gün içi dalgalanmayla başa baş ya da
-# zararla kapandı (bkz. İşlem Günlüğü > Değişiklik Günlüğü sayfası).
+# zararla kapandı (bkz. Algo Analiz > Değişiklik Günlüğü sayfası).
 BREAKEVEN_TRIGGER_PCT = 0.015
 # [2026-09-28 · Öneri 2] Breakeven stopu tam girişe değil, girişin bu kadar
 # üstüne kurulur: açılış boşluğunda stop piyasa fiyatından dolduğunda
@@ -601,7 +601,7 @@ def heikin_ashi_trail(
 # doğrulama backtestinde (scripts/compare_stop_algorithms.py, 11 hisse, günlük)
 # breakeven_atr_structure'ın günlük barlarda izlenen hali +237R, bu algoritma
 # -0.7R (8xATR trail ile +8.7R) verdi - chandelier büyük trendlerden erken
-# çıkıyor. Ayrıntı: İşlem Günlüğü > Değişiklik Günlüğü > Test sonuçları.
+# çıkıyor. Ayrıntı: Algo Analiz > Değişiklik Günlüğü > Test sonuçları.
 
 ATR_VOL_INITIAL_ATR_MULT = 1.5
 ATR_VOL_MAX_STOP_PCT = 0.12

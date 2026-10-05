@@ -481,7 +481,7 @@ def render_stop_loss_settings(username: str):
             "breakeven stopu girişin %0.2 üstüne kuruluyor; seans dışında açılış kalkanı devrede (emir "
             "analizinde 17 çıkışın 7'si açılışın ilk 5 dakikasında, 3'ü seans dışında gerçekleşmişti). "
             "Oynaklık (ATR) Stop seçenek olarak eklendi. Hangi algoritmanın şu an canlıda kullanıldığı için "
-            "yukarıdaki 🟢 listeye bakın. Gerekçeler ve takip ölçütleri: **📒 İşlem Günlüğü > 📝 Değişiklik "
+            "yukarıdaki 🟢 listeye bakın. Gerekçeler ve takip ölçütleri: **🧠 Algo Analiz > 📝 Değişiklik "
             "Günlüğü**."
         )
 

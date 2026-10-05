@@ -85,7 +85,7 @@ which handles the scheduling). Without --once it loops locally, sleeping
 between passes and until the market reopens. --extended-hours-guard runs the
 separate mechanism described above and exits.
 
-2026-09-28 emir analizi değişiklikleri (ayrıntı: 📒 İşlem Günlüğü > 📝 Değişiklik
+2026-09-28 emir analizi değişiklikleri (ayrıntı: 🧠 Algo Analiz > 📝 Değişiklik
 Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
   - Öneri 1: Premium Buy Point hisselerinde stop, girişin kendi mum periyodunda
     izlenir (resolve_stop_timeframe_for_position, _stop_bars_for_timeframe);
