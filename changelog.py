@@ -28,6 +28,37 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "14",
+        "date": "2026-10-05",
+        "title": "Akıllı Dinamik Stop (adaptive_dynamic) eklendi ve walk-forward backtest ile doğrulandı - seçenek, varsayılan değil",
+        "problem": (
+            "Sabit %1.5 stop hissenin oynaklığını görmüyor (günlük barda işlemlerin %59'u ilk stopta kapanıyor, "
+            "getiri birkaç büyük trende bağlı); atr_volatility oynaklığı görüyor ama desteği görmüyor ve sabit "
+            "3xATR chandelier büyük trendlerden erken çıkıyordu."
+        ),
+        "change": (
+            "- İlk stop: girişin altındaki son swing low - 0.25xATR, mesafe [1, 2]xATR bandına sıkıştırılır "
+            "(swing yoksa 2xATR).\n"
+            "- Trail: en yüksek fiyat 1.5R'ye ulaşınca chandelier (en yüksek - k x ATR); k=5'ten başlar, her ek R "
+            "için 0.25 daralır, en az 2. Breakeven ve trend verimliliği (ER) ayarı var ama varsayılan kapalı - "
+            "taramada katkı vermediler.\n"
+            "- scripts/backtest_adaptive_stop.py: aynı girişleri (trend, rastgele, canlı sinyal) tüm stop "
+            "kurallarıyla oynatır; hisse başına veri ortasından bölünür, ayarlar yalnızca eğitim yarısında "
+            "seçilir, test yarısında karşılaştırılır; risk bazlı adetle özsermaye katkısı ve eşleştirilmiş "
+            "bootstrap %95 GA.\n"
+            "- Sonuç (günlük, test, 1077 işlem): ort. özsermaye katkısı +0.272% (canlı kural +0.238%), en iyi 3 "
+            "işlem hariç +251 (canlı +152), PF 1.99 (1.76), maks. düşüş 76 (216). Fark istatistiksel olarak "
+            "anlamlı DEĞİL (GA −0.16 … +0.22). Trend girişlerinde canlı kural daha iyi. 30dk barda tüm kurallar "
+            "negatif, adaptif kural canlı kuraldan biraz kötü (anlamlı değil) - gün içi için önerilmez.\n"
+            "- Tam rapor: reports/adaptive_stop_validation_2026-10-05.md."
+        ),
+        "where": "stop_algorithms.py (adaptive_dynamic_*), stop_loss_settings.py (🧠 sekmesi), "
+                 "scripts/backtest_adaptive_stop.py, tests/test_adaptive_stop.py",
+        "settings": "Stop Loss Ayarları > 🧠 Akıllı Dinamik Stop; modüllerin stop algoritması seçiminden seçilebilir.",
+        "track": "Günlük periyotlu bir modülde denenirse: ilk stopta çıkış oranı, kazanan işlemlerin ortalama "
+                 "R'si ve düşüş. Daha uzun geçmişle tekrar: python scripts/backtest_adaptive_stop.py --yahoo ...",
+    },
+    {
         "id": "13",
         "date": "2026-10-04",
         "title": "Heikin Ashi / PBP kırılım girişleri ve modül çıkışlarında stopsuz kalma boşlukları kapatıldı",

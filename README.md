@@ -6,6 +6,7 @@ Kendi çapımda yatırım araçları. Fincan Kulp ve Stop Loss
 ```bash
 python -m unittest discover -s tests -t .       # birim + sahte Alpaca istemcili entegrasyon testleri
 python scripts/compare_stop_algorithms.py       # stop kurallarının günlük önbellekle karşılaştırması
+python scripts/backtest_adaptive_stop.py        # Akıllı Dinamik Stop walk-forward doğrulaması (--intraday, --yahoo)
 ```
 
 ## Değişiklik günlüğü
