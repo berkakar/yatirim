@@ -194,6 +194,12 @@ systemctl list-timers 'yatirim-server-*'
    `sudo systemctl restart yatirim-streamlit` çalıştırın.
 4. Yeni adreste her şey çalışıyorsa Streamlit Cloud'daki uygulamayı kapatabilirsiniz.
 
+**Yeni giriş kullanıcısı eklemek:** şifreyi sorar, bcrypt ile hash'leyip
+`secrets.toml`'a ekler (önce yedek alır) ve Streamlit'i yeniden başlatır:
+```bash
+sudo bash deploy/web/add_user.sh volkanerdogan "Volkan Erdoğan" volkan@ornek.com
+```
+
 Nginx ayarının kritik kısmı (`deploy/web/nginx-yatirim.conf`):
 ```nginx
 proxy_http_version 1.1;
