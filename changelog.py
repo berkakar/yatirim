@@ -28,6 +28,42 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "20",
+        "date": "2026-10-06",
+        "title": "Algo Analiz: algoritmalara ayrılan nakit, harcama, kullanım ve algoritma bazında K/Z",
+        "problem": "Algoritmaların nakit payından ne kadarının harcandığı, ne kadar kaldığı ve her birinin karlılığı tek yerde görünmüyordu.",
+        "change": (
+            "- Portföyün Son Durumu'nun altında 'Algoritmalara Ayrılan Nakit' tablosu: pay %, bütçe, harcanan "
+            "(açık pozisyonların alış maliyeti), kalan, kullanım %.\n"
+            "- Aynı tabloda algoritma bazında açık K/Z, gerçekleşen K/Z, toplam ve bütçeye göre getiri.\n"
+            "- Modüllere ayrılmayan kısım (Premium Buy Point, Alım-Stop-Alım, elle) ayrı satırda."
+        ),
+        "where": "algo_analiz.module_cash_rows, trade_journal_page._render_module_cash, tests/test_algo_analiz.py",
+        "settings": "Modül sayfalarındaki 'Bu modüle ayrılacak nakit payı (%)'.",
+        "track": "Bir modül alım yaptığında 'Harcanan'ın alış maliyeti kadar arttığı, 'Kalan'ın azaldığı kontrol edilmeli.",
+    },
+    {
+        "id": "19",
+        "date": "2026-10-06",
+        "title": "Algoritmik modüllerin nakit payı alımlar yapıldıkça küçülmüyor",
+        "problem": (
+            "Relative Strength, ORB ve Heikin Ashi Gün İçi modüllerinin payı her taramada Alpaca'daki canlı "
+            "nakdin yüzdesi olarak hesaplanıyordu. 100.000$ nakitle %10 pay 10.000$ ile başlıyor, alımlar "
+            "nakdi 60.000$'a indirince modüle 6.000$ düşüyordu; modülün kendi aldığı hisseler hesaba girmiyordu."
+        ),
+        "change": (
+            "- Modül payı = hesap değeri (nakit + pozisyonlar) × yüzde.\n"
+            "- Modülün kullanılabilir nakdi = pay − modülün elindeki pozisyonların alış maliyeti − bekleyen "
+            "emirler (gerçek nakitle sınırlı). Pozisyon başına tutar da bu paydan hesaplanır.\n"
+            "- Premium Buy Point, modüllerin yalnızca henüz harcanmamış paylarını nakitten düşer.\n"
+            "- Ayar sayfaları pay, alınan hisseler ve kalan tutarı gösterir."
+        ),
+        "where": "module_cash.py, relative_strength_core.py, orb_core.py, heikin_ashi_intraday_core.py, "
+                 "alpaca_buy_points.compute_available_cash_for_buying, ayar sayfaları, tests/test_module_cash.py",
+        "settings": "Her modülün sayfasındaki 'Bu modüle ayrılacak nakit payı (%)'.",
+        "track": "Modül sayfasındaki 'kalan' tutarın, modülün aldığı hisseler kadar azaldığı kontrol edilmeli.",
+    },
+    {
         "id": "18",
         "date": "2026-10-05",
         "title": "Alpaca hesap türü kullanıcı bazlı ayar oldu - Gerçek Para'ya onaylı geçiş, turuncu tema",

@@ -25,7 +25,7 @@ class RelativeStrengthRiskTest(unittest.TestCase):
                 mock.patch.object(rs, "plan_rebalance", return_value=plan), \
                 mock.patch.object(rs, "load_holdings_local", return_value={}), \
                 mock.patch.object(rs, "save_holdings_local"), \
-                mock.patch.object(rs, "compute_available_cash_for_rotation", return_value=50_000.0), \
+                mock.patch.object(rs, "compute_available_cash_for_rotation", return_value=(50_000.0, 50_000.0)), \
                 mock.patch.object(alpaca_buy_points, "load_module_risk_context", return_value=risk):
             result = rs.rebalance(client, "berkakar", self.CFG, {})
         entry = next(c for c in client.calls if c[0] == "market_entry")

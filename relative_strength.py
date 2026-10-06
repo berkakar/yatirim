@@ -20,6 +20,7 @@ from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
+from module_cash import module_cash_caption
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from relative_strength_core import (
     DEFAULT_CASH_ALLOCATION_PCT, DEFAULT_LOOKBACK_WEEKS, DEFAULT_MIN_SCORE_PCT, DEFAULT_TOP_N,
@@ -69,23 +70,20 @@ def render_relative_strength(username: str):
         st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Bu modül, hesabınızın TOPLAM canlı nakdinden (yukarıdaki "
-        "tutar) aşağıda belirlediğiniz yüzdeyi kendine AYIRIR - Premium Buy Point'in kullanabileceği "
-        "nakit, otomatik olarak `toplam nakit × (1 - bu yüzde)` ile sınırlanır (bkz. alpaca_buy_points."
-        "compute_available_cash_for_buying). Yani ikisi de TEK bir nakit havuzundan besleniyor, aynı "
-        "dolarları iki kez harcamaya çalışmazlar. Bu modül devre dışıyken (\"otomatik çalıştır\" "
-        "işaretli değilken) pay 0 kabul edilir - Premium Buy Point tüm nakdi kullanmaya devam eder."
+        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
         min_value=0.0, max_value=100.0,
         value=float(config.get("cash_allocation_pct") or DEFAULT_CASH_ALLOCATION_PCT), step=5.0,
         key="rs_cash_allocation_pct",
-        help="Örn. %30 girilirse, bu modül toplam nakdin %30'unu kullanır, Premium Buy Point kalan "
-             "%70'i - modül devre dışıyken bu yüzde geçersizdir, PBP %100'ü kullanır.",
+        help="Örn. %30 girilirse, bu modülün payı hesap değerinin %30'udur; aldığı hisselerin "
+             "maliyeti bu paydan düşülür. Modül devre dışıyken bu yüzde geçersizdir.",
     )
-    if live_cash is not None and cash_allocation_pct > 0:
-        st.caption(f"Bu ayarla bu modüle düşen tutar: **${live_cash * cash_allocation_pct / 100:,.2f}**")
+    if cash_allocation_pct > 0:
+        caption = module_cash_caption(client, cash_allocation_pct, _load_holdings(GITHUB_REPO, github_token, username).keys())
+        if caption:
+            st.caption(caption)
 
     st.subheader("🌐 Rotasyon Evreni")
     st.caption(

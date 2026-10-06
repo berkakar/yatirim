@@ -18,6 +18,7 @@ from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
+from module_cash import module_cash_caption
 from heikin_ashi_intraday_core import (
     DEFAULT_CASH_ALLOCATION_PCT, DEFAULT_MAX_POSITIONS, EOD_FLATTEN_MINUTES, HA_INTRADAY_DEFAULT_STOP_ALGORITHM,
     NO_NEW_ENTRY_MINUTES, config_path, excluded_symbols, holdings_path, scan_candidates,
@@ -101,10 +102,7 @@ def render_heikin_ashi_intraday(username: str):
         st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Relative Strength Rotasyonu ve ORB ile aynı ilke: bu modül "
-        "hesabınızın TOPLAM canlı nakdinden bir yüzde AYIRIR, Premium Buy Point'in kullanabileceği nakit "
-        "buna göre otomatik küçülür. Bu pay, en fazla pozisyon sayısına eşit bölünür. Modül devre dışıyken "
-        "pay 0 kabul edilir."
+        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
@@ -117,9 +115,12 @@ def render_heikin_ashi_intraday(username: str):
         value=int(config.get("max_positions") or DEFAULT_MAX_POSITIONS), step=1, key="hai_max_positions",
         help="Nakit payı bu sayıya eşit bölünür; her yarım saatlik taramada sadece boş slot kadar yeni alım yapılır.",
     )
-    if live_cash is not None and cash_allocation_pct > 0:
-        total = live_cash * cash_allocation_pct / 100
-        st.caption(f"Bu ayarla modüle düşen tutar: **${total:,.2f}** · pozisyon başına: **${total / max_positions:,.2f}**")
+    if cash_allocation_pct > 0:
+        caption = module_cash_caption(
+            client, cash_allocation_pct, _load_holdings(GITHUB_REPO, github_token, username).keys(), int(max_positions),
+        )
+        if caption:
+            st.caption(caption)
 
     st.subheader("🌐 Tarama Evreni")
     st.caption(

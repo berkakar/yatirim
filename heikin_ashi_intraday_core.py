@@ -26,10 +26,11 @@ Mimari kararlar orb_core.py'nin modül üstü notlarıyla birebir aynı:
   2. Premium Buy Point watchlist'i, Relative Strength Rotasyonu'nun ve
      ORB'un elindeki semboller bu modülün evreninden HARİÇ TUTULUR; RS ve
      ORB de kendi taraflarında bu modülün elindekileri hariç tutar.
-  3. Nakit TEK havuzdan: toplam canlı nakdin cash_allocation_pct'i bu
-     modülündür - alpaca_buy_points.compute_available_cash_for_buying bu
-     payı Premium Buy Point'in hesabından düşer. Pay max_positions slota
-     eşit bölünür.
+  3. Nakit TEK havuzdan: hesap değerinin (equity) cash_allocation_pct'i bu
+     modülündür; elde tutulan pozisyonların alış maliyeti bu paydan düşülür
+     (bkz. module_cash.py). alpaca_buy_points.compute_available_cash_for_buying
+     payın harcanmamış kısmını Premium Buy Point'in hesabından düşer. Pay
+     max_positions slota eşit bölünür.
   4. Koruyucu stop'u alpaca_trailing_stop.py'nin 5 dakikalık botu yönetir
      (resolve_stop_algorithm_for_position bu modülün holdings'ini tanır) -
      "Heikin Ashi Çıkışı" stop'u çıkış sinyalinde stopu kapanışın hemen
@@ -49,6 +50,7 @@ from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import close_position_market, get_bars_for_timeframe, place_protective_stop
 from buy_algorithms import heikin_ashi_stoch_signal
 from heikin_ashi import SMA_PERIOD, long_exit_reason, stochastic_series
+from module_cash import module_available_cash
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import HEIKIN_ASHI_EXIT_RED_CANDLES, STOP_ALGORITHMS, resolve_kwargs
@@ -318,11 +320,10 @@ def run_pass(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict
     candidates = scan_candidates(client, universe)
     selected = candidates[:free_slots]
 
-    account_cash = float(client.get_account()["cash"])
-    target_per_position = account_cash * (cash_allocation_pct / 100) / max_positions
-    # Elde tutulanların giriş maliyeti bu modülün payından düşülür.
-    used = sum(float(i.get("qty", 0)) * float(i.get("entry_price", 0)) for i in holdings.values())
-    available_cash = max(0.0, min(account_cash, account_cash * cash_allocation_pct / 100 - used))
+    # [2026-10-06] Pay canlı nakitten değil hesap değerinden hesaplanır; elde
+    # tutulanların alış maliyeti paydan düşülür (bkz. module_cash.py).
+    budget, available_cash = module_available_cash(client, cash_allocation_pct, holdings.keys(), ORDER_TAG_PREFIX)
+    target_per_position = budget / max_positions
 
     # [2026-09-28 · Öneri 5] Premium Buy Point'in risk ayarları (portfolio_config
     # "risk_sizing") bu modülün girişlerine de TAVAN olarak uygulanır. Stop,

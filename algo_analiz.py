@@ -4,6 +4,7 @@ Sayfa (trade_journal_page.py) sırasıyla şunları gösterir:
     1. Portföyün son durumu: ilk giriş (yatırılan sermaye), güncel değer, K/Z
     2. Karlılık: açık pozisyonlar şimdi satılırsa / stoplar devreye girerse
        oluşacak K/Z ve kapanan pozisyonlardan gerçekleşen K/Z
+    1b. Algoritmalara ayrılan nakit: pay, harcanan, kalan, kullanım ve K/Z
     3. Algoritma × stop algoritması bazında karlılık
     4. Hisse hareketleri tablosu
     5. Çıkış sebebi, çıkış ve giriş seans dilimi istatistikleri
@@ -26,6 +27,7 @@ diğer her şey (Premium Buy Point, Alım-Stop-Alım, elle) PBP portföy ayarıy
 kapalı işlemler yeni algoritma altında görünür.
 """
 
+from module_cash import module_budget, module_used_cash
 from stop_tags import parse_shield_real_stop
 from trade_journal_analysis import STATUS_OPEN, Record
 
@@ -149,6 +151,68 @@ def portfolio_snapshot(account: dict, initial_capital: float | None) -> dict:
         "day_pl": equity - last_equity if last_equity else None,
         "day_pl_pct": (equity / last_equity - 1) * 100 if last_equity else None,
     }
+
+
+OTHER_ALGOS_LABEL = "Premium Buy Point + diğerleri"
+
+
+def module_cash_rows(account: dict, positions: list[dict], modules: list[tuple[str, float, set]],
+                     records: list[Record]) -> list[dict]:
+    """Algoritmalara ayrılan nakit tablosu (bkz. module_cash.py).
+
+    modules: [(modül etiketi, cash_allocation_pct - devre dışıysa 0, modülün
+    tuttuğu semboller), ...]. Her modül için bütçe = equity x yüzde, harcanan
+    = elindeki açık pozisyonların alış maliyeti, kalan = bütçe - harcanan.
+    Son satır modüllere ayrılmayan kısım: Premium Buy Point, Alım-Stop-Alım ve
+    elle işlemler - bütçesi equity'nin kalanı, harcananı modüllere ait olmayan
+    pozisyonların maliyeti, kalanı nakitten modüllerin harcanmamış paylarının
+    düşülmüş hali (PBP'nin kullanabileceği nakit).
+
+    K/Z: açık pozisyon modülün tuttuğu sembolse o modüle, kapalı işlem giriş
+    emrinin etiketindeki algoritmaya yazılır; geri kalan her şey son satıra."""
+    held_by = {}
+    for label, _, symbols in modules:
+        for s in symbols:
+            held_by.setdefault(s, label)
+    labels = [m[0] for m in modules]
+
+    def owner(r: Record) -> str:
+        if r.status == STATUS_OPEN and r.symbol in held_by:
+            return held_by[r.symbol]
+        return r.algorithm if r.algorithm in labels else OTHER_ALGOS_LABEL
+
+    pnl: dict[str, dict] = {}
+    for r in records:
+        p = pnl.setdefault(owner(r), {"open": 0, "closed": 0, "unrealized": 0.0, "realized": 0.0})
+        p["open" if r.status == STATUS_OPEN else "closed"] += 1
+        p["unrealized"] += r.unrealized
+        p["realized"] += r.realized
+
+    def row(label, pct, budget, spent, remaining):
+        p = pnl.get(label, {"open": 0, "closed": 0, "unrealized": 0.0, "realized": 0.0})
+        total = p["unrealized"] + p["realized"]
+        return {
+            "label": label, "pct": pct, "budget": budget, "spent": spent, "remaining": remaining,
+            "usage_pct": spent / budget * 100 if budget > 0 else None,
+            "open": p["open"], "closed": p["closed"],
+            "unrealized": p["unrealized"], "realized": p["realized"], "total": total,
+            "return_pct": total / budget * 100 if budget > 0 else None,
+        }
+
+    rows = []
+    unspent = 0.0
+    for label, pct, symbols in modules:
+        budget = module_budget(account, pct)
+        spent = module_used_cash(positions, symbols)
+        unspent += max(0.0, budget - spent)
+        rows.append(row(label, pct, budget, spent, max(0.0, budget - spent)))
+
+    equity = _f(account.get("equity")) or 0.0
+    cash = _f(account.get("cash")) or 0.0
+    other_pct = max(0.0, 100.0 - sum(m[1] for m in modules))
+    other_spent = module_used_cash(positions, {p.get("symbol") for p in positions} - set(held_by))
+    rows.append(row(OTHER_ALGOS_LABEL, other_pct, equity * other_pct / 100, other_spent, max(0.0, cash - unspent)))
+    return rows
 
 
 def count_by(records: list[Record], attr: str) -> dict[str, int]:

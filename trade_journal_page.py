@@ -3,6 +3,7 @@
 İki sekme:
   - 🧠 Algo Analiz, yukarıdan aşağıya:
       1. Portföyün son durumu: ilk giriş (yatırılan sermaye), güncel değer, K/Z
+         ve altında algoritmalara ayrılan nakit (pay, harcanan, kalan, K/Z)
       2. Karlılık: açık pozisyonlar şimdi satılırsa / stoplar devreye girerse
          ve kapanan pozisyonlardan gerçekleşen K/Z
       3. Algoritma ve birlikte kullanılan stop loss algoritmasının karlılığı
@@ -21,7 +22,8 @@ import streamlit as st
 
 import storage
 from algo_analiz import (
-    apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+    OTHER_ALGOS_LABEL, apply_stop_scenario, count_by, format_stop_moves, module_cash_rows, open_stop_levels, portfolio_snapshot,
+    resolve_stop_algorithm_id, scenario_totals,
 )
 from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
@@ -115,6 +117,23 @@ def _stop_configs(username: str) -> tuple[dict, dict[str, str], dict[str, set]]:
         module_algos[label] = core.resolve_stop_algorithm(_read_setting(core.config_path(username), {}) or {})
         module_holdings[label] = set((_read_setting(core.holdings_path(username), {}) or {}).keys())
     return pbp, module_algos, module_holdings
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _module_allocations(username: str) -> list[tuple[str, float, set]]:
+    """(modül etiketi, nakit payı % - devre dışıysa 0, tuttuğu semboller) -
+    canlı botların get_cash_allocation_pct'iyle aynı kural."""
+    import heikin_ashi_intraday_core
+    import orb_core
+    import relative_strength_core
+
+    out = []
+    for prefix, core in (("rs", relative_strength_core), ("orb", orb_core), ("hai", heikin_ashi_intraday_core)):
+        cfg = _read_setting(core.config_path(username), {}) or {}
+        pct = float(cfg.get("cash_allocation_pct") or 0.0) if cfg.get("enabled") else 0.0
+        symbols = set((_read_setting(core.holdings_path(username), {}) or {}).keys())
+        out.append((MODULE_LABELS[prefix], pct, symbols))
+    return out
 
 
 def _rules_since(username: str) -> tuple[datetime | None, str | None]:
@@ -211,6 +230,32 @@ def _render_portfolio(snap: dict, n_positions: int):
                 help="Güncel portföy değeri − ilk giriş.")
     m[3].metric("Nakit / Pozisyon", _md(f"{snap['cash']:,.0f}$ / {snap['long_value']:,.0f}$"),
                 help=f"{n_positions} açık pozisyon.")
+
+
+def _render_module_cash(rows: list[dict]):
+    st.markdown("#### 🧮 Algoritmalara Ayrılan Nakit")
+    shown = [r for r in rows if r["label"] == OTHER_ALGOS_LABEL or r["pct"] > 0 or r["spent"] > 0 or r["open"] or r["closed"]]
+    df = pd.DataFrame([{
+        "Algoritma": r["label"],
+        "Pay %": round(r["pct"], 2),
+        "Bütçe $": round(r["budget"], 2),
+        "Harcanan $": round(r["spent"], 2),
+        "Kalan $": round(r["remaining"], 2),
+        "Kullanım %": round(r["usage_pct"], 2) if r["usage_pct"] is not None else None,
+        "Açık": r["open"],
+        "Kapalı": r["closed"],
+        "Açık K/Z $": round(r["unrealized"], 2),
+        "Gerçekleşen $": round(r["realized"], 2),
+        "Toplam K/Z $": round(r["total"], 2),
+        "Getiri %": round(r["return_pct"], 2) if r["return_pct"] is not None else None,
+    } for r in shown])
+    _table(df, ["Açık K/Z $", "Gerçekleşen $", "Toplam K/Z $", "Getiri %"])
+    st.caption(
+        "Bütçe = hesap değeri × algoritmanın nakit payı. Harcanan = algoritmanın elindeki açık pozisyonların alış "
+        "maliyeti; Kalan = Bütçe − Harcanan; Kullanım = Harcanan / Bütçe. Son satır modüllere ayrılmayan kısım: "
+        "kalanı, nakitten modüllerin harcanmamış payları düşüldükten sonra Premium Buy Point'in kullanabileceği "
+        "nakittir. Gerçekleşen K/Z seçili penceredeki kapalı işlemlerden; Getiri = Toplam K/Z / Bütçe."
+    )
 
 
 # ------------------------------------------------------------------------------
@@ -492,6 +537,7 @@ def _render_algo_analiz(username: str):
 
     snap = portfolio_snapshot(account, _initial_capital(username))
     _render_portfolio(snap, len(positions))
+    module_cash_slot = st.container()
     freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT "
                       "(hesap/pozisyon/stoplar 1 dk, emir geçmişi 5 dk önbellek).")
 
@@ -547,6 +593,14 @@ def _render_algo_analiz(username: str):
             )
         else:
             st.success(f"🧊 Mevcut kural sürümü ile {n_rules} işlem kapandı - kurallar değerlendirilebilir.")
+
+    with module_cash_slot:
+        try:
+            closed_in_scope = [r for r in records if r.status != STATUS_OPEN]
+            _render_module_cash(module_cash_rows(account, positions, _module_allocations(username),
+                                                 all_open + closed_in_scope))
+        except Exception as e:
+            st.warning(f"Algoritmalara ayrılan nakit hesaplanamadı: {e}")
 
     _render_profitability(snap, all_open, records)
     st.divider()

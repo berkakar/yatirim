@@ -156,8 +156,12 @@ from alpaca_trailing_stop import (
 )
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 from heikin_ashi_intraday_core import get_cash_allocation_pct as get_ha_cash_allocation_pct
+from heikin_ashi_intraday_core import load_holdings_local as load_ha_holdings
+from module_cash import unspent_module_reserve
 from orb_core import get_cash_allocation_pct as get_orb_cash_allocation_pct
+from orb_core import load_holdings_local as load_orb_holdings
 from relative_strength_core import get_cash_allocation_pct as get_rs_cash_allocation_pct
+from relative_strength_core import load_holdings_local as load_rs_holdings
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, resolve_kwargs
 from risk_sizing import load_risk_settings, position_risk, remaining_portfolio_risk, risk_based_qty, top_up_qty_cap
 from stop_tags import parse_shield_real_stop, stop_tag
@@ -988,16 +992,21 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     önler.
 
     Relative Strength Rotasyonu, Açılış Aralığı Kırılımı (ORB) VE Heikin Ashi Gün İçi modülleri
-    etkinleştirilmişse (relative_strength_core.get_cash_allocation_pct /
-    orb_core.get_cash_allocation_pct), o modüllere ayrılan yüzdeler bu
-    hesaplamadan DÜŞÜLÜR - aksi halde bağımsız sistemler aynı gerçek nakti
-    birbirinden habersiz harcamaya çalışırdı; hepsi TEK bir nakit havuzundan
-    (bu fonksiyonun okuduğu AYNI canlı bakiye) besleniyor. Bir modül hiç
-    açılmamışsa/devre dışıysa payı 0'dır, davranış o modül hiç yokmuş gibi
-    aynı kalır (geriye dönük uyumlu)."""
-    reserved_pct = (get_rs_cash_allocation_pct("berkakar") + get_orb_cash_allocation_pct("berkakar")
-                    + get_ha_cash_allocation_pct("berkakar"))
-    cash = float(client.get_account()["cash"]) * (1 - min(reserved_pct, 100.0) / 100)
+    etkinleştirilmişse, o modüllerin HENÜZ HARCANMAMIŞ payları (hesap
+    değeri x yüzde - modülün elindeki pozisyonların alış maliyeti, bkz.
+    module_cash.py) nakitten DÜŞÜLÜR - aksi halde bağımsız sistemler aynı
+    gerçek nakti birbirinden habersiz harcamaya çalışırdı. Modülün zaten
+    hisseye dönmüş kısmı nakitte yer almadığı için ikinci kez düşülmez. Bir
+    modül hiç açılmamışsa/devre dışıysa payı 0'dır, davranış o modül hiç
+    yokmuş gibi aynı kalır (geriye dönük uyumlu)."""
+    modules = [
+        (get_rs_cash_allocation_pct("berkakar"), set(load_rs_holdings("berkakar"))),
+        (get_orb_cash_allocation_pct("berkakar"), set(load_orb_holdings("berkakar"))),
+        (get_ha_cash_allocation_pct("berkakar"), set(load_ha_holdings("berkakar"))),
+    ]
+    account = client.get_account()
+    positions = client.get_all_positions() if any(pct > 0 for pct, _ in modules) else []
+    cash = float(account["cash"]) - unspent_module_reserve(account, positions, modules)
     reserved = sum(
         float(o["qty"]) * float(o["limit_price"])
         for o in client.get_open_orders()
