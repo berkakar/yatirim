@@ -61,7 +61,8 @@ SECRETS="$BASE/.streamlit/secrets.toml"
 if [ ! -f "$SECRETS" ]; then
   cat > "$SECRETS" <<'EOF'
 # Streamlit Cloud → uygulamanız → Settings → Secrets içeriğinin AYNISINI buraya yapıştırın.
-# (credentials, cookie, alpaca.<kullanıcı>, GITHUB_TOKEN, TELEGRAM_BOT_TOKEN)
+# ([cookie], GITHUB_TOKEN, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID). Kullanıcılar ve Alpaca
+# anahtarları veritabanında - eski [credentials]/[alpaca] için: users.sh tasi
 EOF
   echo "    Şablon oluşturuldu: $SECRETS (doldurulması gerekiyor)"
 fi

@@ -5,7 +5,8 @@ from unittest import mock
 
 import alpaca_account
 import orb_scan_runner
-from alpaca_account import LIVE, PAPER, build_job_client, load_account_mode, save_account_mode, secrets_keys
+import alpaca_keys
+from alpaca_account import LIVE, PAPER, build_job_client, load_account_mode, save_account_mode, user_keys
 from alpaca_client import DEFAULT_TRADING_URL, AlpacaClient, is_paper_url
 
 PAPER_ENV = {"APCA_API_KEY_ID": "PKPAPER", "APCA_API_SECRET_KEY": "paper-secret"}
@@ -45,12 +46,24 @@ class AccountModeSettingTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             save_account_mode("berkakar", "demo")
 
-    def test_live_secrets_never_fall_back_to_paper_keys(self):
-        user = {"key_id": "PK", "secret_key": "s"}
-        self.assertEqual(secrets_keys(user, PAPER), ("PK", "s"))
-        self.assertEqual(secrets_keys(user, LIVE), (None, None))
-        user.update(live_key_id="AK", live_secret_key="ls")
-        self.assertEqual(secrets_keys(user, LIVE), ("AK", "ls"))
+    def test_live_keys_never_fall_back_to_paper_keys(self):
+        with mock.patch.dict(os.environ, {alpaca_keys.ENV_KEY: alpaca_keys.generate_key()}):
+            alpaca_keys.set_keys("berkakar", PAPER, "PK", "s")
+            self.assertEqual(user_keys("berkakar", PAPER), ("PK", "s"))
+            self.assertEqual(user_keys("berkakar", LIVE), (None, None))
+            alpaca_keys.set_keys("berkakar", LIVE, "AK", "ls")
+            self.assertEqual(user_keys("berkakar", LIVE), ("AK", "ls"))
+
+    def test_job_client_prefers_db_keys_over_env(self):
+        with mock.patch.dict(os.environ, {**PAPER_ENV, **LIVE_ENV, alpaca_keys.ENV_KEY: alpaca_keys.generate_key()}):
+            alpaca_keys.set_keys("berkakar", PAPER, "PKDB", "db-secret")
+            client = build_job_client("berkakar")
+            self.assertEqual(client.headers["APCA-API-KEY-ID"], "PKDB")
+            save_account_mode("berkakar", LIVE)
+            # Gerçek Para anahtarı veritabanında yoksa ortam değişkenine düşülür, paper DB anahtarına değil.
+            client = build_job_client("berkakar")
+            self.assertFalse(client.is_paper)
+            self.assertEqual(client.headers["APCA-API-KEY-ID"], "AKLIVE")
 
     def test_job_client_follows_setting(self):
         with mock.patch.dict(os.environ, {**PAPER_ENV, **LIVE_ENV}):

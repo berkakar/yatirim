@@ -10,11 +10,12 @@ adresi ve anahtarları buradan alır, böylece arayüzün gösterdiği hesap ile
 botların işlem yaptığı hesap hep aynıdır:
 
 - Sanal Para: https://paper-api.alpaca.markets/v2
-  arayüz: secrets.toml [alpaca.<kullanıcı>] key_id / secret_key
-  işler:  APCA_API_KEY_ID / APCA_API_SECRET_KEY
 - Gerçek Para: https://api.alpaca.markets/v2
-  arayüz: secrets.toml [alpaca.<kullanıcı>] live_key_id / live_secret_key
-  işler:  APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY
+
+Anahtarlar kullanıcının "👤 Hesabım" sayfasında girdiği, veritabanında şifreli
+duran anahtarlardır (bkz. alpaca_keys.py) - arayüz de işler de bunları kullanır.
+İşler, veritabanında kayıt yoksa (ör. GitHub Actions) ortam değişkenlerine düşer:
+APCA_API_KEY_ID / APCA_API_SECRET_KEY ve APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY.
 
 Gerçek Para seçiliyken gerçek hesap anahtarları tanımlı değilse anahtar
 döndürülmez / iş hata verir - asla sessizce paper hesaba düşülmez.
@@ -22,6 +23,7 @@ döndürülmez / iş hata verir - asla sessizce paper hesaba düşülmez.
 import os
 from datetime import datetime, timezone
 
+import alpaca_keys
 import storage
 from alpaca_client import DEFAULT_DATA_URL, AlpacaClient
 
@@ -86,35 +88,36 @@ def trading_url(mode: str) -> str:
     return TRADING_URLS[mode]
 
 
-def secrets_keys(user_secrets: dict, mode: str) -> tuple[str | None, str | None]:
-    """secrets.toml [alpaca.<kullanıcı>] bölümünden seçili hesap türünün
-    anahtarları. Gerçek Para için paper anahtarlarına geri düşülmez."""
-    user_secrets = user_secrets or {}
-    if mode == LIVE:
-        return user_secrets.get("live_key_id"), user_secrets.get("live_secret_key")
-    return user_secrets.get("key_id"), user_secrets.get("secret_key")
+def user_keys(username: str, mode: str) -> tuple[str | None, str | None]:
+    """Kullanıcının veritabanındaki (Hesabım sayfasında girilen) anahtarları.
+    Gerçek Para için paper anahtarlarına geri düşülmez."""
+    return alpaca_keys.get_keys(username, mode)
 
 
-def has_live_keys(user_secrets: dict) -> bool:
-    return all(secrets_keys(user_secrets, LIVE))
+def has_live_keys(username: str) -> bool:
+    return alpaca_keys.has_keys(username, LIVE)
 
 
 def build_job_client(username: str) -> AlpacaClient:
     """Sunucudaki zamanlanmış işlerin Alpaca istemcisi - adres ve anahtarlar
-    kullanıcının hesap türü ayarından. Gerçek Para seçili ama gerçek hesap
-    anahtarları ortamda yoksa hata verir (iş durur, run_job.sh Telegram'a
+    kullanıcının hesap türü ayarından. Anahtarlar önce veritabanından (Hesabım
+    sayfası), yoksa ortam değişkenlerinden alınır. Gerçek Para seçili ama gerçek
+    hesap anahtarı hiçbir yerde yoksa hata verir (iş durur, run_job.sh Telegram'a
     bildirir) - paper hesapla devam etmez."""
     mode = load_account_mode(username)
-    if mode == LIVE:
-        key_id = os.environ.get("APCA_LIVE_API_KEY_ID")
-        secret_key = os.environ.get("APCA_LIVE_API_SECRET_KEY")
-        if not key_id or not secret_key:
-            raise RuntimeError(
-                f"{username} için Alpaca hesap türü 'Gerçek Para' ama APCA_LIVE_API_KEY_ID / "
-                "APCA_LIVE_API_SECRET_KEY tanımlı değil - iş çalıştırılmadı."
-            )
-    else:
-        key_id = os.environ["APCA_API_KEY_ID"]
-        secret_key = os.environ["APCA_API_SECRET_KEY"]
+    key_id, secret_key = user_keys(username, mode)
+    if not (key_id and secret_key):
+        if mode == LIVE:
+            key_id = os.environ.get("APCA_LIVE_API_KEY_ID")
+            secret_key = os.environ.get("APCA_LIVE_API_SECRET_KEY")
+            if not key_id or not secret_key:
+                raise RuntimeError(
+                    f"{username} için Alpaca hesap türü 'Gerçek Para' ama gerçek hesap anahtarı ne "
+                    "Hesabım sayfasında ne de APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY'de tanımlı - "
+                    "iş çalıştırılmadı."
+                )
+        else:
+            key_id = os.environ["APCA_API_KEY_ID"]
+            secret_key = os.environ["APCA_API_SECRET_KEY"]
     data_url = os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL)
     return AlpacaClient(key_id, secret_key, trading_url(mode), data_url)

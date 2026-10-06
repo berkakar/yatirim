@@ -87,6 +87,10 @@ from stop_loss_settings import render_stop_loss_settings
 from trade_journal_page import render_algo_analiz
 from version_info import get_version_label
 from connection_status import check_all_connections
+import user_registry
+from account_ui import (
+    enforce_active_session, render_auth_screen, render_forced_password_change, render_my_account, render_user_admin,
+)
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
@@ -108,6 +112,7 @@ MODULE_GROUPS = {
         "🛡️ Stop Loss Ayarları", "🧠 Algo Analiz",
     ],
     "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
+    "👤 Hesap": ["👤 Hesabım"],  # yöneticilere girişten sonra "🛡️ Kullanıcı Yönetimi" eklenir
 }
 # Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
 # değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
@@ -169,54 +174,53 @@ inject_css()
 # ------------------------------------------------------------------------------
 # GİRİŞ (AUTHENTICATION)
 # ------------------------------------------------------------------------------
-_credentials = {"usernames": {u: dict(v) for u, v in st.secrets["credentials"]["usernames"].items()}}
+# Kullanıcılar veritabanında (user_registry.py); secrets.toml'da yalnızca giriş
+# çerezinin ayarları ([cookie]) kalır. Kayıt, onay ve şifre ekranları account_ui.py'de.
+if not storage.enabled():
+    st.error("Kullanıcı girişi veritabanı gerektiriyor: YATIRIM_DB_PATH tanımlı değil (bkz. deploy/README.md).")
+    st.stop()
+
 authenticator = stauth.Authenticate(
-    _credentials,
+    user_registry.active_credentials(),
     st.secrets["cookie"]["name"],
     st.secrets["cookie"]["key"],
     # secrets.toml'da tırnaklı ("30") yazılırsa da çalışsın - streamlit-authenticator
     # bunu timedelta(days=...) ile kullanıyor, metin gelirse girişte TypeError verir.
     float(st.secrets["cookie"]["expiry_days"]),
+    auto_hash=False,  # veritabanındaki şifreler zaten bcrypt
 )
 _LOGO_PATH = "assets/logo.jpg"
 _LOGIN_BOX_WIDTH = 380
-_not_authenticated = st.session_state.get("authentication_status") is not True
-if _not_authenticated and os.path.exists(_LOGO_PATH):
-    # Giriş formu (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
-    # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
-    st.markdown(
-        f"""
-        <style>
-        div[data-testid="stForm"] {{
-            max-width: {_LOGIN_BOX_WIDTH}px;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-    _login_col, _logo_col = st.columns([1, 1], gap="large")
-    with _login_col:
-        render_mode_switcher(key="login_theme_switcher")
-        authenticator.login(location="main")
-    with _logo_col:
-        st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
-else:
-    if _not_authenticated:
-        render_mode_switcher(key="login_theme_switcher")
-    authenticator.login(location="main")
-
-_auth_status = st.session_state.get("authentication_status")
-if _auth_status is False:
-    st.error("❌ Kullanıcı adı veya şifre hatalı.")
-    st.stop()
-elif _auth_status is None:
-    st.warning("🔒 Devam etmek için giriş yapın.")
-    st.stop()
+if st.session_state.get("authentication_status") is not True:
+    if os.path.exists(_LOGO_PATH):
+        # Giriş/kayıt formları (st.form) varsayılan olarak kolonun tüm genişliğine yayılır -
+        # logoyla aynı boyutta görünmesi için ikisini de aynı sabit genişliğe sabitliyoruz.
+        st.markdown(
+            f"""
+            <style>
+            div[data-testid="stForm"] {{
+                max-width: {_LOGIN_BOX_WIDTH}px;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+        _login_col, _logo_col = st.columns([1, 1], gap="large")
+        with _logo_col:
+            st.image(_LOGO_PATH, width=_LOGIN_BOX_WIDTH)
+        with _login_col:
+            render_auth_screen(authenticator, lambda: render_mode_switcher(key="login_theme_switcher"))
+    else:
+        render_auth_screen(authenticator, lambda: render_mode_switcher(key="login_theme_switcher"))
 
 username = st.session_state["username"]
+current_user = enforce_active_session(authenticator, username)
+render_forced_password_change(current_user)
 
 st.title("📈 Yatırım Terminali")
 authenticator.logout("🚪 Çıkış Yap", "sidebar")
+if current_user["role"] == user_registry.ADMIN:
+    MODULE_GROUPS["👤 Hesap"].append("🛡️ Kullanıcı Yönetimi")
 
 # ------------------------------------------------------------------------------
 # DİNAMİK LİSTE YÜKLEME VE SESSION STATE
@@ -454,7 +458,8 @@ if module == NAV_HOME:
     elif has_alpaca_account(username):
         missing_keys_warning(username)
     else:
-        st.info(f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde `[alpaca.{username}]`).")
+        st.info("Alpaca hesabınız bağlı değil - **👤 Hesap → 👤 Hesabım** sayfasından Sanal Para ve "
+                "Gerçek Para anahtarlarınızı girebilirsiniz.")
 
     st.divider()
     st.subheader("🔌 Bağlantılar")
@@ -1678,6 +1683,12 @@ elif module == "🧠 Algo Analiz":
 # ==============================================================================
 elif module == "🔪 Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
+
+elif module == "👤 Hesabım":
+    render_my_account(current_user)
+
+elif module == "🛡️ Kullanıcı Yönetimi":
+    render_user_admin(username)
 
 # ==============================================================================
 # YAZILIM SÜRÜMÜ (sol menünün en altı)
