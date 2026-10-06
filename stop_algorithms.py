@@ -61,6 +61,7 @@ dosyanın sonundaki bölüm notlarına bakın):
 """
 
 import inspect
+import statistics
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Callable
@@ -610,13 +611,40 @@ ATR_VOL_BREAKEVEN_R = 1.0
 ATR_VOL_BREAKEVEN_BUFFER_ATR = 0.1
 ATR_VOL_TRAIL_START_R = 2.0
 ATR_VOL_TRAIL_ATR_MULT = 3.0
+# [2026-10-06 · MDB incelemesi] İkisi de varsayılan KAPALI (0) - backtest
+# sonucuna göre açılacak (scripts/compare_atr_trail_variants.py).
+#   atr_gap_cap: ATR penceresindeki her günün gerçek aralığı, pencerenin medyan
+#     gerçek aralığının en fazla bu katı sayılır. Kazanç açıklaması gibi tek
+#     seferlik bir boşluk (MDB 28.09: 110$ aralık, normal ~15$) ATR'yi - ve
+#     ondan türeyen 1R'yi ve chandelier mesafesini - iki hafta şişirmesin.
+#   trail_tighten_per_r: chandelier çarpanı, trail_start_r'nin ötesindeki her
+#     R kâr için bu kadar daralır; trail_min_atr_mult'ın altına inmez.
+ATR_VOL_GAP_CAP = 0.0
+ATR_VOL_TRAIL_TIGHTEN_PER_R = 0.0
+ATR_VOL_TRAIL_MIN_ATR_MULT = 2.0
 
 
-def _atr_from_context(bars: list[Bar] | None, history_bars: list[Bar] | None, atr_period: int) -> float | None:
+def gap_capped_atr(bars: list[Bar] | None, period: int, gap_cap: float = 0.0) -> float | None:
+    """atr() ile aynı; gap_cap > 0 ise her barın gerçek aralığı pencerenin
+    medyan gerçek aralığının gap_cap katıyla sınırlanır (bkz. ATR_VOL_GAP_CAP)."""
+    if not bars:
+        return None
+    if gap_cap <= 0:
+        return atr(bars, period)
+    if len(bars) < period + 1:
+        return None
+    window = bars[-(period + 1):]
+    true_ranges = [max(cur.h - cur.l, abs(cur.h - prev.c), abs(cur.l - prev.c)) for prev, cur in zip(window, window[1:])]
+    limit = gap_cap * statistics.median(true_ranges)
+    return sum(min(tr, limit) for tr in true_ranges) / len(true_ranges)
+
+
+def _atr_from_context(bars: list[Bar] | None, history_bars: list[Bar] | None, atr_period: int,
+                      gap_cap: float = 0.0) -> float | None:
     """history_bars (giriş öncesini de içeren) varsa ATR ondan, yoksa bars'tan."""
     for source in (history_bars, bars):
         if source:
-            value = atr(source, atr_period)
+            value = gap_capped_atr(source, atr_period, gap_cap)
             if value is not None:
                 return value
     return None
@@ -626,10 +654,11 @@ def atr_volatility_initial_stop(
     entry_price: float, side: str, bars: list[Bar] | None = None,
     initial_atr_mult: float = ATR_VOL_INITIAL_ATR_MULT, atr_period: int = ATR_PERIOD,
     max_stop_pct: float = ATR_VOL_MAX_STOP_PCT, fallback_pct: float = ATR_VOL_FALLBACK_PCT,
+    atr_gap_cap: float = ATR_VOL_GAP_CAP,
 ) -> float:
     """giriş - initial_atr_mult x ATR (short için +). ATR hesaplanamazsa
     (bars yok / yetersiz) fallback_pct; mesafe max_stop_pct ile sınırlı."""
-    atr_value = atr(bars, atr_period) if bars else None
+    atr_value = gap_capped_atr(bars, atr_period, atr_gap_cap)
     distance = initial_atr_mult * atr_value if atr_value else entry_price * fallback_pct
     distance = min(distance, entry_price * max_stop_pct)
     return entry_price - distance if side == "long" else entry_price + distance
@@ -645,6 +674,9 @@ def atr_volatility_trail(
     breakeven_buffer_atr: float = ATR_VOL_BREAKEVEN_BUFFER_ATR,
     trail_start_r: float = ATR_VOL_TRAIL_START_R,
     trail_atr_mult: float = ATR_VOL_TRAIL_ATR_MULT,
+    atr_gap_cap: float = ATR_VOL_GAP_CAP,
+    trail_tighten_per_r: float = ATR_VOL_TRAIL_TIGHTEN_PER_R,
+    trail_min_atr_mult: float = ATR_VOL_TRAIL_MIN_ATR_MULT,
 ) -> StopDecision | None:
     """R bazlı breakeven + chandelier trail - bkz. bölüm notu. Breakeven
     kararı KAPANMIŞ bara göre verilir (oluşmakta olan barın anlık iğnesi
@@ -654,7 +686,7 @@ def atr_volatility_trail(
         return None
     side = ctx.side
     last_price = ctx.bars[-1].c
-    atr_value = _atr_from_context(ctx.bars, ctx.history_bars, atr_period)
+    atr_value = _atr_from_context(ctx.bars, ctx.history_bars, atr_period, atr_gap_cap)
 
     if ctx.initial_stop_price is not None and ctx.initial_stop_price != ctx.entry_price:
         one_r = abs(ctx.entry_price - ctx.initial_stop_price)
@@ -681,7 +713,11 @@ def atr_volatility_trail(
         extreme = min(b.l for b in ctx.bars)
         reached = ctx.entry_price - extreme >= trail_start_r * one_r
     if reached and atr_value is not None:
-        candidates.append((extreme - sign * trail_atr_mult * atr_value, f"chandelier ({trail_atr_mult:g}xATR)"))
+        k = trail_atr_mult
+        if trail_tighten_per_r > 0:
+            mfe_r = sign * (extreme - ctx.entry_price) / one_r
+            k = max(trail_min_atr_mult, trail_atr_mult - trail_tighten_per_r * (mfe_r - trail_start_r))
+        candidates.append((extreme - sign * k * atr_value, f"chandelier ({round(k, 2):g}xATR)"))
 
     valid = [c for c in candidates if (c[0] < last_price if side == "long" else c[0] > last_price)]
     if not valid:
