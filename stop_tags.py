@@ -46,7 +46,13 @@ REASON_LABELS = {
     "trail": "Trail (diğer)",
     "shield": "Açılış kalkanı (felaket stopu)",
     "shieldexit": "Açılış kalkanı sonrası çıkış",
+    "extguard": "Seans dışı acil çıkış (limit)",
 }
+
+# [2026-10-06] Seans dışı guard'ın acil limit-sell emrinin etiket kodu
+# (stop_tag(EXT_GUARD_CODE, sembol)) - sahipsiz emir temizliği bu emri
+# tanıyıp pozisyonu kalmamışsa iptal edebilsin diye.
+EXT_GUARD_CODE = "extguard"
 
 
 def reason_code(reason: str) -> str:

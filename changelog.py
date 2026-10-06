@@ -28,6 +28,32 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "22",
+        "date": "2026-10-06",
+        "title": "Seans dışı acil limit ve stop kurulumlarında açığa satış koruması",
+        "problem": (
+            "Stop botu ve seans dışı guard pozisyon listesini geçişin başında bir kez çekiyordu. O arada guard'ın "
+            "acil limit emri (ör. açılışta) dolup pozisyonu kapatırsa 'stop da yok, çıkış emri de yok' "
+            "görünüyor, eski adetle yeni bir GTC stop ya da ikinci bir acil limit-sell gönderilebiliyordu - "
+            "pozisyonu olmayan hissede marjinli hesapta açığa satış. Sahipsiz emir temizliği de guard'ın limit "
+            "emirlerine bakmıyor ve seans dışında hiç çalışmıyordu; guard'ın limit emri etiketsizdi."
+        ),
+        "change": (
+            "- live_exit_qty: guard'ın acil limiti, guard'ın stop geri kurulumu, stop botunun stopsuz pozisyona "
+            "stop kurması ve açılış kalkanı sonrası market çıkışı, emirden hemen önce pozisyonu Alpaca'dan "
+            "yeniden okur; pozisyon yoksa ya da yönü değişmişse emir gönderilmez, adet güncel pozisyonu aşmaz.\n"
+            "- Guard'ın acil limit emri 'stop-extguard-...' etiketiyle gönderilir.\n"
+            "- Sahipsiz emir temizliği bu etiketli limit-sell emirlerini de kapsar (yaş beklemesi yok; etiketsiz "
+            "limitlere dokunulmaz) ve seans dışı guard'ın başında da çalışır."
+        ),
+        "where": "alpaca_trailing_stop.py (live_exit_qty, guard_position, manage_position, restore_from_shield, "
+                 "cancel_orphan_stops, run_extended_hours_guard), alpaca_client.py (place_extended_hours_limit), "
+                 "stop_tags.py (EXT_GUARD_CODE), tests/test_short_sale_protection.py",
+        "settings": "Yok.",
+        "track": "Log'da '... pozisyon yeniden okundu, artık yok' satırları ve Telegram'da '🧹 ... seans dışı acil "
+                 "limit emri ... iptal edildi' uyarıları; Alpaca'da negatif adetli (short) pozisyon olmamalı.",
+    },
+    {
         "id": "21",
         "date": "2026-10-06",
         "title": "Premium Buy Point'e de yüzde nakit payı",
