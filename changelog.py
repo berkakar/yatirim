@@ -28,6 +28,21 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "20",
+        "date": "2026-10-06",
+        "title": "Algo Analiz: algoritmalara ayrılan nakit, harcama, kullanım ve algoritma bazında K/Z",
+        "problem": "Algoritmaların nakit payından ne kadarının harcandığı, ne kadar kaldığı ve her birinin karlılığı tek yerde görünmüyordu.",
+        "change": (
+            "- Portföyün Son Durumu'nun altında 'Algoritmalara Ayrılan Nakit' tablosu: pay %, bütçe, harcanan "
+            "(açık pozisyonların alış maliyeti), kalan, kullanım %.\n"
+            "- Aynı tabloda algoritma bazında açık K/Z, gerçekleşen K/Z, toplam ve bütçeye göre getiri.\n"
+            "- Modüllere ayrılmayan kısım (Premium Buy Point, Alım-Stop-Alım, elle) ayrı satırda."
+        ),
+        "where": "algo_analiz.module_cash_rows, trade_journal_page._render_module_cash, tests/test_algo_analiz.py",
+        "settings": "Modül sayfalarındaki 'Bu modüle ayrılacak nakit payı (%)'.",
+        "track": "Bir modül alım yaptığında 'Harcanan'ın alış maliyeti kadar arttığı, 'Kalan'ın azaldığı kontrol edilmeli.",
+    },
+    {
         "id": "19",
         "date": "2026-10-06",
         "title": "Algoritmik modüllerin nakit payı alımlar yapıldıkça küçülmüyor",

@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 
 from algo_analiz import (
-    apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+    OTHER_ALGOS_LABEL, module_cash_rows, apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
 )
 from trade_journal import walk_fills
 from trade_journal_analysis import STATUS_CLOSED, STATUS_OPEN, Record, closed_records, group_summary, open_records
@@ -163,6 +163,46 @@ class StopHistoryTest(unittest.TestCase):
         self.assertEqual(text, "01.09 97.00 İlk → 03.09 100.20 BE → 04.09 96.00 Kalkan (gerçek 105.00) "
                                "→ 04.09 105.00 Kalkan sonrası")
         self.assertEqual(format_stop_moves([], timezone.utc), "")
+
+
+
+class ModuleCashRowsTest(unittest.TestCase):
+    def test_budget_spent_remaining_and_pnl(self):
+        # 100k hesap, 60k nakit; ORB %10 -> AAA (4k maliyet), geri kalan PBP: BBB (36k).
+        account = {"equity": "100000", "cash": "60000"}
+        positions = [
+            {"symbol": "AAA", "qty": "40", "avg_entry_price": "100", "cost_basis": "4000"},
+            {"symbol": "BBB", "qty": "360", "avg_entry_price": "100", "cost_basis": "36000"},
+        ]
+        records = [
+            _open("AAA", 40, 100, 105, algorithm="bilinmiyor"),  # sembol ORB'de -> ORB'ye yazılır
+            _open("BBB", 360, 100, 99),
+            _closed("X", 50, algorithm="ORB"),
+            _closed("Y", -20, algorithm="Relative Strength"),
+            _closed("Z", 10, algorithm="PBP: ema_cross"),
+        ]
+        modules = [("Relative Strength", 0.0, set()), ("ORB", 10.0, {"AAA"}), ("Heikin Ashi Gün İçi", 0.0, set())]
+        rows = {r["label"]: r for r in module_cash_rows(account, positions, modules, records)}
+
+        orb = rows["ORB"]
+        self.assertEqual((orb["budget"], orb["spent"], orb["remaining"]), (10_000.0, 4_000.0, 6_000.0))
+        self.assertAlmostEqual(orb["usage_pct"], 40.0)
+        self.assertAlmostEqual(orb["unrealized"], 200.0)
+        self.assertAlmostEqual(orb["realized"], 50.0)
+        self.assertAlmostEqual(orb["return_pct"], 2.5)
+
+        rs = rows["Relative Strength"]
+        self.assertEqual(rs["budget"], 0.0)
+        self.assertIsNone(rs["usage_pct"])
+        self.assertAlmostEqual(rs["realized"], -20.0)
+
+        other = rows[OTHER_ALGOS_LABEL]
+        self.assertEqual(other["pct"], 90.0)
+        self.assertEqual(other["budget"], 90_000.0)
+        self.assertEqual(other["spent"], 36_000.0)
+        self.assertEqual(other["remaining"], 54_000.0)  # 60k nakit - ORB'nin harcanmamış 6k'sı
+        self.assertAlmostEqual(other["unrealized"], -360.0)
+        self.assertAlmostEqual(other["realized"], 10.0)
 
 
 if __name__ == "__main__":
