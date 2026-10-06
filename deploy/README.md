@@ -194,11 +194,21 @@ systemctl list-timers 'yatirim-server-*'
    `sudo systemctl restart yatirim-streamlit` çalıştırın.
 4. Yeni adreste her şey çalışıyorsa Streamlit Cloud'daki uygulamayı kapatabilirsiniz.
 
-**Yeni giriş kullanıcısı eklemek:** şifreyi sorar, bcrypt ile hash'leyip
-`secrets.toml`'a ekler (önce yedek alır) ve Streamlit'i yeniden başlatır:
+**Giriş kullanıcıları (`deploy/web/users.sh`):**
 ```bash
-sudo bash deploy/web/add_user.sh volkanerdogan "Volkan Erdoğan" volkan@ornek.com
+sudo bash deploy/web/users.sh durum                     # kim giriş yapabilir, sorun var mı
+sudo bash deploy/web/users.sh duzelt                    # kullanıcı listelerini tek dosyada topla
+sudo bash deploy/web/users.sh ekle volkanerdogan "Volkan Erdoğan" volkan@ornek.com
+sudo bash deploy/web/users.sh sifre volkanerdogan       # şifre değiştir
+sudo bash deploy/web/users.sh dene volkanerdogan        # girilen şifre doğru mu
+sudo bash deploy/web/users.sh sil volkanerdogan
 ```
+Streamlit hem `/opt/yatirim/.streamlit/secrets.toml` hem `/opt/yatirim/app/.streamlit/secrets.toml`
+dosyasını okur ve **üst düzey bölüm bazında** birleştirir: `[credentials]` ikincide de
+varsa birincideki kullanıcıların hiçbiri görünmez. Script listenin gerçekte geldiği
+dosyaya yazar, `durum` bu çakışmayı gösterir, `duzelt` listeyi birinci dosyada toplar.
+Her değişiklikte yedek alınır, sonuç yeniden okunup doğrulanır ve Streamlit yeniden
+başlatılır.
 
 Nginx ayarının kritik kısmı (`deploy/web/nginx-yatirim.conf`):
 ```nginx
