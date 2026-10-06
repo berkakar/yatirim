@@ -632,6 +632,8 @@ def _render_changelog():
             st.markdown(f"**Kod:** `{change['where']}`")
             st.markdown(f"**Ayar:** {change['settings']}")
             st.markdown(f"**Nasıl takip edilir:** {change['track']}")
+            if change.get("verification"):
+                st.markdown(f"**Doğrulama:** {change['verification']}")
     if VERIFICATION_NOTES:
         with st.expander("🧪 Test ve doğrulama sonuçları"):
             st.markdown(VERIFICATION_NOTES)

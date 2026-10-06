@@ -28,6 +28,39 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "23",
+        "date": "2026-10-06",
+        "title": "Oynaklık (ATR) Stop: günlük ATR'de aykırı günler (kazanç boşluğu) hesaba katılmıyor",
+        "problem": (
+            "MDB 28.09'da kazanç açıklamasıyla 410$'dan 311$'a boşlukla açıldı; o günün gerçek aralığı 110$, "
+            "son 14 günün medyanı ~24$. ATR son 14 günün düz ortalaması olduğu için tek bu gün ATR'yi iki hafta "
+            "boyunca 18.6'dan 27.7'ye şişirdi: 1R %12 tavanına dayandı, 3xATR chandelier ~83$ (%23) geriden "
+            "gelecekti - stop güncel fiyatın çok gerisinde kaldı."
+        ),
+        "change": (
+            "- Günlük (ve daha uzun) barlarda gerçek aralığı pencere medyanının 3 katını aşan gün aykırı sayılır "
+            "ve ATR ortalamasına katılmaz (MDB: 27.7 → 21.3, chandelier mesafesi 83$ → 64$). İlk stop, breakeven "
+            "tamponu ve chandelier aynı ATR'yi kullanır.\n"
+            "- 30dk gibi gün içi barlarda uygulanmaz: orada her sabahki gece boşluğu normal; boşlukları kırpmak "
+            "backtestte sonucu +121.8%'den +21.8%'e düşürdü.\n"
+            "- Ayrıca (varsayılan KAPALI) kâr büyüdükçe daralan chandelier seçeneği: trail_tighten_per_r."
+        ),
+        "where": "stop_algorithms.py (robust_atr, atr_volatility_initial_stop/trail), "
+                 "scripts/compare_atr_trail_variants.py, tests/test_atr_outlier.py",
+        "settings": "Kodda ATR_VOL_OUTLIER_MULT = 3.0 (stop_loss_settings kaydında atr_volatility.atr_outlier_mult ile değiştirilebilir, 0 = kapalı).",
+        "track": "Kazanç açıklaması sonrası ATR stoplu hisselerde stop mesafesi; Algo Analiz'de ATR stoplu "
+                 "işlemlerin R dağılımı.",
+        "verification": (
+            "`python scripts/compare_atr_trail_variants.py --intraday` (repo önbelleği; aynı girişler her "
+            "varyantla, işlem başına %0.5 risk). Günlük bar, 30 hisse, 2181 giriş - toplam özsermaye katkısı / "
+            "maks. düşüş: önceki +380.8% / 123.8; aykırı gün hariç **+412.6% / 83.8** (kâr faktörü 1.61 → 1.66). "
+            "Canlı sinyal, trend ve rastgele girişlerin üçünde ve verinin iki yarısında da aynı yönde; eşik 2.5x "
+            "ve 4x'te de benzer (+404.6%, +405.7%). İkinci yarıda fark istatistiksel olarak anlamlı, tüm veride "
+            "değil. 30dk barda hiçbir işlemin sonucu değişmedi. Kademeli daralma: getiri aynı, düşüş azalıyor "
+            "ama dönemler arası tutarsız - kapalı bırakıldı."
+        ),
+    },
+    {
         "id": "22",
         "date": "2026-10-06",
         "title": "Seans dışı acil limit ve stop kurulumlarında açığa satış koruması",
