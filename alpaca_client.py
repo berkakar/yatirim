@@ -358,7 +358,8 @@ class AlpacaClient:
                 raise
             return self._patch(f"/orders/{order_id}", payload)
 
-    def place_extended_hours_limit(self, symbol: str, qty: float, side: str, limit_price: float) -> dict:
+    def place_extended_hours_limit(self, symbol: str, qty: float, side: str, limit_price: float,
+                                   client_order_id: str | None = None) -> dict:
         """Alpaca normal seans dışında (extended hours) yalnızca limit
         emirlerin - ve sadece time_in_force="day" ile - çalışmasına izin
         veriyor; stop/stop_limit emirler bu pencerede hiç tetiklenemiyor.
@@ -366,8 +367,11 @@ class AlpacaClient:
         pozisyon için bunu, normal stopun yerine geçecek tek seçenek olarak
         kullanır. DİKKAT: long için piyasanın altındaki bir limit-sell stop
         gibi beklemez, anında dolar - bunu sadece gerçekten satmak
-        istendiğinde (stop kırılmışken) kullan, "koruma" olarak değil."""
-        return self._post("/orders", {
+        istendiğinde (stop kırılmışken) kullan, "koruma" olarak değil.
+
+        client_order_id: [2026-10-06] guard emri stop_tags.EXT_GUARD_CODE
+        etiketiyle gönderir - sahipsiz emir temizliği onu tanıyabilsin."""
+        payload = {
             "symbol": symbol,
             "qty": qty,
             "side": "sell" if side == "long" else "buy",
@@ -375,7 +379,10 @@ class AlpacaClient:
             "limit_price": f"{limit_price:.2f}",
             "time_in_force": "day",
             "extended_hours": True,
-        })
+        }
+        if client_order_id is not None:
+            payload["client_order_id"] = client_order_id
+        return self._post("/orders", payload)
 
     def replace_stop_qty(self, order_id: str, qty: float) -> dict:
         """Resting stop'un adedini pozisyonun güncel toplam adedine eşitler -

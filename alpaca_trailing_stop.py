@@ -115,7 +115,7 @@ from alpaca_account import build_job_client
 import storage
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS, StopContext, resolve_kwargs
 from stop_algorithms import TREND_EMA_PERIOD as DEFAULT_TREND_EMA_PERIOD
-from stop_tags import parse_shield_real_stop, reason_code, shield_exit_tag, shield_tag, stop_tag
+from stop_tags import EXT_GUARD_CODE, parse_shield_real_stop, reason_code, shield_exit_tag, shield_tag, stop_tag, tag_kind
 from structure import Bar
 from telegram_notify import TelegramError, send_telegram_message
 
@@ -696,6 +696,12 @@ def restore_from_shield(
     disaster = float(stop_order["stop_price"])
     client.cancel_order(stop_order["id"])
     time.sleep(1)  # iptalin hisseleri serbest bırakması için
+    # [2026-10-06] Açığa satış koruması - bkz. live_exit_qty.
+    live_qty = live_exit_qty(client, symbol, side, qty)
+    if live_qty is None:
+        log(f"{symbol}: açılış kalkanı bitti ama pozisyon artık yok - market çıkışı gönderilmedi.")
+        return None
+    qty = live_qty
     try:
         client.place_market_exit(symbol, qty, client_order_id=shield_exit_tag(symbol))
         log(f"{symbol}: açılış kalkanı bitti, fiyat ({last_price:.2f}) gerçek stopun ({real:.2f}) altında - "
@@ -808,6 +814,26 @@ def _wrong_side(level: float, last_price: float | None, side: str) -> bool:
     if last_price is None:
         return False
     return level >= last_price if side == "long" else level <= last_price
+
+
+def live_exit_qty(client: AlpacaClient, symbol: str, side: str, qty: float) -> float | None:
+    """[2026-10-06] Kapanış yönündeki bir emri (stop, acil limit, market
+    çıkışı) göndermeden HEMEN önce pozisyon Alpaca'dan yeniden okunur.
+
+    Neden: run_once / run_extended_hours_guard pozisyon listesini geçişin
+    başında bir kez çekiyor; o arada guard'ın acil limit emri (ya da başka bir
+    çıkış) dolup pozisyonu kapatabilir. Bu durumda "stop da yok, çıkış emri de
+    yok" görünür ve eski adetle yeniden kurulan stop/limit, pozisyonu olmayan
+    hissede marjinli hesapta AÇIĞA SATIŞ açar. Pozisyon yoksa ya da yönü
+    değişmişse None döner (emir gönderilmemeli); varsa adet güncel pozisyonu
+    aşmayacak şekilde sınırlanır."""
+    position = client.get_position(symbol)
+    if position is None:
+        return None
+    live = float(position["qty"])
+    if live == 0 or ("long" if live > 0 else "short") != side:
+        return None
+    return min(qty, abs(live))
 
 
 def close_position_market(
@@ -984,6 +1010,15 @@ def manage_position(
             initial_stop = fallback
             reason = "seviye kırılmıştı, güncel fiyata göre koruyucu stop"
 
+        # [2026-10-06] Açığa satış koruması: pozisyon listesi bu geçişin
+        # başında çekildi - o arada guard'ın acil limit emri dolup pozisyonu
+        # kapatmış olabilir (has_open_exit_order bu yüzden boş döner). Bkz.
+        # live_exit_qty.
+        live_qty = live_exit_qty(client, symbol, side, qty)
+        if live_qty is None:
+            log(f"{symbol}: stop kurulmadan önce pozisyon yeniden okundu, artık yok - stop kurulmadı.")
+            return
+        qty = live_qty
         stop_order = place_protective_stop(
             client, symbol, qty, side, initial_stop, entry_price=entry_price,
             client_order_id=stop_tag("initial", symbol), context="stopsuz pozisyon",
@@ -1229,8 +1264,14 @@ def guard_position(
         # bir sonraki guard çalışması onu resting stop olarak görür (kırılırsa
         # marketable limite çevirir), normal seans açılınca da kendisi çalışır.
         try:
+            # [2026-10-06] Açığa satış koruması - bkz. live_exit_qty.
+            live_qty = live_exit_qty(client, symbol, side, qty)
+            if live_qty is None:
+                log(f"{symbol}: koruma yeniden kurulmadan önce pozisyon yeniden okundu, artık yok - stop kurulmadı.")
+                return
             tag = shield_tag(symbol, real_stop) if real_stop is not None else stop_tag("restore", symbol)
-            client.place_stop_order(symbol, qty, side, reference_price, client_order_id=tag, reference_price=entry_price)
+            client.place_stop_order(symbol, live_qty, side, reference_price, client_order_id=tag,
+                                    reference_price=entry_price)
         except Exception as e:
             msg = (f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
                    f"seviyesinden yeniden kurulamadı, pozisyon şu an KORUMASIZ olabilir: {e}")
@@ -1254,7 +1295,17 @@ def guard_position(
         if resting_order_id is not None:
             client.cancel_order(resting_order_id)
             time.sleep(1)  # cancel'ın hisseleri serbest bırakması için kısa bir pay
-        client.place_extended_hours_limit(symbol, qty, side, limit_price)
+        # [2026-10-06] Açığa satış koruması: pozisyon emirden hemen önce
+        # yeniden okunur - kapanmışsa (ör. önceki acil emir az önce doldu)
+        # ikinci bir satış limiti açığa satış olurdu. Bkz. live_exit_qty.
+        live_qty = live_exit_qty(client, symbol, side, qty)
+        if live_qty is None:
+            log(f"{symbol}: acil limit emri öncesi pozisyon yeniden okundu, artık yok - emir gönderilmedi.")
+            return
+        qty = live_qty
+        client.place_extended_hours_limit(
+            symbol, qty, side, limit_price, client_order_id=stop_tag(EXT_GUARD_CODE, symbol),
+        )
     except requests.HTTPError as e:
         # Varsa resting emir muhtemelen zaten iptal oldu ama yerine emir
         # konamadı - pozisyon şu an gerçekten korumasız. Bunu sessizce
@@ -1301,6 +1352,9 @@ def run_extended_hours_guard(client: AlpacaClient) -> None:
         return
 
     positions = [p for p in client.get_all_positions() if p.get("asset_class") == "us_equity"]
+    # [2026-10-06] Sahipsiz stop/acil limit temizliği seans dışında da -
+    # pozisyon hiç kalmamış olsa da çalışmalı (run_once ile aynı).
+    cancel_orphan_stops(client, positions)
     if not positions:
         log(f"{session}: açık pozisyon yok.")
         return
@@ -1338,6 +1392,12 @@ def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: dateti
     kalıyordu. Tetiklenirse marjinli hesapta açığa satış açar, aynı hissede
     sonradan açılan yeni bir pozisyonu da eski seviye ve adetle satabilir.
 
+    [2026-10-06] Seans dışı guard'ın etiketli acil limit-sell emirleri
+    (stop_tags.EXT_GUARD_CODE) de kapsanır; bu emir yalnızca açık bir pozisyona
+    karşı gönderildiğinden yaş beklemesi uygulanmaz. Fonksiyon seans dışı
+    guard'ın (run_extended_hours_guard) başında da çalışır. Etiketsiz limit
+    emirlere (elle verilmiş olabilir) dokunulmaz.
+
     Dokunulmayanlar: dolmamış bracket bacakları ("held" - giriş emri dolunca
     devreye girecek normal koruma) ve ORPHAN_STOP_MIN_AGE'den yeni emirler
     (bir modül o an alış yapıp stop kuruyor olabilir; pozisyon listesi bir
@@ -1351,7 +1411,9 @@ def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: dateti
         return []
     canceled = []
     for order in open_orders:
-        if order.get("type") not in ("stop", "stop_limit") or order.get("status") == "held":
+        is_stop = order.get("type") in ("stop", "stop_limit")
+        is_guard_limit = order.get("type") == "limit" and tag_kind(order.get("client_order_id")) == EXT_GUARD_CODE
+        if not (is_stop or is_guard_limit) or order.get("status") == "held":
             continue
         if (order.get("asset_class") or "us_equity") != "us_equity":
             continue
@@ -1359,7 +1421,7 @@ def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: dateti
         side = sides.get(symbol)
         if side is not None and order.get("side") == _CLOSING_SIDE[side]:
             continue  # pozisyonu koruyan normal stop
-        if now - _parse_iso(order["created_at"]) < ORPHAN_STOP_MIN_AGE:
+        if is_stop and now - _parse_iso(order["created_at"]) < ORPHAN_STOP_MIN_AGE:
             continue
         try:
             position = client.get_position(symbol)
@@ -1375,10 +1437,11 @@ def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: dateti
             log(f"{symbol}: sahipsiz stop iptal edilemedi: {e}")
             continue
         canceled.append(symbol)
-        level = order.get("stop_price")
+        level = order.get("stop_price") if is_stop else order.get("limit_price")
+        kind = "stop" if is_stop else "seans dışı acil limit"
         notify_once_per_day(
             symbol, "orphan_stop",
-            f"🧹 {symbol}: pozisyon yokken açık kalmış {order.get('side')} stop emri ({order.get('qty')} adet @ "
+            f"🧹 {symbol}: pozisyon yokken açık kalmış {order.get('side')} {kind} emri ({order.get('qty')} adet @ "
             f"{level}) iptal edildi - tetiklenseydi istenmeyen bir pozisyon açılabilirdi.",
         )
     return canceled

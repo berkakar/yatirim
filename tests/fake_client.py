@@ -98,7 +98,7 @@ class FakeClient:
     def get_watchlist_by_name(self, name):
         return None
 
-    def place_extended_hours_limit(self, symbol, qty, side, limit_price):
+    def place_extended_hours_limit(self, symbol, qty, side, limit_price, client_order_id=None):
         self.calls.append(("ext_limit", symbol, round(limit_price, 2)))
         return self._new(symbol=symbol, qty=str(qty), side="sell", type="limit",
-                         limit_price=f"{limit_price:.2f}", extended_hours=True)
+                         limit_price=f"{limit_price:.2f}", extended_hours=True, client_order_id=client_order_id)
