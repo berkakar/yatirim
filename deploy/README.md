@@ -194,21 +194,43 @@ systemctl list-timers 'yatirim-server-*'
    `sudo systemctl restart yatirim-streamlit` çalıştırın.
 4. Yeni adreste her şey çalışıyorsa Streamlit Cloud'daki uygulamayı kapatabilirsiniz.
 
-**Giriş kullanıcıları (`deploy/web/users.sh`):**
+**Giriş kullanıcıları (veritabanı):** Kullanıcılar, rolleri ve her kullanıcının
+Alpaca anahtarları SQLite veritabanında tutulur (`user_registry.py`, `alpaca_keys.py`);
+`secrets.toml`'da kullanıcı ya da `[alpaca.*]` bölümü **yoktur**. Yeni kullanıcılar giriş
+ekranındaki *📝 Hesap Oluştur* sekmesinden başvurur. Başvuru, yöneticinin
+*👤 Hesap → 🛡️ Kullanıcı Yönetimi* sayfasında onayıyla açılır; yöneticinin ürettiği bir
+davet koduyla yapılan başvuru ise beklemeden açılır. Her kullanıcı Sanal Para ve Gerçek
+Para anahtarlarını *👤 Hesabım* sayfasında kendisi girer. Anahtarlar kaydedilmeden önce
+Alpaca'da denenir ve `/etc/yatirim/env` içindeki `YATIRIM_SECRET_KEY` ile şifrelenir.
+Bu değişkeni kaybetmeyin: değişirse kayıtlı anahtarlar çözülemez. Botlar (`JOB_USERNAME`)
+anahtarları önce veritabanından, yoksa `APCA_*` değişkenlerinden alır.
+
+Yeni başvuru ve şifre sıfırlama talepleri `secrets.toml`'daki `TELEGRAM_BOT_TOKEN` ile
+`TELEGRAM_CHAT_ID`'ye bildirilir. `secrets.toml`'da yalnızca uygulama sırları kalır:
+`[cookie]`, `GITHUB_TOKEN`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`.
+
+Eski düzenden geçiş (bir kerelik, SQLite açıkken):
 ```bash
-sudo bash deploy/web/users.sh durum                     # kim giriş yapabilir, sorun var mı
-sudo bash deploy/web/users.sh duzelt                    # kullanıcı listelerini tek dosyada topla
-sudo bash deploy/web/users.sh ekle volkanerdogan "Volkan Erdoğan" volkan@ornek.com
-sudo bash deploy/web/users.sh sifre volkanerdogan       # şifre değiştir
-sudo bash deploy/web/users.sh dene volkanerdogan        # girilen şifre doğru mu
-sudo bash deploy/web/users.sh sil volkanerdogan
+cd /root/yatirim && git pull --ff-only origin main
+sudo bash deploy/web/users.sh tasi                      # varsayılan yönetici: berkakar
+sudo bash deploy/web/users.sh durum
 ```
-Streamlit hem `/opt/yatirim/.streamlit/secrets.toml` hem `/opt/yatirim/app/.streamlit/secrets.toml`
-dosyasını okur ve **üst düzey bölüm bazında** birleştirir: `[credentials]` ikincide de
-varsa birincideki kullanıcıların hiçbiri görünmez. Script listenin gerçekte geldiği
-dosyaya yazar, `durum` bu çakışmayı gösterir, `duzelt` listeyi birinci dosyada toplar.
-Her değişiklikte yedek alınır, sonuç yeniden okunup doğrulanır ve Streamlit yeniden
-başlatılır.
+`tasi` önce `YATIRIM_SECRET_KEY` yoksa üretip `/etc/yatirim/env`'e ekler. Ardından iki
+secrets dosyasındaki kullanıcıları (şifre hash'leriyle) ve `[alpaca.<kullanıcı>]`
+anahtarlarını veritabanına yazar, okuyarak doğrular. Doğrulama geçerse bu bölümleri
+secrets dosyalarından siler ve arayüzü yeniden başlatır. Silmeden önce `.bak.*` yedeği
+alınır; girişleri denedikten sonra bu yedekleri silin, çünkü eski anahtarları içerir.
+
+Sunucudan acil durum komutları (veritabanı yatirim kullanıcısıyla yazılır):
+```bash
+sudo bash deploy/web/users.sh ekle volkanerdogan "Volkan Erdoğan" volkan@ornek.com [--yonetici]
+sudo bash deploy/web/users.sh sifre volkanerdogan --gecici   # ilk girişte değiştirmesi istenir
+sudo bash deploy/web/users.sh dene volkanerdogan
+sudo bash deploy/web/users.sh onayla volkanerdogan
+sudo bash deploy/web/users.sh yonetici volkanerdogan [--kaldir]
+sudo bash deploy/web/users.sh sil volkanerdogan [--veri-kalsin]
+sudo bash deploy/web/users.sh anahtar                        # YATIRIM_SECRET_KEY yoksa üret
+```
 
 Nginx ayarının kritik kısmı (`deploy/web/nginx-yatirim.conf`):
 ```nginx
@@ -283,7 +305,8 @@ Elle yapmak isterseniz adımlar (root olarak):
    install -m 755 -o root -g root deploy/run_job.sh /opt/yatirim/bin/
    ```
 4. Veritabanı klasörünü oluşturun ve main'deki güncel JSON'ları aktarın. Kullanıcı listesi
-   `/opt/yatirim/.streamlit/secrets.toml` içinden okunur:
+   `/opt/yatirim/.streamlit/secrets.toml` içinden okunur (kullanıcılar henüz veritabanına
+   taşınmadıysa; taşındıysa `--users berkakar,...` verin):
    ```bash
    install -d -o yatirim -g yatirim -m 750 /var/lib/yatirim
    systemctl start yatirim-app-sync.service

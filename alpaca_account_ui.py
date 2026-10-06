@@ -1,25 +1,28 @@
 """Alpaca hesap türünün (Sanal Para / Gerçek Para) arayüz tarafı: seçili
-türe göre kullanıcının anahtarları ve adresi, hesap türü rozeti ve onaylı
-geçiş ayarı. Ayarın kendisi ve sunucu işleri için bkz. alpaca_account.py."""
+türe göre kullanıcının anahtarları ve adresi, hesap türü rozeti, onaylı
+geçiş ayarı ve Hesabım sayfasındaki anahtar formu. Ayarın kendisi ve sunucu
+işleri için bkz. alpaca_account.py, anahtarların saklanması için alpaca_keys.py."""
 import streamlit as st
 
+import alpaca_keys
 import storage
 from alpaca_account import (
     CONFIRM_TEXT, JOB_USERNAME, LIVE, MODE_LABELS, PAPER, has_live_keys, load_account_mode, save_account_mode,
-    secrets_keys, trading_url,
+    trading_url, user_keys,
 )
+from alpaca_client import AlpacaClient
 from theme import get_palette
 
 _MODE_STATE_KEY = "alpaca_account_mode_{}"
-
-
-def _user_secrets(username: str) -> dict:
-    return st.secrets.get("alpaca", {}).get(username, {}) or {}
+KEYS_HINT = "**👤 Hesabım → 🔑 Alpaca Anahtarları** bölümünden"
 
 
 def has_alpaca_account(username: str) -> bool:
-    """secrets.toml'da kullanıcı için bir [alpaca.<kullanıcı>] bölümü var mı."""
-    return bool(_user_secrets(username))
+    """Kullanıcı Hesabım sayfasında herhangi bir (paper ya da live) anahtar girmiş mi."""
+    try:
+        return alpaca_keys.has_keys(username, PAPER) or alpaca_keys.has_keys(username, LIVE)
+    except alpaca_keys.KeyStoreError:
+        return False
 
 
 def get_account_mode(username: str) -> str:
@@ -35,22 +38,22 @@ def get_user_alpaca(username: str) -> tuple[str | None, str | None, str]:
     """(key_id, secret_key, trading_url) - seçili hesap türüne göre. Gerçek
     Para seçili ve gerçek hesap anahtarları yoksa anahtarlar None döner."""
     mode = get_account_mode(username)
-    key_id, secret_key = secrets_keys(_user_secrets(username), mode)
+    try:
+        key_id, secret_key = user_keys(username, mode)
+    except alpaca_keys.KeyStoreError as e:
+        st.error(str(e))
+        key_id = secret_key = None
     return key_id, secret_key, trading_url(mode)
 
 
 def missing_keys_warning(username: str, extra: str = "") -> None:
     if get_account_mode(username) == LIVE:
         st.warning(
-            f"Hesap türü **Gerçek Para** ama '{username}' için gerçek hesap anahtarları tanımlı değil "
-            f"(`.streamlit/secrets.toml` içinde `[alpaca.{username}]` altında `live_key_id` / "
-            f"`live_secret_key`). Giriş Sayfası'ndan Sanal Para'ya dönebilirsiniz.{extra}"
+            f"Hesap türü **Gerçek Para** ama gerçek hesap anahtarlarınız girilmemiş - {KEYS_HINT} "
+            f"ekleyin ya da Giriş Sayfası'ndan Sanal Para'ya dönün.{extra}"
         )
     else:
-        st.warning(
-            f"'{username}' için Alpaca hesabı tanımlı değil (`.streamlit/secrets.toml` içinde "
-            f"`[alpaca.{username}]`).{extra}"
-        )
+        st.warning(f"Alpaca Sanal Para (paper) anahtarlarınız girilmemiş - {KEYS_HINT} ekleyin.{extra}")
 
 
 def is_live(username: str) -> bool:
@@ -113,13 +116,8 @@ def render_account_mode_setting(username: str):
             return
 
         st.markdown("Şu an **🧪 Sanal Para** (Alpaca Paper Trading) hesabı kullanılıyor." + bots_note)
-        if not has_live_keys(_user_secrets(username)):
-            st.info(
-                "Gerçek Para'ya geçmek için önce gerçek hesap anahtarlarını `.streamlit/secrets.toml` içinde "
-                f"`[alpaca.{username}]` altına `live_key_id` ve `live_secret_key` olarak ekleyin"
-                + (" ve sunucuda `/etc/yatirim/env` dosyasına `APCA_LIVE_API_KEY_ID` / "
-                   "`APCA_LIVE_API_SECRET_KEY` yazın." if username == JOB_USERNAME else ".")
-            )
+        if not has_live_keys(username):
+            st.info(f"Gerçek Para'ya geçmek için önce gerçek hesap anahtarlarınızı {KEYS_HINT} girin.")
             return
 
         st.warning(
@@ -135,3 +133,84 @@ def render_account_mode_setting(username: str):
         confirmed = understood and typed.strip().upper() == CONFIRM_TEXT
         if st.button("💰 Gerçek Paraya Geç", type="primary", disabled=not confirmed, key="account_mode_to_live"):
             _switch(username, LIVE)
+
+
+def _test_keys(key_id: str, secret_key: str, mode: str) -> tuple[bool, str]:
+    """Anahtarları Alpaca'da dener; (başarılı mı, açıklama)."""
+    try:
+        account = AlpacaClient(key_id, secret_key, trading_url(mode)).get_account()
+    except Exception as e:
+        return False, str(e)
+    number = (account or {}).get("account_number") or "?"
+    status = (account or {}).get("status") or "?"
+    return True, f"hesap {number}, durum {status}"
+
+
+def _render_keys_form(username: str, mode: str) -> None:
+    info = alpaca_keys.key_info(username, mode)
+    label = MODE_LABELS[mode]
+    if info:
+        st.markdown(f"Kayıtlı: `{alpaca_keys.mask(info['key_id'])}` · güncellendi {info['updated_at'][:16].replace('T', ' ')} UTC")
+    else:
+        st.caption(f"{label} anahtarı girilmemiş.")
+
+    with st.form(f"alpaca_keys_form_{mode}", clear_on_submit=True):
+        key_id = st.text_input("API Key ID", key=f"alpaca_key_id_{mode}")
+        secret_key = st.text_input("Secret Key", type="password", key=f"alpaca_secret_{mode}")
+        ack = True
+        if mode == LIVE:
+            ack = st.checkbox(
+                "Bunun gerçek parayla işlem yapan canlı hesabımın anahtarı olduğunu anlıyorum.",
+                key="alpaca_live_keys_ack",
+            )
+        submitted = st.form_submit_button("🔌 Bağlantıyı test et ve kaydet", type="primary")
+    if submitted:
+        if not ack:
+            st.error("Kaydetmek için onay kutusunu işaretleyin.")
+            return
+        if not key_id.strip() or not secret_key.strip():
+            st.error("API Key ID ve Secret Key boş olamaz.")
+            return
+        ok, detail = _test_keys(key_id.strip(), secret_key.strip(), mode)
+        if not ok:
+            st.error(f"Alpaca bu anahtarları kabul etmedi ({label} adresi: {trading_url(mode)}): {detail}")
+            return
+        try:
+            alpaca_keys.set_keys(username, mode, key_id, secret_key)
+        except alpaca_keys.KeyStoreError as e:
+            st.error(str(e))
+            return
+        st.cache_data.clear()
+        st.success(f"{label} anahtarları doğrulandı ve şifreli olarak kaydedildi ({detail}).")
+
+    if info and st.button(f"🗑️ {label} anahtarlarını sil", key=f"alpaca_keys_delete_{mode}"):
+        if mode == LIVE and get_account_mode(username) == LIVE:
+            # Gerçek Para seçiliyken anahtar kalmazsa her şey hata verir; önce Sanal Para'ya dön.
+            save_account_mode(username, PAPER, st.secrets.get("GITHUB_TOKEN"))
+            st.session_state[_MODE_STATE_KEY.format(username)] = PAPER
+        alpaca_keys.delete_keys(username, mode)
+        st.cache_data.clear()
+        st.rerun()
+
+
+def render_alpaca_keys_setting(username: str) -> None:
+    """Hesabım sayfası: kullanıcının kendi Sanal Para ve Gerçek Para anahtarları."""
+    st.subheader("🔑 Alpaca Anahtarları")
+    if not alpaca_keys.encryption_available():
+        st.error(
+            "Sunucuda şifreleme anahtarı (YATIRIM_SECRET_KEY) tanımlı değil; Alpaca anahtarları kaydedilemez. "
+            "Yöneticinin `sudo bash deploy/web/users.sh anahtar` çalıştırması gerekiyor."
+        )
+        return
+    st.caption(
+        "Anahtarları Alpaca panelinde *API Keys* bölümünden oluşturabilirsiniz. Kaydetmeden önce Alpaca'da "
+        "denenir; gizli anahtar veritabanında şifreli saklanır ve bir daha gösterilmez."
+        + (" Sunucudaki zamanlanmış botlar da bu anahtarlarla işlem yapar." if username == JOB_USERNAME else "")
+    )
+    paper_tab, live_tab = st.tabs(["🧪 Sanal Para (Paper)", "💰 Gerçek Para (Live)"])
+    with paper_tab:
+        _render_keys_form(username, PAPER)
+    with live_tab:
+        st.warning("Gerçek hesap anahtarlarıyla verilen emirler gerçek parayla gerçekleşir. Hesap türünü "
+                   "Giriş Sayfası'ndaki ayardan ayrıca onaylayarak değiştirirsiniz.")
+        _render_keys_form(username, LIVE)
