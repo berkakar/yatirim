@@ -29,6 +29,7 @@ kapalı işlemler yeni algoritma altında görünür.
 
 from module_cash import module_budget, module_used_cash
 from stop_tags import parse_shield_real_stop
+from trade_journal import REBUY_LABEL
 from trade_journal_analysis import STATUS_OPEN, Record
 
 
@@ -154,6 +155,10 @@ def portfolio_snapshot(account: dict, initial_capital: float | None) -> dict:
 
 
 OTHER_ALGOS_LABEL = "Premium Buy Point + diğerleri"
+PBP_LABEL = "Premium Buy Point"
+# Premium Buy Point kendi payıyla satırdaysa son satır yalnızca ayrılmamış
+# kısmı ve elle işlemleri gösterir.
+UNALLOCATED_LABEL = "Ayrılmamış + elle işlemler"
 
 
 def module_cash_rows(account: dict, positions: list[dict], modules: list[tuple[str, float, set]],
@@ -175,11 +180,18 @@ def module_cash_rows(account: dict, positions: list[dict], modules: list[tuple[s
         for s in symbols:
             held_by.setdefault(s, label)
     labels = [m[0] for m in modules]
+    other_label = UNALLOCATED_LABEL if PBP_LABEL in labels else OTHER_ALGOS_LABEL
 
     def owner(r: Record) -> str:
         if r.status == STATUS_OPEN and r.symbol in held_by:
             return held_by[r.symbol]
-        return r.algorithm if r.algorithm in labels else OTHER_ALGOS_LABEL
+        if r.algorithm in labels:
+            return r.algorithm
+        # PBP emirleri "PBP: <algo>", Alım-Stop-Alım "Alım-Stop-Alım: <algo>"
+        # etiketlidir; ikisi de PBP bütçesinden alır.
+        if PBP_LABEL in labels and (r.algorithm.startswith("PBP:") or r.algorithm.startswith(f"{REBUY_LABEL}:")):
+            return PBP_LABEL
+        return other_label
 
     pnl: dict[str, dict] = {}
     for r in records:
@@ -211,7 +223,7 @@ def module_cash_rows(account: dict, positions: list[dict], modules: list[tuple[s
     cash = _f(account.get("cash")) or 0.0
     other_pct = max(0.0, 100.0 - sum(m[1] for m in modules))
     other_spent = module_used_cash(positions, {p.get("symbol") for p in positions} - set(held_by))
-    rows.append(row(OTHER_ALGOS_LABEL, other_pct, equity * other_pct / 100, other_spent, max(0.0, cash - unspent)))
+    rows.append(row(other_label, other_pct, equity * other_pct / 100, other_spent, max(0.0, cash - unspent)))
     return rows
 
 

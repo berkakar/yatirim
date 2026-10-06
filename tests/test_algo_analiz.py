@@ -2,7 +2,7 @@ import unittest
 from datetime import datetime, timezone
 
 from algo_analiz import (
-    OTHER_ALGOS_LABEL, module_cash_rows, apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+    OTHER_ALGOS_LABEL, PBP_LABEL, UNALLOCATED_LABEL, module_cash_rows, apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
 )
 from trade_journal import walk_fills
 from trade_journal_analysis import STATUS_CLOSED, STATUS_OPEN, Record, closed_records, group_summary, open_records
@@ -203,6 +203,31 @@ class ModuleCashRowsTest(unittest.TestCase):
         self.assertEqual(other["remaining"], 54_000.0)  # 60k nakit - ORB'nin harcanmamış 6k'sı
         self.assertAlmostEqual(other["unrealized"], -360.0)
         self.assertAlmostEqual(other["realized"], 10.0)
+
+
+    def test_pbp_row_with_own_share(self):
+        account = {"equity": "100000", "cash": "60000"}
+        positions = [
+            {"symbol": "AAA", "qty": "40", "avg_entry_price": "100", "cost_basis": "4000"},
+            {"symbol": "PPP", "qty": "300", "avg_entry_price": "100", "cost_basis": "30000"},
+            {"symbol": "MAN", "qty": "60", "avg_entry_price": "100", "cost_basis": "6000"},
+        ]
+        records = [
+            _open("PPP", 300, 100, 101),
+            _closed("Q", 40, algorithm="PBP: ema_cross"),
+            _closed("R", -5, algorithm="Alım-Stop-Alım: ema_cross"),
+            _closed("S", 7, algorithm="Elle / bilinmiyor"),
+        ]
+        modules = [("ORB", 10.0, {"AAA"}), (PBP_LABEL, 50.0, {"PPP"})]
+        rows = {r["label"]: r for r in module_cash_rows(account, positions, modules, records)}
+        pbp = rows[PBP_LABEL]
+        self.assertEqual((pbp["budget"], pbp["spent"], pbp["remaining"]), (50_000.0, 30_000.0, 20_000.0))
+        self.assertAlmostEqual(pbp["realized"], 35.0)
+        self.assertAlmostEqual(pbp["unrealized"], 300.0)
+        rest = rows[UNALLOCATED_LABEL]
+        self.assertEqual((rest["pct"], rest["spent"]), (40.0, 6_000.0))
+        self.assertEqual(rest["remaining"], 34_000.0)  # 60k - ORB 6k - PBP 20k
+        self.assertAlmostEqual(rest["realized"], 7.0)
 
 
 if __name__ == "__main__":

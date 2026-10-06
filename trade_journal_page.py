@@ -22,7 +22,7 @@ import streamlit as st
 
 import storage
 from algo_analiz import (
-    OTHER_ALGOS_LABEL, apply_stop_scenario, count_by, format_stop_moves, module_cash_rows, open_stop_levels, portfolio_snapshot,
+    OTHER_ALGOS_LABEL, PBP_LABEL, UNALLOCATED_LABEL, apply_stop_scenario, count_by, format_stop_moves, module_cash_rows, open_stop_levels, portfolio_snapshot,
     resolve_stop_algorithm_id, scenario_totals,
 )
 from alpaca_account_ui import get_user_alpaca, missing_keys_warning
@@ -133,6 +133,12 @@ def _module_allocations(username: str) -> list[tuple[str, float, set]]:
         pct = float(cfg.get("cash_allocation_pct") or 0.0) if cfg.get("enabled") else 0.0
         symbols = set((_read_setting(core.holdings_path(username), {}) or {}).keys())
         out.append((MODULE_LABELS[prefix], pct, symbols))
+    # Premium Buy Point'in kendi payı kaydedildiyse ayrı satır: portföy
+    # (ağırlık listesi) sembolleri, modüllere ait olmayanlar.
+    pbp = _read_setting(f"portfolio_config_{username}.json", {}) or {}
+    if pbp.get("cash_allocation_pct") is not None:
+        module_symbols = set().union(*(m[2] for m in out))
+        out.append((PBP_LABEL, float(pbp["cash_allocation_pct"]), set(pbp.get("weights") or {}) - module_symbols))
     return out
 
 
@@ -234,7 +240,7 @@ def _render_portfolio(snap: dict, n_positions: int):
 
 def _render_module_cash(rows: list[dict]):
     st.markdown("#### 🧮 Algoritmalara Ayrılan Nakit")
-    shown = [r for r in rows if r["label"] == OTHER_ALGOS_LABEL or r["pct"] > 0 or r["spent"] > 0 or r["open"] or r["closed"]]
+    shown = [r for r in rows if r["label"] in (OTHER_ALGOS_LABEL, UNALLOCATED_LABEL, PBP_LABEL) or r["pct"] > 0 or r["spent"] > 0 or r["open"] or r["closed"]]
     df = pd.DataFrame([{
         "Algoritma": r["label"],
         "Pay %": round(r["pct"], 2),
@@ -252,9 +258,10 @@ def _render_module_cash(rows: list[dict]):
     _table(df, ["Açık K/Z $", "Gerçekleşen $", "Toplam K/Z $", "Getiri %"])
     st.caption(
         "Bütçe = hesap değeri × algoritmanın nakit payı. Harcanan = algoritmanın elindeki açık pozisyonların alış "
-        "maliyeti; Kalan = Bütçe − Harcanan; Kullanım = Harcanan / Bütçe. Son satır modüllere ayrılmayan kısım: "
-        "kalanı, nakitten modüllerin harcanmamış payları düşüldükten sonra Premium Buy Point'in kullanabileceği "
-        "nakittir. Gerçekleşen K/Z seçili penceredeki kapalı işlemlerden; Getiri = Toplam K/Z / Bütçe."
+        "maliyeti; Kalan = Bütçe − Harcanan; Kullanım = Harcanan / Bütçe. Son satır hiçbir algoritmaya "
+        "ayrılmayan kısım ve elle açılan pozisyonlar: kalanı, nakitten algoritmaların harcanmamış payları "
+        "düşüldükten sonra geriye kalan nakittir (Premium Buy Point'in yüzde payı kaydedilmemişse PBP de bu "
+        "satırdadır). Gerçekleşen K/Z seçili penceredeki kapalı işlemlerden; Getiri = Toplam K/Z / Bütçe."
     )
 
 

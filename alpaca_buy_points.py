@@ -40,8 +40,9 @@ tagged "algo-..."). An open position for a removed symbol is untouched
 either way - alpaca_trailing_stop.py manages every open position's stop
 independent of watchlist membership, so it keeps trailing normally.
 
-config["budget"] is just a number the user typed in premium_buy_portfolio.py
-- nothing used to check it against Alpaca's actual cash before this, so a
+config["budget"] used to be just a number the user typed in premium_buy_portfolio.py
+(now the budget is equity x config["cash_allocation_pct"], see
+resolve_pbp_budget) - nothing used to check it against Alpaca's actual cash before this, so a
 mass stop-out (many symbols hitting their stop at once, e.g. a broad
 sell-off) followed by a mass re-entry (once signals return) could try to
 commit more than the account actually has, silently relying on margin (if
@@ -157,7 +158,7 @@ from alpaca_trailing_stop import (
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, reject_if_marketable
 from heikin_ashi_intraday_core import get_cash_allocation_pct as get_ha_cash_allocation_pct
 from heikin_ashi_intraday_core import load_holdings_local as load_ha_holdings
-from module_cash import unspent_module_reserve
+from module_cash import module_budget, module_used_cash, unspent_module_reserve
 from orb_core import get_cash_allocation_pct as get_orb_cash_allocation_pct
 from orb_core import load_holdings_local as load_orb_holdings
 from relative_strength_core import get_cash_allocation_pct as get_rs_cash_allocation_pct
@@ -775,7 +776,6 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
         return
 
     config = load_local_config()
-    budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
     default_algorithm = resolve_default_algorithm(config)
     symbol_settings = config.get("symbol_settings") or {}
@@ -793,7 +793,8 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
             return
 
     try:
-        available_cash = compute_available_cash_for_buying(client)
+        budget = resolve_pbp_budget(client, config)
+        available_cash = compute_available_cash_for_buying(client, config)
         risk = build_risk_context(client, config)
     except Exception as e:
         log(f"{session}: hesap nakti alınamadı, bu pass atlanıyor: {e}")
@@ -979,7 +980,20 @@ def load_module_risk_context(client: AlpacaClient) -> dict | None:
         return None
 
 
-def compute_available_cash_for_buying(client: AlpacaClient) -> float:
+def resolve_pbp_budget(client: AlpacaClient, config: dict, account: dict | None = None) -> float:
+    """Premium Buy Point'in toplam bütçesi (hisse ağırlıkları bunun yüzdesi).
+
+    [2026-10-06] config["cash_allocation_pct"] varsa diğer modüllerle aynı
+    mantık: bütçe = hesap değeri (equity) x yüzde - alımlar nakdi azalttıkça
+    küçülmez (bkz. module_cash.py). Yoksa (yüzde ayarı kaydedilmemiş eski
+    config) eski sabit config["budget"] tutarı kullanılır."""
+    pct = config.get("cash_allocation_pct")
+    if pct is None:
+        return float(config.get("budget") or 0)
+    return module_budget(account if account is not None else client.get_account(), float(pct))
+
+
+def compute_available_cash_for_buying(client: AlpacaClient, config: dict | None = None) -> float:
     """Alpaca'daki gerçek nakit bakiyesinden (marjin/kaldıraç değil), bu
     sistemin hâlâ açık/bekleyen ("algo-" etiketli) buy-limit emirlerinin
     toplam tutarını düşerek, bu pass'te YENİ bir giriş/top-up emri için
@@ -998,21 +1012,36 @@ def compute_available_cash_for_buying(client: AlpacaClient) -> float:
     gerçek nakti birbirinden habersiz harcamaya çalışırdı. Modülün zaten
     hisseye dönmüş kısmı nakitte yer almadığı için ikinci kez düşülmez. Bir
     modül hiç açılmamışsa/devre dışıysa payı 0'dır, davranış o modül hiç
-    yokmuş gibi aynı kalır (geriye dönük uyumlu)."""
+    yokmuş gibi aynı kalır (geriye dönük uyumlu).
+
+    [2026-10-06] Premium Buy Point'in kendi nakit payı (config
+    "cash_allocation_pct") tanımlıysa kullanılabilir nakit ayrıca
+    bütçe - PBP hisselerinin (ağırlık listesindeki, modüllere ait olmayan
+    semboller) alış maliyeti - bekleyen emirler ile sınırlanır."""
+    if config is None:
+        config = load_local_config()
     modules = [
         (get_rs_cash_allocation_pct("berkakar"), set(load_rs_holdings("berkakar"))),
         (get_orb_cash_allocation_pct("berkakar"), set(load_orb_holdings("berkakar"))),
         (get_ha_cash_allocation_pct("berkakar"), set(load_ha_holdings("berkakar"))),
     ]
+    own_pct = config.get("cash_allocation_pct")
     account = client.get_account()
-    positions = client.get_all_positions() if any(pct > 0 for pct, _ in modules) else []
+    need_positions = own_pct is not None or any(pct > 0 for pct, _ in modules)
+    positions = client.get_all_positions() if need_positions else []
     cash = float(account["cash"]) - unspent_module_reserve(account, positions, modules)
     reserved = sum(
         float(o["qty"]) * float(o["limit_price"])
         for o in client.get_open_orders()
         if o["type"] == "limit" and o["side"] == "buy" and (o.get("client_order_id") or "").startswith("algo-")
     )
-    return max(0.0, cash - reserved)
+    available = cash - reserved
+    if own_pct is not None:
+        module_symbols = set().union(*(symbols for _, symbols in modules))
+        own_symbols = set(config.get("weights") or {}) - module_symbols
+        used = module_used_cash(positions, own_symbols)
+        available = min(available, module_budget(account, float(own_pct)) - used - reserved)
+    return max(0.0, available)
 
 
 def run_once(client: AlpacaClient) -> None:
@@ -1030,7 +1059,6 @@ def run_once(client: AlpacaClient) -> None:
         return
 
     config = load_local_config()
-    budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
     default_algorithm = resolve_default_algorithm(config)
     symbol_settings = config.get("symbol_settings") or {}
@@ -1039,7 +1067,8 @@ def run_once(client: AlpacaClient) -> None:
     stop_settings = load_stop_loss_settings()
 
     try:
-        available_cash = compute_available_cash_for_buying(client)
+        budget = resolve_pbp_budget(client, config)
+        available_cash = compute_available_cash_for_buying(client, config)
         risk = build_risk_context(client, config)
     except Exception as e:
         log(f"failed to fetch account cash, skipping this pass to avoid buying blind: {e}")

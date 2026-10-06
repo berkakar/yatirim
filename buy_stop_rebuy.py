@@ -50,7 +50,7 @@ from dotenv import load_dotenv
 
 import storage
 from alpaca_bars_cache import INTRADAY_BARS_CACHE_PATH, parse_iso
-from alpaca_buy_points import compute_available_cash_for_buying, load_local_config
+from alpaca_buy_points import compute_available_cash_for_buying, load_local_config, resolve_pbp_budget
 from alpaca_client import AlpacaClient
 from alpaca_account import build_job_client
 from alpaca_trailing_stop import (
@@ -277,12 +277,12 @@ def run_once(client: AlpacaClient) -> None:
         save_state(state)
         return
 
-    budget = float(config.get("budget") or 0)
     weights = config.get("weights") or {}
     stop_settings = load_stop_loss_settings()
 
     try:
-        available_cash = compute_available_cash_for_buying(client)
+        budget = resolve_pbp_budget(client, config)
+        available_cash = compute_available_cash_for_buying(client, config)
     except Exception as e:
         log(f"Alım-Stop-Alım: hesap nakti alınamadı, bu pass atlanıyor: {e}")
         save_state(state)
