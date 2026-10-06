@@ -4,6 +4,7 @@ CSS string'lerini render eder; burada satırlara alternatif arka plan (zebra)
 uygulanır, tema (gündüz/gece) theme.py üzerinden okunur.
 """
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -24,6 +25,23 @@ def freshness_caption(text: str) -> None:
     Alpaca her zaman anlık, KAP sadece periyodik rapor tarihi) tek bir ayrıştırma
     mantığına zorlamak yerine sadece görsel biçimi (🕒 ikonu) ortaklaştırır."""
     st.caption(f"🕒 {text}")
+
+
+def format_cell(v):
+    """Tablo hücresinin görünen metni. Styler biçim verilmezse ondalıklı
+    sayıları pandas varsayılanıyla 6 basamak gösterir (1.870000); burada
+    ondalıklı sayılar 2 basamağa, 1'den küçük ve daha hassas olanlar (fon
+    fiyatı, oran) 4 basamağa yuvarlanır. Tam sayı, metin vb. olduğu gibi."""
+    if v is None:
+        return "—"
+    if isinstance(v, (float, np.floating)):
+        v = float(v)
+        if v != v:  # NaN
+            return "—"
+        if 0 < abs(v) < 1 and round(v, 2) != round(v, 4):
+            return f"{v:.4f}"
+        return f"{v:,.2f}"
+    return str(v)
 
 
 def zebra_style(df, extra_style_fn=None):
@@ -54,4 +72,4 @@ def zebra_style(df, extra_style_fn=None):
             style_df = style_df + extra_df
         return style_df
 
-    return df.style.apply(_apply, axis=None)
+    return df.style.apply(_apply, axis=None).format(format_cell)
