@@ -134,7 +134,8 @@ class HeikinAshiEntryStopTest(unittest.TestCase):
         client = mock.Mock()
         client.get_clock.return_value = {"next_close": "2099-01-01T00:00:00Z"}
         client.get_all_positions.return_value = []
-        client.get_account.return_value = {"cash": "100000"}
+        client.get_account.return_value = {"cash": "100000", "equity": "100000"}
+        client.get_open_orders.return_value = []
         client.place_market_entry.return_value = {"id": "b"}
         client.wait_for_fill.return_value = fill
         client.get_latest_trade_price.return_value = last_price

@@ -107,7 +107,7 @@ class ScanAndBuyStopTest(unittest.TestCase):
     def _run(self, last_prices, stop_raises=False):
         cand = orb_core.OrbCandidate(symbol="NUTX", price=212.30, score=1.0, reason="test")
         client = mock.Mock()
-        client.get_account.return_value = {"cash": "100000"}
+        client.get_account.return_value = {"cash": "100000", "equity": "100000"}
         client.get_open_orders.return_value = []
         client.get_all_positions.return_value = []
         client.get_watchlist_by_name.return_value = None
@@ -153,7 +153,7 @@ class ScanAndBuyStopTest(unittest.TestCase):
     def test_stale_breakout_is_not_bought(self):
         cand = orb_core.OrbCandidate(symbol="NUTX", price=212.30, score=1.0, reason="test")
         client = mock.Mock()
-        client.get_account.return_value = {"cash": "100000"}
+        client.get_account.return_value = {"cash": "100000", "equity": "100000"}
         client.get_open_orders.return_value = []
         client.get_watchlist_by_name.return_value = None
         cfg = {"enabled": True, "cash_allocation_pct": 10.0, "top_n": 1}

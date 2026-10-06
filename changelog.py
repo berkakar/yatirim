@@ -28,6 +28,27 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "19",
+        "date": "2026-10-06",
+        "title": "Algoritmik modüllerin nakit payı alımlar yapıldıkça küçülmüyor",
+        "problem": (
+            "Relative Strength, ORB ve Heikin Ashi Gün İçi modüllerinin payı her taramada Alpaca'daki canlı "
+            "nakdin yüzdesi olarak hesaplanıyordu. 100.000$ nakitle %10 pay 10.000$ ile başlıyor, alımlar "
+            "nakdi 60.000$'a indirince modüle 6.000$ düşüyordu; modülün kendi aldığı hisseler hesaba girmiyordu."
+        ),
+        "change": (
+            "- Modül payı = hesap değeri (nakit + pozisyonlar) × yüzde.\n"
+            "- Modülün kullanılabilir nakdi = pay − modülün elindeki pozisyonların alış maliyeti − bekleyen "
+            "emirler (gerçek nakitle sınırlı). Pozisyon başına tutar da bu paydan hesaplanır.\n"
+            "- Premium Buy Point, modüllerin yalnızca henüz harcanmamış paylarını nakitten düşer.\n"
+            "- Ayar sayfaları pay, alınan hisseler ve kalan tutarı gösterir."
+        ),
+        "where": "module_cash.py, relative_strength_core.py, orb_core.py, heikin_ashi_intraday_core.py, "
+                 "alpaca_buy_points.compute_available_cash_for_buying, ayar sayfaları, tests/test_module_cash.py",
+        "settings": "Her modülün sayfasındaki 'Bu modüle ayrılacak nakit payı (%)'.",
+        "track": "Modül sayfasındaki 'kalan' tutarın, modülün aldığı hisseler kadar azaldığı kontrol edilmeli.",
+    },
+    {
         "id": "18",
         "date": "2026-10-05",
         "title": "Alpaca hesap türü kullanıcı bazlı ayar oldu - Gerçek Para'ya onaylı geçiş, turuncu tema",

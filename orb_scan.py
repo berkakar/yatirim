@@ -20,6 +20,7 @@ from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
 from config import load_group_markets, load_stock_groups
 from github_config import read_json_from_github, write_json_to_github
+from module_cash import module_cash_caption
 from orb_core import (
     DEFAULT_CASH_ALLOCATION_PCT, DEFAULT_MAX_BARS_AFTER_OPEN, DEFAULT_TIMEFRAME, DEFAULT_TOP_N,
     DEFAULT_VOLUME_MULT, ORB_DEFAULT_STOP_ALGORITHM, config_path, holdings_path, scan_candidates,
@@ -70,22 +71,20 @@ def render_orb_scan(username: str):
         st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Bu modül de (Relative Strength Rotasyonu ile aynı ilke) "
-        "hesabınızın TOPLAM canlı nakdinden bir yüzde AYIRIR - Premium Buy Point'in ve Relative "
-        "Strength Rotasyonu'nun kullanabileceği nakit buna göre otomatik küçülür (bkz. alpaca_buy_points."
-        "compute_available_cash_for_buying). Üç modül de TEK bir nakit havuzundan besleniyor. Bu modül "
-        "devre dışıyken pay 0 kabul edilir."
+        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
         min_value=0.0, max_value=100.0,
         value=float(config.get("cash_allocation_pct") or DEFAULT_CASH_ALLOCATION_PCT), step=5.0,
         key="orb_cash_allocation_pct",
-        help="Örn. %20 girilirse, bu modül toplam nakdin %20'sini kullanır. Diğer modüllerle "
-             "toplamı %100'ü aşarsa alpaca_buy_points.py bunu otomatik sınırlar.",
+        help="Örn. %20 girilirse, bu modülün payı hesap değerinin %20'sidir; aldığı hisselerin "
+             "maliyeti bu paydan düşülür.",
     )
-    if live_cash is not None and cash_allocation_pct > 0:
-        st.caption(f"Bu ayarla bu modüle düşen tutar: **${live_cash * cash_allocation_pct / 100:,.2f}**")
+    if cash_allocation_pct > 0:
+        caption = module_cash_caption(client, cash_allocation_pct, _load_holdings(GITHUB_REPO, github_token, username).keys())
+        if caption:
+            st.caption(caption)
 
     st.subheader("🌐 Tarama Evreni")
     st.caption(

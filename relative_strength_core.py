@@ -28,14 +28,13 @@ import edilir.
      elinde tuttuğu bir sembolü sonradan elle Premium Buy Point
      watchlist'ine eklerse bu koruma o an için işe yaramaz - bilinen bir
      sınır, elle eklememeniz önerilir.
-  3. "Toplam nakit" tek bir referans: Alpaca hesabının GERÇEK canlı nakti
-     (client.get_account()["cash"]) - alpaca_buy_points.
-     compute_available_cash_for_buying'in KULLANDIĞI AYNI değer. Bu modülün
-     cash_allocation_pct'i o değerin bir yüzdesini bu modüle AYIRIR;
-     alpaca_buy_points.py bu payı kendi hesabından DÜŞER (bkz. o dosyadaki
-     get_cash_allocation_pct kullanımı) - böylece iki modül asla aynı
-     dolarları iki kez harcamaya çalışmaz, ikisi de TEK bir nakit havuzundan
-     besleniyor olur.
+  3. Bu modülün payı = hesap değeri (equity) x cash_allocation_pct; elde
+     tutulan pozisyonların alış maliyeti bu paydan düşülür, kalan bu modülün
+     kullanılabilir nakdidir (bkz. module_cash.py). [2026-10-06] Eskiden pay
+     canlı nakdin yüzdesiydi ve alımlar nakdi azalttıkça pay da küçülüyordu.
+     alpaca_buy_points.compute_available_cash_for_buying modüllerin henüz
+     harcanmamış paylarını kendi hesabından DÜŞER - böylece iki sistem asla
+     aynı dolarları iki kez harcamaya çalışmaz.
   4. RS'nin hangi sembolleri "kendi elinde tuttuğu" Alpaca'nın pozisyon
      API'sinde YOK (pozisyonlar hangi stratejiye ait olduğunu bilmez) - bu
      yüzden ayrı bir durum dosyası (relative_strength_holdings_<kullanıcı>.
@@ -59,6 +58,7 @@ from datetime import datetime, timedelta, timezone
 import storage
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import close_position_market, place_protective_stop
+from module_cash import module_available_cash
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
@@ -235,22 +235,13 @@ def plan_rebalance(
     )
 
 
-def compute_available_cash_for_rotation(client: AlpacaClient, cash_allocation_pct: float) -> float:
-    """alpaca_buy_points.compute_available_cash_for_buying ile aynı desen -
-    bu modülün payına (toplam canlı nakdin cash_allocation_pct'i) düşen
-    tutardan, bu modülün hâlâ açık/bekleyen ("rs-" etiketli) buy-limit
-    emirlerinin tutarını düşer. Bu modül şu an sadece market emriyle
-    alıyor (bkz. rebalance()), o yüzden pratikte resting bir emir olması
-    beklenmez - yine de aynı çift-sayım korumasını tutarlılık için
-    uyguluyor."""
-    cash = float(client.get_account()["cash"]) * (cash_allocation_pct / 100)
-    reserved = sum(
-        float(o["qty"]) * float(o["limit_price"])
-        for o in client.get_open_orders()
-        if o["type"] == "limit" and o["side"] == "buy"
-        and (o.get("client_order_id") or "").startswith(f"{ORDER_TAG_PREFIX}-")
-    )
-    return max(0.0, cash - reserved)
+def compute_available_cash_for_rotation(
+    client: AlpacaClient, cash_allocation_pct: float, held_symbols=(),
+) -> tuple[float, float]:
+    """(bütçe, kalan): bütçe = hesap değerinin cash_allocation_pct'i; kalan =
+    bütçe - bu modülün elindeki pozisyonların alış maliyeti - hâlâ bekleyen
+    ("rs-" etiketli) buy-limit emirleri. Bkz. module_cash.py."""
+    return module_available_cash(client, cash_allocation_pct, held_symbols, ORDER_TAG_PREFIX)
 
 
 def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict | None = None) -> dict:
@@ -315,9 +306,8 @@ def rebalance(client: AlpacaClient, username: str, cfg: dict, stop_settings: dic
 
     # Satışlardan SONRA hesapla - o an serbest kalan nakit bu pass'in
     # alımlarında kullanılabilsin diye.
-    total_rs_cash = float(client.get_account()["cash"]) * (cash_allocation_pct / 100)
+    total_rs_cash, available_cash = compute_available_cash_for_rotation(client, cash_allocation_pct, holdings.keys())
     target_per_position = total_rs_cash / top_n if top_n > 0 else 0.0
-    available_cash = compute_available_cash_for_rotation(client, cash_allocation_pct)
 
     # [2026-09-28 · Öneri 5] Premium Buy Point'in risk ayarları (portfolio_config
     # "risk_sizing") bu modülün girişlerine de TAVAN olarak uygulanır: stopa

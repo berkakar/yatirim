@@ -20,11 +20,12 @@ otomatik_alim_satim_core.py ile aynı ilke.
      modül üstü notu #2 ile aynı gerekçe, artık üç yönlü). Relative Strength
      Rotasyonu da kendi tarafında bu modülün elindeki sembolleri hariç
      tutuyor (bkz. o modüldeki karşılıklı koruma).
-  3. "Toplam nakit" YİNE TEK bir referans (relative_strength_core.py'nin
-     modül üstü notu #3 ile birebir aynı ilke): Alpaca hesabının gerçek
-     canlı nakti. alpaca_buy_points.compute_available_cash_for_buying artık
-     HEM Relative Strength Rotasyonu'nun HEM bu modülün payını kendi
-     hesabından düşüyor - üç modül de TEK bir nakit havuzundan besleniyor.
+  3. Nakit payı relative_strength_core.py'nin modül üstü notu #3 ile
+     birebir aynı ilke: hesap değerinin cash_allocation_pct'i bu modülündür,
+     elde tutulanların alış maliyeti bu paydan düşülür (bkz. module_cash.py).
+     alpaca_buy_points.compute_available_cash_for_buying modüllerin
+     harcanmamış paylarını kendi hesabından düşüyor - hepsi TEK bir nakit
+     havuzundan besleniyor.
   4. ORB, Relative Strength Rotasyonu'nun aksine bir ROTASYON stratejisi
      DEĞİL: her gün yeni adaylar aranıp alınır, ama var olan bir pozisyon
      "artık en yüksek puanlı değil" diye SATILMAZ - tek çıkış mekanizması
@@ -50,6 +51,7 @@ import storage
 from alpaca_client import AlpacaClient
 from alpaca_trailing_stop import _timeframe_duration, get_bars_for_timeframe, place_protective_stop
 from buy_algorithms import orb_signal
+from module_cash import module_available_cash
 from otomatik_alim_satim_core import DEFAULT_MIN_AVG_DOLLAR_VOLUME, build_universe, filter_by_liquidity
 from risk_sizing import apply_risk_cap
 from stop_algorithms import STOP_ALGORITHMS, resolve_kwargs
@@ -244,20 +246,13 @@ def select_top_candidates(candidates: list[OrbCandidate], top_n: int = DEFAULT_T
     return candidates[:top_n]
 
 
-def compute_available_cash_for_scan(client: AlpacaClient, cash_allocation_pct: float) -> float:
-    """alpaca_buy_points.compute_available_cash_for_buying /
-    relative_strength_core.compute_available_cash_for_rotation ile aynı
-    desen - bu modülün payına (toplam canlı nakdin cash_allocation_pct'i)
-    düşen tutardan, bu modülün hâlâ açık/bekleyen ("orb-" etiketli)
-    buy-limit emirlerinin tutarını düşer."""
-    cash = float(client.get_account()["cash"]) * (cash_allocation_pct / 100)
-    reserved = sum(
-        float(o["qty"]) * float(o["limit_price"])
-        for o in client.get_open_orders()
-        if o["type"] == "limit" and o["side"] == "buy"
-        and (o.get("client_order_id") or "").startswith(f"{ORDER_TAG_PREFIX}-")
-    )
-    return max(0.0, cash - reserved)
+def compute_available_cash_for_scan(
+    client: AlpacaClient, cash_allocation_pct: float, held_symbols=(),
+) -> tuple[float, float]:
+    """(bütçe, kalan): bütçe = hesap değerinin cash_allocation_pct'i; kalan =
+    bütçe - bu modülün elindeki pozisyonların alış maliyeti - hâlâ bekleyen
+    ("orb-" etiketli) buy-limit emirleri. Bkz. module_cash.py."""
+    return module_available_cash(client, cash_allocation_pct, held_symbols, ORDER_TAG_PREFIX)
 
 
 def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: dict | None = None) -> dict:
@@ -316,9 +311,8 @@ def scan_and_buy(client: AlpacaClient, username: str, cfg: dict, stop_settings: 
     candidates = scan_candidates(client, universe, timeframe, volume_mult, max_bars_after_open)
     selected = select_top_candidates(candidates, top_n)
 
-    total_orb_cash = float(client.get_account()["cash"]) * (cash_allocation_pct / 100)
+    total_orb_cash, available_cash = compute_available_cash_for_scan(client, cash_allocation_pct, own_holdings.keys())
     target_per_position = total_orb_cash / top_n if top_n > 0 else 0.0
-    available_cash = compute_available_cash_for_scan(client, cash_allocation_pct)
 
     # [2026-09-28 · Öneri 5] Premium Buy Point'teki risk bazlı büyüklük ayarları
     # (portfolio_config "risk_sizing") ORB girişlerine de TAVAN olarak uygulanır:
