@@ -28,6 +28,29 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "21",
+        "date": "2026-10-06",
+        "title": "Premium Buy Point'e de yüzde nakit payı",
+        "problem": (
+            "Premium Buy Point'in bütçesi sabit bir dolar tutarıydı ve sayfa her açıldığında Alpaca'daki anlık "
+            "nakitle dolduruluyordu; alımlar nakdi azalttıkça bütçe de küçülüyordu. Diğer algoritmalar gibi "
+            "yüzde seçilemiyordu."
+        ),
+        "change": (
+            "- Premium Buy Point sayfasında 'Premium Buy Point'e ayrılacak nakit payı (%)' alanı; bütçe = hesap "
+            "değeri × yüzde, hisse ağırlıkları bu bütçenin yüzdesi.\n"
+            "- Kullanılabilir nakit = bütçe − portföy hisselerinin alış maliyeti − bekleyen alım emirleri; "
+            "diğer algoritmaların harcanmamış payları ve gerçek nakit yine üst sınır. Alım-Stop-Alım da aynı bütçeyi kullanır.\n"
+            "- Diğer algoritmalarla toplam %100'ü aşarsa sayfada uyarı.\n"
+            "- Algo Analiz'de Premium Buy Point kendi satırında; son satır ayrılmamış kısım ve elle işlemler.\n"
+            "- Yüzde kaydedilmemiş eski ayarda eski sabit bütçe kullanılmaya devam eder."
+        ),
+        "where": "alpaca_buy_points.resolve_pbp_budget / compute_available_cash_for_buying, buy_stop_rebuy.py, "
+                 "premium_buy_portfolio.py, algo_analiz.module_cash_rows, trade_journal_page.py, tests/test_module_cash.py",
+        "settings": "Premium Buy Point > Bütçe ve Hisse Ağırlıkları > nakit payı (%).",
+        "track": "Algo Analiz'deki Premium Buy Point satırında 'Harcanan' alımlar kadar artmalı, bütçe sabit kalmalı.",
+    },
+    {
         "id": "20",
         "date": "2026-10-06",
         "title": "Algo Analiz: algoritmalara ayrılan nakit, harcama, kullanım ve algoritma bazında K/Z",

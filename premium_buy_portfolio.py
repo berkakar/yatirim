@@ -11,7 +11,8 @@ from alpaca_trailing_stop import get_bars_for_timeframe, TIMEFRAME
 from backtest import TIMEFRAME_LABELS
 from backtest_data import best_per_symbol_combo, load_results
 from buy_algorithms import ALGORITHMS, DEFAULT_ALGORITHM, compute_all_signals, reject_if_marketable
-from github_config import read_portfolio_config, write_portfolio_config
+from github_config import read_json_from_github, read_portfolio_config, write_portfolio_config
+from module_cash import module_budget, module_cash_caption
 from risk_sizing import load_risk_settings
 from rules_version import MIN_TRADES_FOR_EVALUATION, stamp_rules_version
 from stop_algorithms import DEFAULT_STOP_ALGORITHM, STOP_ALGORITHMS
@@ -132,6 +133,24 @@ def _render_buy_point_table(
         "etkinken o hissenin kendi bütçesine göre gerçekleşen zararının eşiğe ulaştığı, yeni alım yapılmadığı "
         "anlamına gelir."
     )
+
+
+def _other_module_pcts(github_token: str, username: str) -> dict[str, float]:
+    """Diğer algoritmaların (RS, ORB, Heikin Ashi) etkin nakit payları -
+    PBP payının varsayılanı ve %100 kontrolü için."""
+    import heikin_ashi_intraday_core
+    import orb_core
+    import relative_strength_core
+
+    out = {}
+    for label, core in (("Relative Strength", relative_strength_core), ("ORB", orb_core),
+                        ("Heikin Ashi Gün İçi", heikin_ashi_intraday_core)):
+        try:
+            cfg = read_json_from_github(GITHUB_REPO, github_token, core.config_path(username), {}) or {}
+        except Exception:
+            cfg = {}
+        out[label] = float(cfg.get("cash_allocation_pct") or 0.0) if cfg.get("enabled") else 0.0
+    return out
 
 
 def render_premium_buy_portfolio(target_list: list[str], username: str):
@@ -256,26 +275,39 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
     st.subheader("💰 Bütçe ve Hisse Ağırlıkları")
     try:
-        live_cash = float(client.get_account()["cash"])
+        account = client.get_account()
     except Exception:
-        live_cash = None
+        account = None
+    other_pcts = _other_module_pcts(github_token, username)
+    other_total = sum(other_pcts.values())
 
-    budget = st.number_input(
-        "Toplam portföy bütçesi ($)", min_value=0.0,
-        value=float(live_cash if live_cash is not None else (config.get("budget") or 0)), step=100.0,
-        key="pbp_budget",
-        help="Sayfa her açıldığında Alpaca'daki güncel nakit bakiyeyle önceden doldurulur - isterseniz "
-             "aşağı çekip bir kısmını nakitte tutabilirsiniz, ama bu tutar hesaptaki nakti aşamaz.",
+    st.info(
+        "💰 **Nakit payı nasıl çalışır?** Diğer algoritmalarla aynı: Premium Buy Point'in bütçesi = hesap "
+        "değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Portföydeki hisselerin alış maliyeti bu bütçeden "
+        "düşülür; kalan tutar yeni alımlar için kullanılabilir nakittir - başka algoritmaların alımları bu "
+        "bütçeyi küçültmez. Hisse ağırlıkları bu bütçenin yüzdesidir."
     )
-    if live_cash is None:
-        st.caption("⚠️ Alpaca'daki güncel nakit bakiye alınamadı - bütçe sınırı bu sayfada kontrol edilemiyor.")
-    elif budget > live_cash:
-        st.warning(
-            f"Girdiğiniz bütçe (${budget:,.2f}), Alpaca'daki güncel nakit bakiyeyi (${live_cash:,.2f}) "
-            "aşıyor. Bu haliyle kaydedilemez - lütfen bütçeyi bu tutarın altına indirin."
-        )
+    saved_pct = config.get("cash_allocation_pct")
+    cash_allocation_pct = st.number_input(
+        "Premium Buy Point'e ayrılacak nakit payı (%)", min_value=0.0, max_value=100.0,
+        value=float(saved_pct if saved_pct is not None else max(0.0, 100.0 - other_total)), step=5.0,
+        key="pbp_cash_allocation_pct",
+        help="Kaydedilmiş bir yüzde yoksa, diğer algoritmalara ayrılmayan kısım önerilir.",
+    )
+    budget = module_budget(account, cash_allocation_pct) if account is not None else float(config.get("budget") or 0)
+    if account is None:
+        st.caption("⚠️ Alpaca hesap bilgisi alınamadı - bütçe bu sayfada hesaplanamıyor.")
     else:
-        st.caption(f"Alpaca'daki güncel nakit bakiye: ${live_cash:,.2f}.")
+        caption = module_cash_caption(client, cash_allocation_pct, set(config.get("weights") or {}))
+        if caption:
+            st.caption(caption)
+    if cash_allocation_pct + other_total > 100.0 + 1e-9:
+        detail = ", ".join(f"{k} %{v:g}" for k, v in other_pcts.items() if v > 0)
+        st.warning(
+            f"Premium Buy Point (%{cash_allocation_pct:g}) ve diğer algoritmaların payları ({detail}) toplamı "
+            f"%{cash_allocation_pct + other_total:g} - %100'ü aşıyor. Algoritmalar aynı nakit için yarışır; "
+            "gerçek nakit her zaman üst sınırdır."
+        )
 
     edited_weights = pd.DataFrame(columns=["Hisse", "Ağırlık %"])
     if selected_symbols:
@@ -618,43 +650,40 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         )
 
     if st.button("💾 Portföyü Kaydet", type="primary"):
-        if live_cash is not None and budget > live_cash:
-            st.error(
-                f"Bütçe (${budget:,.2f}), Alpaca'daki nakit bakiyeyi (${live_cash:,.2f}) aşıyor - kaydedilmedi. "
-                "Lütfen bütçeyi indirin ve tekrar deneyin."
-            )
-        else:
-            client.set_watchlist_symbols(watchlist["id"], selected_symbols)
-            st.session_state["premium_buy_transfer_carry"] = []
-            new_config = {
-                **{k: v for k, v in config.items() if k in ("rules_fingerprint", "rules_version_since")},
-                "budget": float(budget),
-                "weights": weights_map,
-                "algorithm": selected_algorithm,
-                "stop_algorithm": selected_stop_algorithm,
-                "symbol_settings": symbol_settings,
-                "stop_loss_enabled": bool(stop_loss_enabled),
-                "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
-                "top_up_stop_mode": top_up_stop_mode,
-                "buy_stop_rebuy_enabled": bool(buy_stop_rebuy_enabled),
-                "buy_stop_rebuy_window_hours": float(buy_stop_rebuy_window_hours),
-                "risk_sizing": {
-                    "risk_sizing_enabled": bool(risk_sizing_enabled),
-                    "risk_per_trade_pct": float(risk_per_trade_pct),
-                    "max_position_pct": float(max_position_pct),
-                    "max_portfolio_risk_pct": float(max_portfolio_risk_pct),
-                },
-                "entry_timing": {
-                    "pre_open_cancel_enabled": bool(pre_open_cancel_enabled),
-                    "entry_guard_minutes": int(entry_guard_minutes),
-                },
-                "stop_timeframe_mode": stop_timeframe_mode,
-            }
-            # [2026-09-28 · Öneri 6] Kural parmak izi değiştiyse kural sürümü yenilenir.
-            new_config = stamp_rules_version(new_config, config)
-            write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
-            st.success("Portföy kaydedildi.")
-            st.rerun()
+        client.set_watchlist_symbols(watchlist["id"], selected_symbols)
+        st.session_state["premium_buy_transfer_carry"] = []
+        new_config = {
+            **{k: v for k, v in config.items() if k in ("rules_fingerprint", "rules_version_since")},
+            # budget: kayıt anındaki bilgi amaçlı tutar - botlar bütçeyi her
+            # taramada equity x cash_allocation_pct'ten yeniden hesaplar.
+            "cash_allocation_pct": float(cash_allocation_pct),
+            "budget": float(budget),
+            "weights": weights_map,
+            "algorithm": selected_algorithm,
+            "stop_algorithm": selected_stop_algorithm,
+            "symbol_settings": symbol_settings,
+            "stop_loss_enabled": bool(stop_loss_enabled),
+            "max_loss_pct": float(max_loss_pct) if stop_loss_enabled else None,
+            "top_up_stop_mode": top_up_stop_mode,
+            "buy_stop_rebuy_enabled": bool(buy_stop_rebuy_enabled),
+            "buy_stop_rebuy_window_hours": float(buy_stop_rebuy_window_hours),
+            "risk_sizing": {
+                "risk_sizing_enabled": bool(risk_sizing_enabled),
+                "risk_per_trade_pct": float(risk_per_trade_pct),
+                "max_position_pct": float(max_position_pct),
+                "max_portfolio_risk_pct": float(max_portfolio_risk_pct),
+            },
+            "entry_timing": {
+                "pre_open_cancel_enabled": bool(pre_open_cancel_enabled),
+                "entry_guard_minutes": int(entry_guard_minutes),
+            },
+            "stop_timeframe_mode": stop_timeframe_mode,
+        }
+        # [2026-09-28 · Öneri 6] Kural parmak izi değiştiyse kural sürümü yenilenir.
+        new_config = stamp_rules_version(new_config, config)
+        write_portfolio_config(GITHUB_REPO, github_token, new_config, username)
+        st.success("Portföy kaydedildi.")
+        st.rerun()
 
     if not current_symbols:
         return
