@@ -4,8 +4,8 @@ MDB'de stop güncel fiyatın ~%12 gerisinde kaldı: 28.09 kazanç boşluğu (110
 gerçek aralık) günlük ATR'yi 18.6'dan 27.7'ye şişirdi; 1R %12 tavanına dayandı
 ve 3xATR chandelier ~%23 geriden gelecekti. İki düzeltme ölçülür:
 
-  1. Boşluk sınırı (atr_gap_cap): ATR penceresinde her günün gerçek aralığı
-     pencerenin medyanının en fazla N katı sayılır.
+  1. Aykırı gün ayıklama (atr_outlier_mult, yalnızca günlük barlar): gerçek
+     aralığı pencere medyanının N katını aşan gün ATR ortalamasına katılmaz.
   2. Kademeli daralma (trail_tighten_per_r): chandelier çarpanı 2R'de 3x'ten
      başlar, ötesindeki her R için 0.25 daralır, 2x'in altına inmez
      (2R 3x, 4R 2.5x, 6R 2x).
@@ -38,15 +38,13 @@ ALGO = "atr_volatility"
 def variants(saved: dict) -> list[tuple[str, dict]]:
     base = dict(saved.get(ALGO) or {})
     return [
-        ("Mevcut (3xATR sabit)", base),
-        ("Boşluk sınırı 3x medyan", {**base, "atr_gap_cap": 3.0}),
-        ("Kademeli daralma 3x→2x", {**base, "trail_tighten_per_r": 0.25, "trail_min_atr_mult": 2.0}),
-        ("İkisi birden", {**base, "atr_gap_cap": 3.0, "trail_tighten_per_r": 0.25, "trail_min_atr_mult": 2.0}),
+        ("Önceki (aykırı gün dahil)", {**base, "atr_outlier_mult": 0.0}),
+        ("Aykırı gün hariç (3x medyan)", {**base, "atr_outlier_mult": 3.0}),
+        ("Kademeli daralma 3x→2x", {**base, "atr_outlier_mult": 0.0, "trail_tighten_per_r": 0.25, "trail_min_atr_mult": 2.0}),
+        ("Aykırı hariç + kademeli", {**base, "atr_outlier_mult": 3.0, "trail_tighten_per_r": 0.25, "trail_min_atr_mult": 2.0}),
         # Duyarlılık: seçilen değerlerin komşuları da aynı yönde mi?
-        ("  (duyarlılık) sınır 2x", {**base, "atr_gap_cap": 2.0}),
-        ("  (duyarlılık) sınır 4x", {**base, "atr_gap_cap": 4.0}),
-        ("  (duyarlılık) daralma 0.5/R", {**base, "trail_tighten_per_r": 0.5, "trail_min_atr_mult": 2.0}),
-        ("  (duyarlılık) sabit 2xATR", {**base, "trail_atr_mult": 2.0}),
+        ("  (duyarlılık) aykırı eşiği 2.5x", {**base, "atr_outlier_mult": 2.5}),
+        ("  (duyarlılık) aykırı eşiği 4x", {**base, "atr_outlier_mult": 4.0}),
     ]
 
 
