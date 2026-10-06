@@ -2,9 +2,10 @@ import unittest
 from datetime import datetime, timezone
 
 from algo_analiz import (
-    apply_stop_scenario, count_by, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+    apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
 )
-from trade_journal_analysis import STATUS_CLOSED, STATUS_OPEN, Record, group_summary
+from trade_journal import walk_fills
+from trade_journal_analysis import STATUS_CLOSED, STATUS_OPEN, Record, closed_records, group_summary, open_records
 
 
 def _open(symbol, qty, entry, last, algorithm="PBP: ema_cross", realized=0.0):
@@ -111,6 +112,57 @@ class PortfolioSnapshotTest(unittest.TestCase):
     def test_count_by_skips_empty(self):
         recs = [_closed("A", 1), _closed("B", -1, reason=None)]
         self.assertEqual(count_by(recs, "exit_reason"), {"Stop: İlk stop": 1})
+
+
+def _stop(id_, symbol, price, created, coid, status="replaced"):
+    return {"id": id_, "symbol": symbol, "side": "sell", "type": "stop", "status": status, "qty": "10",
+            "filled_qty": "0", "stop_price": price, "filled_avg_price": None, "filled_at": None,
+            "created_at": created, "client_order_id": coid}
+
+
+def _fill(id_, symbol, side, price, at, coid=None, qty="10", type_="market"):
+    return {"id": id_, "symbol": symbol, "side": side, "type": type_, "status": "filled", "qty": qty,
+            "filled_qty": qty, "filled_avg_price": price, "filled_at": at, "created_at": at, "client_order_id": coid}
+
+
+class StopHistoryTest(unittest.TestCase):
+    ORDERS = [
+        # Önceki işlemin stopu - bu işleme sayılmamalı
+        _stop("s0", "MU", "80", "2026-08-30T14:00:00Z", "stop-initial-MU-0"),
+        _fill("b1", "MU", "buy", "100", "2026-09-01T14:00:00Z", "algo-ema_cross-1Day-MU-1"),
+        _stop("s1", "MU", "97", "2026-09-01T14:00:01Z", "stop-initial-MU-1"),
+        # Aynı seviye, sadece adet değişti -> tek hareket
+        _stop("s1b", "MU", "97", "2026-09-01T15:00:00Z", "stop-initial-MU-2"),
+        _stop("s2", "MU", "100.2", "2026-09-03T14:00:00Z", "stop-breakeven-MU-3"),
+        _stop("s3", "MU", "96", "2026-09-04T00:30:00Z", "shield-MU-10500-4"),
+        _stop("s4", "MU", "105", "2026-09-04T13:45:00Z", "stop-restore-MU-5", status="filled"),
+        _fill("x1", "MU", "sell", "105", "2026-09-04T15:00:00Z", "stop-restore-MU-5", type_="stop"),
+        # Çıkıştan sonraki stop - sayılmamalı
+        _stop("s5", "MU", "120", "2026-09-05T14:00:00Z", "stop-initial-MU-6"),
+        # Açık pozisyon
+        _fill("b2", "AMD", "buy", "50", "2026-09-10T14:00:00Z", "orb-buy-AMD-1"),
+        _stop("a1", "AMD", "48", "2026-09-10T14:00:01Z", "stop-initial-AMD-1"),
+        _stop("a2", "AMD", "50.1", "2026-09-11T14:00:00Z", "stop-breakeven-AMD-2", status="new"),
+    ]
+
+    def test_closed_and_open_moves(self):
+        trips, lots = walk_fills(self.ORDERS, now=datetime(2026, 9, 12, tzinfo=timezone.utc))
+        self.assertEqual(len(trips), 1)
+        moves = trips[0].extra["stop_moves"]
+        self.assertEqual([(m.price, m.kind) for m in moves],
+                         [(97.0, "initial"), (100.2, "breakeven"), (96.0, "shield"), (105.0, "restore")])
+        self.assertEqual(moves[2].real_price, 105.0)
+        self.assertEqual([m.price for m in lots["AMD"].stop_moves], [48.0, 50.1])
+
+        recs = closed_records(trips) + open_records(
+            [{"symbol": "AMD", "qty": "10", "avg_entry_price": "50", "current_price": "52", "unrealized_pl": "20"}], lots)
+        self.assertEqual(len(recs[0].stop_moves), 4)
+        self.assertEqual(len(recs[1].stop_moves), 2)
+
+        text = format_stop_moves(moves, timezone.utc)
+        self.assertEqual(text, "01.09 97.00 İlk → 03.09 100.20 BE → 04.09 96.00 Kalkan (gerçek 105.00) "
+                               "→ 04.09 105.00 Kalkan sonrası")
+        self.assertEqual(format_stop_moves([], timezone.utc), "")
 
 
 if __name__ == "__main__":

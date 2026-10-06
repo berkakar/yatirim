@@ -13,7 +13,7 @@ API çağrısı yapmaz (tests/test_trade_journal_analysis.py). Streamlit
 sayfası: trade_journal_page.py (🧠 Algo Analiz), stop senaryosu: algo_analiz.py.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from trade_journal import MANUAL_SOURCE, OpenLot, RoundTrip, entry_source_parts, session_bucket
@@ -48,6 +48,8 @@ class Record:
     stop_algorithm: str | None = None
     current_stop: float | None = None
     stop_unrealized: float | None = None
+    # İşlem süresince stop hareketleri (trade_journal.StopMove listesi).
+    stop_moves: list = field(default_factory=list)
 
     @property
     def total(self) -> float:
@@ -86,6 +88,7 @@ def closed_records(trips: list[RoundTrip]) -> list[Record]:
             entry_time=t.entry_time, exit_time=t.exit_time, r_multiple=t.r_multiple,
             qty=t.qty, entry_price=t.entry_price, last_price=t.exit_price, initial_stop=t.initial_stop,
             exit_reason=t.exit_reason, entry_session=t.entry_session, exit_session=t.exit_session,
+            stop_moves=list((t.extra or {}).get("stop_moves") or []),
         ))
     return records
 
@@ -114,6 +117,7 @@ def open_records(positions: list[dict], open_lots: dict[str, OpenLot]) -> list[R
             qty=qty, entry_price=avg_entry, last_price=_f(p.get("current_price")),
             initial_stop=lot.initial_stop if lot else None,
             entry_session=session_bucket(lot.entry_time) if lot else None,
+            stop_moves=list(lot.stop_moves) if lot else [],
         ))
     return records
 

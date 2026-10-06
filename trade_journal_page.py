@@ -21,7 +21,7 @@ import streamlit as st
 
 import storage
 from algo_analiz import (
-    apply_stop_scenario, count_by, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
+    apply_stop_scenario, count_by, format_stop_moves, open_stop_levels, portfolio_snapshot, resolve_stop_algorithm_id, scenario_totals,
 )
 from alpaca_account_ui import get_user_alpaca, missing_keys_warning
 from alpaca_client import AlpacaClient
@@ -180,17 +180,17 @@ def _pnl_color_style(cols: list[str]):
     return fn
 
 
-def _table(df: pd.DataFrame, pnl_cols: list[str] | None = None):
+def _table(df: pd.DataFrame, pnl_cols: list[str] | None = None, column_config: dict | None = None):
     style = _pnl_color_style(pnl_cols) if pnl_cols else None
     styler = zebra_style(df, style).format(precision=2, thousands=",", na_rep="—")
-    int_like = [c for c in ("Adet", "İşlem", "Kapalı", "Açık") if c in df.columns]
+    int_like = [c for c in ("Adet", "İşlem", "Kapalı", "Açık", "Stop Güncelleme") if c in df.columns]
     if int_like:
         styler = styler.format("{:g}", subset=int_like, na_rep="—")
     if "Pay %" in df.columns:
         styler = styler.format("{:.1f}", subset=["Pay %"])
     if "İsabet %" in df.columns:
         styler = styler.format("{:.0f}", subset=["İsabet %"], na_rep="—")
-    st.dataframe(styler, use_container_width=True, hide_index=True)
+    st.dataframe(styler, use_container_width=True, hide_index=True, column_config=column_config)
 
 
 # ------------------------------------------------------------------------------
@@ -389,6 +389,8 @@ def _movements_dataframe(records, split_timeframe: bool) -> pd.DataFrame:
             "Durum": r.status,
             "Algoritma": r.algo_label(split_timeframe),
             "Stop Loss": _stop_label(r.stop_algorithm),
+            "Stop Güncelleme": max(len(r.stop_moves) - 1, 0) if r.stop_moves else None,
+            "Stop Hareketleri": format_stop_moves(r.stop_moves, TR_TZ) or "—",
             "Giriş (TRT)": r.entry_time.astimezone(TR_TZ).strftime("%d.%m.%y %H:%M") if r.entry_time else "—",
             "Çıkış (TRT)": r.exit_time.astimezone(TR_TZ).strftime("%d.%m.%y %H:%M") if r.exit_time else "—",
             "Adet": r.qty,
@@ -419,8 +421,19 @@ def _render_movements(records: list, split_tf: bool):
         st.info("Bu seçimle gösterilecek hareket yok.")
         return
     _table(_movements_dataframe(shown, split_tf),
-           ["Gerçekleşen $", "Açık K/Z $", "Toplam $", "Stop senaryosu $", "K/Z %", "R"])
+           ["Gerçekleşen $", "Açık K/Z $", "Toplam $", "Stop senaryosu $", "K/Z %", "R"],
+           column_config={
+               "Stop Hareketleri": st.column_config.TextColumn(
+                   "Stop Hareketleri", width="large",
+                   help="Giriş ile çıkış (açık pozisyonda şimdi) arasında kurulan stop seviyeleri, eskiden yeniye. "
+                        "Hücrenin üzerine gelince tamamı görünür."),
+               "Stop Güncelleme": st.column_config.NumberColumn(
+                   "Stop Güncelleme", help="İlk stoptan sonra stopun kaç kez taşındığı."),
+           })
     st.caption(
+        "Stop hareketleri: tarih (TRT), seviye ve sebep - İlk: ilk stop, BE: breakeven, Yapısal: yapısal trail, "
+        "ATR trail: chandelier, Kalkan: açılış kalkanının geçici felaket stopu (parantezde dönülecek gerçek seviye), "
+        "Kalkan sonrası: gerçek stopa dönüş. Sebepsiz seviyeler 28.09.2026 öncesi ya da elle konmuş stoplardır. "
         "Açık pozisyonun giriş emri seçili pencerede yoksa sembolün son "
         f"{OPEN_ENTRY_LOOKBACK_DAYS} günlük geçmişi taranır; yine bulunamazsa algoritma 'Bilinmiyor' görünür. Açık "
         "pozisyonlardaki R anlık fiyata göredir. R = (çıkış − giriş) / (giriş − ilk stop)."

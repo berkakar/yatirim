@@ -158,3 +158,35 @@ def count_by(records: list[Record], attr: str) -> dict[str, int]:
         if v:
             counts[v] = counts.get(v, 0) + 1
     return counts
+
+
+# Hisse Hareketleri tablosunda stop hareketleri için kısa etiketler
+# (uzun açıklamalar: stop_tags.REASON_LABELS).
+STOP_KIND_SHORT = {
+    "initial": "İlk",
+    "breakeven": "BE",
+    "structure": "Yapısal",
+    "chandelier": "ATR trail",
+    "profitlock": "Kâr kilidi",
+    "haexit": "HA",
+    "topup": "İlave",
+    "restore": "Kalkan sonrası",
+    "trail": "Trail",
+    "shield": "Kalkan",
+}
+
+
+def format_stop_moves(moves, tz) -> str:
+    """Stop hareketlerini tek satırlık metne çevirir:
+    "05.09 97.00 İlk → 08.09 99.50 BE → 10.09 150.00 Kalkan (gerçek 103.20)".
+    Etiketsiz (28.09.2026 öncesi / elle) stoplarda yalnız tarih ve seviye."""
+    parts = []
+    for m in moves:
+        text = f"{m.time.astimezone(tz):%d.%m} {m.price:,.2f}"
+        label = STOP_KIND_SHORT.get(m.kind or "", m.kind or "")
+        if label:
+            text += f" {label}"
+        if m.real_price is not None:
+            text += f" (gerçek {m.real_price:,.2f})"
+        parts.append(text)
+    return " → ".join(parts)

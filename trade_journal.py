@@ -160,6 +160,7 @@ class OpenLot:
     realized_pnl: float
     sold_qty: float
     initial_stop: float | None = None
+    stop_moves: list = field(default_factory=list)
 
 
 def walk_fills(orders: list[dict], now: datetime | None = None) -> tuple[list[RoundTrip], dict[str, OpenLot]]:
@@ -217,7 +218,8 @@ def walk_fills(orders: list[dict], now: datetime | None = None) -> tuple[list[Ro
                 exit_reason=exit_reason(o),
                 entry_session=session_bucket(entry_time), exit_session=session_bucket(exit_time),
                 initial_stop=_initial_stop(stops_by_symbol.get(symbol, []), entry_order, exit_time),
-                extra={"client_order_id": entry_order.get("client_order_id")},
+                extra={"client_order_id": entry_order.get("client_order_id"),
+                       "stop_moves": stop_history(stops_by_symbol.get(symbol, []), entry_order, exit_time)},
             ))
             qty, cost, bought, entry_order = 0.0, 0.0, 0.0, None
         if qty > 1e-9 and entry_order is not None:
@@ -227,6 +229,7 @@ def walk_fills(orders: list[dict], now: datetime | None = None) -> tuple[list[Ro
                 symbol=symbol, entry_time=_parse(entry_order["filled_at"]), entry_order=entry_order,
                 qty=qty, avg_entry=avg_entry, realized_pnl=exit_value - avg_entry * exit_qty, sold_qty=exit_qty,
                 initial_stop=_initial_stop(stops_by_symbol.get(symbol, []), entry_order, upper),
+                stop_moves=stop_history(stops_by_symbol.get(symbol, []), entry_order, upper),
             )
     trips.sort(key=lambda t: t.exit_time)
     return trips, open_lots
@@ -235,6 +238,38 @@ def walk_fills(orders: list[dict], now: datetime | None = None) -> tuple[list[Ro
 def build_round_trips(orders: list[dict]) -> list[RoundTrip]:
     """Kapanmış işlemler (bkz. walk_fills)."""
     return walk_fills(orders)[0]
+
+
+@dataclass
+class StopMove:
+    """Bir işlem süresince kurulan / güncellenen stop seviyesi. Alpaca'da stop
+    güncellemesi (replace) yeni bir emir üretir; her biri bir hareket."""
+    time: datetime
+    price: float
+    kind: str | None           # stop_tags.tag_kind: "initial", "breakeven", "shield"...
+    real_price: float | None = None  # kalkan stopunda 09:45'te dönülecek gerçek seviye
+
+
+def stop_history(stops: list[dict], entry_order: dict, end_time: datetime) -> list[StopMove]:
+    """Giriş emri oluşturulduktan sonra ve `end_time`dan (çıkış ya da şimdi)
+    önce kurulan stop emirleri, zaman sırasıyla. Art arda aynı seviye (ve
+    aynı tür) tekrar ederse tek hareket sayılır - ör. sadece adet
+    güncellemesi ya da iptal edilip aynı seviyeden yeniden kurulan stop."""
+    lower = _parse(entry_order.get("created_at")) or _parse(entry_order.get("filled_at"))
+    moves: list[StopMove] = []
+    for s in sorted(stops, key=lambda s: s.get("created_at") or ""):
+        created = _parse(s.get("created_at"))
+        if created is None or s.get("stop_price") in (None, ""):
+            continue
+        if (lower is not None and created < lower) or created > end_time:
+            continue
+        price = float(s["stop_price"])
+        kind = tag_kind(s.get("client_order_id"))
+        if moves and abs(moves[-1].price - price) < 1e-9 and moves[-1].kind == kind:
+            continue
+        moves.append(StopMove(time=created, price=price, kind=kind,
+                              real_price=parse_shield_real_stop(s.get("client_order_id"))))
+    return moves
 
 
 def _initial_stop(stops: list[dict], entry_order: dict, exit_time: datetime) -> float | None:
