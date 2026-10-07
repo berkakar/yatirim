@@ -28,6 +28,26 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "25",
+        "date": "2026-10-07",
+        "title": "Oynaklık (ATR) Stop: günlük ATR yalnızca tamamlanmış günlerden",
+        "problem": (
+            "Stop botu 5 dakikada bir bugünün henüz kapanmamış günlük barını da ATR'nin 14 günlük penceresine "
+            "katıyordu. Sabah saatlerinde bu barın aralığı küçük olduğundan ATR düşük çıkıyor, iz süren stop "
+            "geçici olarak daha yakına hesaplanıyordu; stop geri gevşemediği için bu etki kalıcı oluyordu."
+        ),
+        "change": (
+            "- Günlük barlarda bugünün oluşmakta olan barı ATR hesabından çıkarılır (ilk stop, breakeven "
+            "tamponu ve chandelier mesafesi). En yüksek fiyat ve güncel fiyat kontrolü yine gün içi canlı "
+            "veriyi kullanır - stop gün içinde yukarı çekilmeye devam eder.\n"
+            "- Gün içi barlarda değişiklik yok."
+        ),
+        "where": "stop_algorithms.py (robust_atr), tests/test_atr_outlier.py",
+        "settings": "Yok.",
+        "track": "Aynı gün içinde ATR stoplu bir hissenin chandelier mesafesi sabit kalmalı.",
+        "verification": "Backtest sonuçları değişmedi (geçmiş barların hepsi tamamlanmış): günlük +395.8%, 30dk +121.8%.",
+    },
+    {
         "id": "24",
         "date": "2026-10-07",
         "title": "Oynaklık (ATR) Stop: günlük barlarda iz süren stop 1.5R'de başlar, 2xATR geriden gelir",
