@@ -655,10 +655,19 @@ def _is_daily_or_longer(bars: list[Bar]) -> bool:
 def robust_atr(bars: list[Bar] | None, period: int, outlier_mult: float = 0.0) -> float | None:
     """atr() ile aynı pencere; outlier_mult > 0 ve barlar günlükse, gerçek
     aralığı medyanın outlier_mult katını aşan günler ortalamadan çıkarılır
-    (bkz. ATR_VOL_OUTLIER_MULT)."""
+    (bkz. ATR_VOL_OUTLIER_MULT).
+
+    [2026-10-07] Günlük barlarda henüz kapanmamış BUGÜNÜN barı ATR'ye katılmaz
+    (_closed_bars): canlı stop botu 5 dakikada bir bugünkü oluşmakta olan barı
+    da geçiriyor; sabah saatlerinde aralığı küçük olan bu bar ATR'yi düşürüp
+    chandelier'i geçici olarak sıkılaştırıyordu (stop gevşemediği için etkisi
+    kalıcı oluyordu). Gün içi barlarda davranış değişmedi."""
     if not bars:
         return None
-    if outlier_mult <= 0 or not _is_daily_or_longer(bars):
+    daily = _is_daily_or_longer(bars)
+    if daily:
+        bars = _closed_bars(bars)
+    if outlier_mult <= 0 or not daily:
         return atr(bars, period)
     if len(bars) < period + 1:
         return None

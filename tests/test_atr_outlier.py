@@ -48,6 +48,35 @@ class RobustAtrTest(unittest.TestCase):
         self.assertIsNone(robust_atr(_bars([4.0] * 5, DAILY), 14, 3.0))
 
 
+class ClosedDaysOnlyTest(unittest.TestCase):
+    """[2026-10-07] Günlük ATR'ye bugünün oluşmakta olan barı katılmaz."""
+
+    def _bars_ending_today(self, ranges):
+        today = datetime.now(timezone.utc).replace(hour=4, minute=0, second=0, microsecond=0)
+        start = today - DAILY * len(ranges)
+        bars = []
+        for i, r in enumerate([1.0] + list(ranges)):
+            t = (start + DAILY * i).isoformat().replace("+00:00", "Z")
+            bars.append(Bar(t=t, o=100, h=100 + r / 2, l=100 - r / 2, c=100, v=1))
+        return bars
+
+    def test_forming_daily_bar_is_excluded(self):
+        bars = self._bars_ending_today([4.0] * 15 + [0.5])  # son bar = bugün, sabah: aralık küçük
+        self.assertAlmostEqual(robust_atr(bars, 14, 3.0), 4.0)
+        self.assertAlmostEqual(robust_atr(bars, 14, 0.0), 4.0)
+        self.assertLess(atr(bars, 14), 4.0)  # eski hesap bugünü katıyordu
+
+    def test_completed_history_unchanged(self):
+        bars = _bars([4.0] * 13 + [6.0], DAILY)  # 2026-09 tarihli: hepsi kapanmış
+        self.assertAlmostEqual(robust_atr(bars, 14, 0.0), atr(bars, 14))
+
+    def test_intraday_forming_bar_kept(self):
+        now = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        bars = [Bar(t=(now - HALF_HOUR * (16 - i)).isoformat().replace("+00:00", "Z"), o=100, h=102, l=98, c=100, v=1)
+                for i in range(16)] + [Bar(t=now.isoformat().replace("+00:00", "Z"), o=100, h=100.1, l=99.9, c=100, v=1)]
+        self.assertAlmostEqual(robust_atr(bars, 14, 3.0), atr(bars, 14))
+
+
 class AtrVolatilityUsesRobustAtrTest(unittest.TestCase):
     def test_initial_stop_ignores_gap_day(self):
         bars = _bars(NORMAL + [40.0], DAILY)
