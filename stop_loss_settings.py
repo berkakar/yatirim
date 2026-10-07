@@ -22,7 +22,7 @@ from stop_algorithms import (
     ADAPTIVE_BREAKEVEN_R, ADAPTIVE_ER_WEIGHT, ADAPTIVE_INITIAL_ATR_MULT, ADAPTIVE_MAX_ATR_MULT,
     ADAPTIVE_MIN_ATR_MULT, ADAPTIVE_MIN_TRAIL_ATR_MULT, ADAPTIVE_STRUCTURE_BUFFER_ATR, ADAPTIVE_TIGHTEN_PER_R,
     ADAPTIVE_TRAIL_ATR_MULT, ADAPTIVE_TRAIL_START_R, ATR_MULTIPLIER, ATR_PERIOD, ATR_VOL_BREAKEVEN_BUFFER_ATR, ATR_VOL_BREAKEVEN_R, ATR_VOL_FALLBACK_PCT,
-    ATR_VOL_INITIAL_ATR_MULT, ATR_VOL_MAX_STOP_PCT, ATR_VOL_TRAIL_ATR_MULT, ATR_VOL_TRAIL_START_R,
+    ATR_VOL_INITIAL_ATR_MULT, ATR_VOL_MAX_STOP_PCT, ATR_VOL_DAILY_TRAIL_ATR_MULT, ATR_VOL_DAILY_TRAIL_START_R, ATR_VOL_TRAIL_ATR_MULT, ATR_VOL_TRAIL_START_R,
     BREAKEVEN_BUFFER_PCT, BREAKEVEN_TRIGGER_PCT, FALLBACK_BUFFER_PCT, INITIAL_STOP_PCT,
     HEIKIN_ASHI_EXIT_BUFFER_PCT, HEIKIN_ASHI_MIN_ATR_MULT, HEIKIN_ASHI_STOP_BUFFER_PCT, ORB_STOP_BUFFER_PCT, ORB_TREND_EMA_PERIOD,
     DEFAULT_STOP_ALGORITHM, STALE_REFERENCE_DAYS, STOP_ALGORITHMS, SWING_ORDER, TREND_EMA_PERIOD,
@@ -381,6 +381,19 @@ def render_stop_loss_settings(username: str):
             key="sls_algo5_trail_atr_mult",
             help="Chandelier trail: girişten beri en yüksek fiyat − bu çarpan × ATR.",
         )
+        st.caption("Stop GÜNLÜK barlarda izleniyorsa (ör. 1 Gün periyotlu Premium Buy Point hisseleri) "
+                   "yukarıdaki iki trail ayarı yerine aşağıdakiler kullanılır.")
+        a5c8, a5c9 = st.columns(2)
+        algo5_daily_trail_start_r = a5c8.number_input(
+            "Günlük: Trail Başlangıcı (R)", min_value=0.5, max_value=20.0,
+            value=float(algo5.get("daily_trail_start_r", ATR_VOL_DAILY_TRAIL_START_R)), step=0.25, format="%.2f",
+            key="sls_algo5_daily_trail_start_r",
+        )
+        algo5_daily_trail_atr_mult = a5c9.number_input(
+            "Günlük: Trail ATR Çarpanı", min_value=0.5, max_value=10.0,
+            value=float(algo5.get("daily_trail_atr_mult", ATR_VOL_DAILY_TRAIL_ATR_MULT)), step=0.25, format="%.2f",
+            key="sls_algo5_daily_trail_atr_mult",
+        )
 
     with tab_algo6:
         _live_note("adaptive_dynamic", usage)
@@ -528,6 +541,8 @@ def render_stop_loss_settings(username: str):
                 "breakeven_buffer_atr": float(algo5_breakeven_buffer_atr),
                 "trail_start_r": float(algo5_trail_start_r),
                 "trail_atr_mult": float(algo5_trail_atr_mult),
+                "daily_trail_start_r": float(algo5_daily_trail_start_r),
+                "daily_trail_atr_mult": float(algo5_daily_trail_atr_mult),
             },
             "adaptive_dynamic": {
                 "initial_atr_mult": float(algo6_initial_atr_mult),
