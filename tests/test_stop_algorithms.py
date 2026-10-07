@@ -67,6 +67,10 @@ class HeikinAshiExitRedCandlesTest(unittest.TestCase):
 
 
 class AtrVolatilityTrailTest(unittest.TestCase):
+    # Günlük barlara özgü trail ayarları (1.5R / 2xATR) tests/test_atr_outlier.py'de;
+    # burada genel mekanizma eski 2R / 3xATR değerleriyle sınanıyor.
+    LEGACY = {"daily_trail_start_r": 2.0, "daily_trail_atr_mult": 3.0}
+
     def setUp(self):
         self.history = make_bars([100.0] * 20, spread=2.0)  # ATR = 2 -> 1R = 4
 
@@ -77,31 +81,31 @@ class AtrVolatilityTrailTest(unittest.TestCase):
 
     def test_no_breakeven_before_one_r_close(self):
         # Kapanış +3 (0.75R) - intrabar tepe +6 olsa bile breakeven yok.
-        self.assertIsNone(atr_volatility_trail(self._ctx([101, 103, 103], highs=[102, 106, 104])))
+        self.assertIsNone(atr_volatility_trail(self._ctx([101, 103, 103], highs=[102, 106, 104]), **self.LEGACY))
 
     def test_breakeven_with_atr_buffer_after_one_r_close(self):
         # Son iki bar kapanmış sayılır (eski zaman damgaları) - kapanış 104.5 >= 104.
-        decision = atr_volatility_trail(self._ctx([101, 104.5, 105]))
+        decision = atr_volatility_trail(self._ctx([101, 104.5, 105]), **self.LEGACY)
         self.assertIsNotNone(decision)
         self.assertAlmostEqual(decision.price, 100.2)  # giriş + 0.1 x ATR
         self.assertIn("breakeven", decision.reason)
 
     def test_chandelier_after_two_r(self):
-        decision = atr_volatility_trail(self._ctx([102, 106, 109, 110], current_stop=100.2))
+        decision = atr_volatility_trail(self._ctx([102, 106, 109, 110], current_stop=100.2), **self.LEGACY)
         self.assertIsNotNone(decision)
         # en yüksek fiyat 111 (110 + spread/2), ATR history_bars'tan = 2 -> 111 - 3 x 2
         self.assertIn("chandelier", decision.reason)
         self.assertAlmostEqual(decision.price, 105.0)
 
     def test_never_loosens(self):
-        self.assertIsNone(atr_volatility_trail(self._ctx([101, 104.5, 105], current_stop=103.0)))
+        self.assertIsNone(atr_volatility_trail(self._ctx([101, 104.5, 105], current_stop=103.0), **self.LEGACY))
 
     def test_uses_initial_stop_for_one_r(self):
         # İlk stop 90 -> 1R = 10: +4.5 kapanış breakeven için yetmez.
         bars = make_bars([101, 104.5, 105], spread=2.0)
         ctx = StopContext(side="long", entry_price=100.0, current_stop_price=90.0, bars=bars,
                           initial_stop_price=90.0, history_bars=self.history)
-        self.assertIsNone(atr_volatility_trail(ctx))
+        self.assertIsNone(atr_volatility_trail(ctx, **self.LEGACY))
 
 
 class BreakevenBufferTest(unittest.TestCase):

@@ -626,6 +626,17 @@ ATR_VOL_TRAIL_ATR_MULT = 3.0
 ATR_VOL_OUTLIER_MULT = 3.0
 ATR_VOL_TRAIL_TIGHTEN_PER_R = 0.0
 ATR_VOL_TRAIL_MIN_ATR_MULT = 2.0
+# [2026-10-07] GÜNLÜK (ve daha uzun) barlarda izlenen stop için ayrı trail
+# ayarları: chandelier 2R yerine 1.5R'de başlar ve 3xATR yerine 2xATR geriden
+# gelir. Neden: 2R'de başlayan 3xATR chandelier ilk seviyesi breakeven'in
+# altında kaldığı için ~2.1R'ye kadar etkisizdi; 1R-2R arasında ~2R'lik açık
+# kâr, zirvelerden de 2R geri veriliyordu. Backtest (günlük, 30 hisse, 2181
+# giriş): toplam +412.6% -> +395.8%, fark istatistiksel olarak anlamsız; verinin
+# ikinci yarısında +190.2% -> +210.0%, maks. düşüş 83.8 -> 80.4. Gün içi
+# barlarda (RS'nin 30dk trail'i) UYGULANMAZ - orada aynı ayar +121.8%'i
+# +34.2%'ye düşürdü; trail_start_r / trail_atr_mult geçerli kalır.
+ATR_VOL_DAILY_TRAIL_START_R = 1.5
+ATR_VOL_DAILY_TRAIL_ATR_MULT = 2.0
 _DAILY_BAR_MIN_SPACING_S = 20 * 3600
 
 
@@ -696,6 +707,8 @@ def atr_volatility_trail(
     atr_outlier_mult: float = ATR_VOL_OUTLIER_MULT,
     trail_tighten_per_r: float = ATR_VOL_TRAIL_TIGHTEN_PER_R,
     trail_min_atr_mult: float = ATR_VOL_TRAIL_MIN_ATR_MULT,
+    daily_trail_start_r: float = ATR_VOL_DAILY_TRAIL_START_R,
+    daily_trail_atr_mult: float = ATR_VOL_DAILY_TRAIL_ATR_MULT,
 ) -> StopDecision | None:
     """R bazlı breakeven + chandelier trail - bkz. bölüm notu. Breakeven
     kararı KAPANMIŞ bara göre verilir (oluşmakta olan barın anlık iğnesi
@@ -706,6 +719,8 @@ def atr_volatility_trail(
     side = ctx.side
     last_price = ctx.bars[-1].c
     atr_value = _atr_from_context(ctx.bars, ctx.history_bars, atr_period, atr_outlier_mult)
+    if _is_daily_or_longer(ctx.history_bars or ctx.bars):
+        trail_start_r, trail_atr_mult = daily_trail_start_r, daily_trail_atr_mult
 
     if ctx.initial_stop_price is not None and ctx.initial_stop_price != ctx.entry_price:
         one_r = abs(ctx.entry_price - ctx.initial_stop_price)

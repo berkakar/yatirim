@@ -28,6 +28,35 @@ ANALYSIS_SUMMARY = {
 
 CHANGES = [
     {
+        "id": "24",
+        "date": "2026-10-07",
+        "title": "Oynaklık (ATR) Stop: günlük barlarda iz süren stop 1.5R'de başlar, 2xATR geriden gelir",
+        "problem": (
+            "Chandelier 2R'de başlayıp 3xATR geriden geliyordu. 3xATR = 2R olduğu için ilk seviyesi breakeven'in "
+            "altında kalıyor, ~2.1R'ye kadar etkisizdi: 1R-2R arasında ~2R'lik açık kâr (örnek: 100$ giriş, "
+            "ATR 3$, 108.9'dan dönen işlem +0.07R ile kapanıyor), zirvelerden de 2R geri veriliyordu."
+        ),
+        "change": (
+            "- Stop GÜNLÜK barlarda izleniyorsa (1 Gün periyotlu Premium Buy Point hisseleri) chandelier "
+            "1.5R'de başlar ve en yüksek − 2xATR'yi izler (daily_trail_start_r, daily_trail_atr_mult). "
+            "Örnekte 108.9'dan dönen işlem +0.64R, 120'den dönen +2.4R yerine +3.1R ile kapanır.\n"
+            "- Breakeven (1R) aynen kalır.\n"
+            "- Gün içi barlarda (RS'nin 30dk trail'i) eski 2R / 3xATR geçerli."
+        ),
+        "where": "stop_algorithms.py (atr_volatility_trail), stop_loss_settings.py, tests/test_atr_outlier.py",
+        "settings": "Stop Loss Ayarları > Oynaklık (ATR) Stop: 'Günlük: Trail Başlangıcı (R)' ve "
+                    "'Günlük: Trail ATR Çarpanı'.",
+        "track": "Günlük ATR stoplu işlemlerde zirveden geri verilen R; Algo Analiz'de bu işlemlerin R dağılımı.",
+        "verification": (
+            "Günlük bar, 30 hisse, 2181 giriş; 24 kombinasyonluk tarama (başlama 1/1.5/2R × mesafe "
+            "1.5/2/2.5/3xATR × breakeven açık/kapalı). Kayıtlı canlı ayarlarla: toplam özsermaye katkısı "
+            "+412.6% → +395.8%, maks. düşüş 83.8 → 80.4; işlem başına fark istatistiksel olarak anlamsız "
+            "(-0.008%, %95 GA -0.062 … +0.036). Verinin ilk yarısında +222.4 → +185.7, ikinci yarısında "
+            "+190.2 → +210.0. 30dk barda aynı ayar +121.8% → +34.2% olduğu için orada uygulanmadı (30dk sonucu "
+            "değişmedi). Daha sıkısı (1R'de başlayan 1.5xATR) +267.1% - büyük trendleri kesiyor."
+        ),
+    },
+    {
         "id": "23",
         "date": "2026-10-06",
         "title": "Oynaklık (ATR) Stop: günlük ATR'de aykırı günler (kazanç boşluğu) hesaba katılmıyor",

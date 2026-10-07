@@ -66,17 +66,47 @@ class AtrVolatilityUsesRobustAtrTest(unittest.TestCase):
                           initial_stop_price=94.0, history_bars=hist)
         decision = atr_volatility_trail(ctx)
         self.assertIn("chandelier", decision.reason)
-        self.assertAlmostEqual(decision.price, 113 - 3 * 4.0)
+        self.assertAlmostEqual(decision.price, 113 - 2 * 4.0)  # günlük: 2xATR
 
     def test_tiered_tightening(self):
         hist = _bars(NORMAL + [4.0], DAILY)
         pos = [Bar(t="2026-09-16T04:00:00Z", o=124, h=124, l=123, c=124, v=1)] * 2  # 4R kâr (1R=6)
         ctx = StopContext(side="long", entry_price=100.0, current_stop_price=94.0, bars=pos,
                           initial_stop_price=94.0, history_bars=hist)
-        loose = atr_volatility_trail(ctx)
-        tight = atr_volatility_trail(ctx, trail_tighten_per_r=0.25)
+        legacy = {"daily_trail_start_r": 2.0, "daily_trail_atr_mult": 3.0}
+        loose = atr_volatility_trail(ctx, **legacy)
+        tight = atr_volatility_trail(ctx, trail_tighten_per_r=0.25, **legacy)
         self.assertAlmostEqual(loose.price, 124 - 3 * 4.0)
         self.assertAlmostEqual(tight.price, 124 - 2.5 * 4.0)
+
+
+class DailyTrailSettingsTest(unittest.TestCase):
+    """[2026-10-07] Günlük barlarda chandelier 1.5R'de başlar, 2xATR geriden
+    gelir; gün içi barlarda trail_start_r / trail_atr_mult (2R, 3x) geçerli."""
+
+    def _ctx(self, step, high):
+        hist = _bars([4.0] * 14, step)
+        last = hist[-1].t
+        pos = [Bar(t=last, o=high - 1, h=high, l=high - 2, c=high - 1, v=1)] * 2
+        return StopContext(side="long", entry_price=100.0, current_stop_price=94.0, bars=pos,
+                           initial_stop_price=94.0, history_bars=hist)  # 1R = 6, ATR = 4
+
+    def test_daily_starts_at_1_5r_with_2x(self):
+        decision = atr_volatility_trail(self._ctx(DAILY, 110.0))  # 1.67R
+        self.assertIn("chandelier (2xATR)", decision.reason)
+        self.assertAlmostEqual(decision.price, 110 - 2 * 4.0)
+
+    def test_intraday_keeps_2r_and_3x(self):
+        decision = atr_volatility_trail(self._ctx(HALF_HOUR, 110.0))  # 1.67R < 2R: yalnız breakeven
+        self.assertIn("breakeven", decision.reason)
+        decision = atr_volatility_trail(self._ctx(HALF_HOUR, 115.0))  # 2.5R
+        self.assertAlmostEqual(decision.price, 115 - 3 * 4.0)
+
+    def test_saved_trail_settings_do_not_override_daily(self):
+        algo = STOP_ALGORITHMS["atr_volatility"]
+        kwargs = resolve_kwargs(algo.trail, {"trail_start_r": 2.0, "trail_atr_mult": 3.0}, {})
+        decision = atr_volatility_trail(self._ctx(DAILY, 110.0), **kwargs)
+        self.assertAlmostEqual(decision.price, 110 - 2 * 4.0)
 
 
 if __name__ == "__main__":
