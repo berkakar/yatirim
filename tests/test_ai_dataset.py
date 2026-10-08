@@ -1,0 +1,207 @@
+"""Yapay zeka veri seti (ai_dataset.py): EMA, direnç (sızıntısız), VWAP
+yaklaşığı, interpolasyon, temporal özellikler, birleştirme ve veritabanı
+kayıt / gün ekleme - Yahoo yerine sahte barlarla."""
+
+import os
+import tempfile
+import unittest
+from unittest import mock
+
+import numpy as np
+import pandas as pd
+
+import ai_dataset as ad
+
+END = "2026-10-07"
+VALUATION = {"valuation_score": 62.0, "valuation_sector_discount_pct": 12.5, "valuation_pe": 30.0,
+             "valuation_sector_pe": 34.0, "sector": "Technology"}
+
+
+def fake_ohlcv(last_day=END, seed=1):
+    def fetch(ticker, start, end=None):
+        dates = pd.bdate_range(start, last_day)
+        rng = np.random.default_rng(seed)
+        c = 100 * np.exp(np.cumsum(rng.normal(0.0005, 0.015, len(dates))))
+        return pd.DataFrame({"open": c * 0.995, "high": c * 1.01, "low": c * 0.985, "close": c,
+                             "volume": rng.integers(1_000_000, 2_000_000, len(dates))}, index=dates)
+    return fetch
+
+
+def fake_market(missing=(5, 100)):
+    def load(start, end):
+        dates = pd.bdate_range(start, end).delete(list(missing))
+        return pd.DataFrame({
+            "nasdaq_100__score": np.linspace(20, 80, len(dates)),
+            "nasdaq_100__put_call_ratio": np.nan,
+            "nyse__score": 50.0,
+            "xlk__ret_5d": np.linspace(-2, 2, len(dates)),
+            "xlv__ret_5d": 0.5,
+            "spy__close": 500.0,
+        }, index=dates)
+    return load
+
+
+class CalculationTests(unittest.TestCase):
+    def test_ema_matches_pandas_and_needs_warmup(self):
+        df = pd.DataFrame({"close": np.arange(1, 301, dtype=float)}, index=pd.bdate_range("2025-01-01", periods=300))
+        out = ad.add_emas(df)
+        self.assertTrue(out["ema200"].iloc[:199].isna().all())
+        self.assertAlmostEqual(out["ema20"].iloc[-1], df["close"].ewm(span=20, adjust=False).mean().iloc[-1])
+        self.assertGreater(out["dist_ema200_pct"].iloc[-1], 0)
+
+    def test_vwap_falls_back_to_typical_price(self):
+        idx = pd.bdate_range("2026-01-05", periods=3)
+        df = pd.DataFrame({"high": [11.0, 12, 13], "low": [9.0, 10, 11], "close": [10.0, 11, 12]}, index=idx)
+        out = ad.add_vwap(df, pd.Series([10.5], index=idx[:1]))
+        self.assertEqual(out["vwap"].tolist(), [10.5, 11.0, 12.0])
+        self.assertEqual(out["vwap_is_proxy"].tolist(), [0, 1, 1])
+
+    def test_resistance_picks_nearest_pivot_above_close(self):
+        # Kapanış 100'de yatay; tepeler: 10. gün 120, 40. gün 110.
+        n = 80
+        high = np.full(n, 100.0)
+        high[10], high[40] = 120.0, 110.0
+        close = pd.Series(np.full(n, 100.0), index=pd.bdate_range("2026-01-01", periods=n))
+        out = ad.resistance_levels(pd.Series(high, index=close.index), close)
+        at50 = out.iloc[50]                       # 1 ay [29,49], 2 ay [8,49]: 120 ve 110 -> en yakın 110
+        self.assertAlmostEqual(at50["resistance_1m"], 110.0)
+        self.assertAlmostEqual(at50["resistance_2m"], 110.0)
+        self.assertTrue(np.isnan(at50["resistance_3m"]))          # 63 günlük geçmiş yok
+        self.assertAlmostEqual(at50["resistance_nearest_dist_pct"], 10.0)
+        last = out.iloc[-1]                       # 1 ay [58,78]: üstte tepe yok -> pencere zirvesi 100
+        self.assertAlmostEqual(last["resistance_1m"], 100.0)
+        self.assertAlmostEqual(last["resistance_3m"], 110.0)
+        self.assertAlmostEqual(last["resistance_nearest_dist_pct"], 0.0)
+        self.assertEqual(last["resistance_nearest_window"], 1)
+        self.assertFalse(np.isnan(out["resistance_3m"].iloc[63]))
+
+    def test_resistance_has_no_lookahead(self):
+        n = 60
+        idx = pd.bdate_range("2026-01-01", periods=n)
+        close = pd.Series(np.linspace(100, 110, n), index=idx)
+        high = close * 1.01
+        base = ad.resistance_levels(high, close)
+        spiked = high.copy()
+        spiked.iloc[45:] = 500.0                  # gelecekteki sıçrama geçmiş günleri değiştirmemeli
+        changed = ad.resistance_levels(spiked, close)
+        pd.testing.assert_frame_equal(base.iloc[:46], changed.iloc[:46])
+
+    def test_breakout_gives_non_positive_distance(self):
+        n = 40
+        idx = pd.bdate_range("2026-01-01", periods=n)
+        close = pd.Series(np.linspace(100, 140, n), index=idx)   # sürekli yükselen: üstte direnç yok
+        out = ad.resistance_levels(close + 0.5, close)
+        self.assertLessEqual(out["resistance_1m_dist_pct"].iloc[-1], 0)
+        self.assertEqual(out["resistance_nearest_window"].iloc[-1], 1)
+
+    def test_fill_gaps_interpolates_inside_and_counts(self):
+        idx = pd.bdate_range("2026-01-05", periods=5)
+        df = pd.DataFrame({"a": [np.nan, 1.0, np.nan, 3.0, np.nan], "flag": [1, np.nan, 1, 1, 1]}, index=idx)
+        out, report = ad.fill_gaps(df, skip=("flag",))
+        self.assertEqual(out["a"].tolist(), [1.0, 1.0, 2.0, 3.0, 3.0])
+        self.assertTrue(np.isnan(out["flag"].iloc[1]))
+        self.assertEqual(out["interpolated_cells"].tolist(), [1, 0, 1, 0, 1])
+        self.assertEqual(report, {"a": 3})
+
+    def test_temporal_features(self):
+        t = ad.temporal_features(pd.DatetimeIndex(["2026-10-05", "2026-10-09"]))   # pazartesi, cuma
+        self.assertEqual(t["day_of_week"].tolist(), [0, 4])
+        self.assertEqual(t["time_idx"].tolist(), [0, 1])
+        self.assertAlmostEqual(t["dow_sin"].iloc[0], 0.0)
+        self.assertTrue(((t[[c for c in t.columns if c.endswith(("_sin", "_cos"))]].abs()) <= 1).all().all())
+
+    def test_market_columns_keep_nasdaq_and_etfs_and_add_own_sector(self):
+        frame = fake_market(missing=())("2026-01-01", "2026-01-10")
+        out = ad.market_columns(frame, "XLK")
+        self.assertIn("nasdaq_100__score", out)
+        self.assertNotIn("nasdaq_100__put_call_ratio", out)
+        self.assertNotIn("nyse__score", out)
+        self.assertIn("xlv__ret_5d", out)
+        pd.testing.assert_series_equal(out["sector_etf__ret_5d"], out["xlk__ret_5d"], check_names=False)
+
+
+class DatasetTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.env = mock.patch.dict(os.environ, {"YATIRIM_DB_PATH": os.path.join(self.tmp.name, "t.db")})
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def _create(self, **kw):
+        kw.setdefault("ohlcv_fetcher", fake_ohlcv())
+        kw.setdefault("market_loader", fake_market())
+        return ad.create("aapl", valuation=VALUATION, end=END, **kw)
+
+    def test_build_keeps_two_years_and_fills_everything(self):
+        df, meta = self._create()
+        self.assertEqual(meta["ticker"], "AAPL")
+        self.assertGreater(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2))
+        self.assertLess(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2) + pd.Timedelta(days=5))
+        self.assertGreater(len(df), 500)
+        for col in ("open", "vwap", "close", "volume", "ema20", "ema50", "ema200", "stock_sentiment",
+                    "resistance_1m", "resistance_2m", "resistance_3m", "resistance_nearest_dist_pct",
+                    "valuation_score", "nasdaq_100__score", "xlk__ret_5d", "sector_etf__ret_5d", "month_sin"):
+            self.assertIn(col, df.columns)
+            self.assertFalse(df[col].isna().any(), col)
+        self.assertEqual(meta["sector_etf"], "XLK")
+        self.assertEqual(meta["filled"].get("nasdaq_100__score"), 2)   # arşivde eksik iki gün
+        self.assertEqual(int((df["interpolated_cells"] > 0).sum()), 2)
+        self.assertTrue((df["source"] == ad.SOURCE_BACKFILL).all())
+        self.assertTrue((df["valuation_is_snapshot"] == 1).all())
+
+    def test_missing_archive_warns(self):
+        _, meta = self._create(market_loader=lambda s, e: pd.DataFrame())
+        self.assertTrue(any("arşiv" in w.lower() for w in meta["warnings"]))
+
+    def test_update_appends_only_new_days_and_keeps_extra(self):
+        df, meta = self._create()
+        ad.set_extra("AAPL", meta["end"], {"news_sentiment": 0.4})
+        added, _ = ad.update("AAPL", valuation={**VALUATION, "valuation_score": 70.0},
+                             ohlcv_fetcher=fake_ohlcv("2026-10-09"), market_loader=fake_market(), end="2026-10-09")
+        self.assertEqual(added, 2)
+        after = ad.load_dataset("AAPL")
+        self.assertEqual(len(after), len(df) + 2)
+        self.assertEqual(after.index.max(), pd.Timestamp("2026-10-09"))
+        self.assertEqual(after["source"].iloc[-1], ad.SOURCE_DAILY)
+        self.assertEqual(after["valuation_score"].iloc[-1], 70.0)
+        self.assertEqual(after["valuation_is_snapshot"].iloc[-1], 0)
+        self.assertEqual(after["valuation_score"].iloc[-3], 62.0)        # eski gün değişmedi
+        self.assertEqual(after.loc[meta["end"], "news_sentiment"], 0.4)
+        self.assertEqual(ad.get_dataset_info("aapl")["end"], "2026-10-09")
+        self.assertEqual(ad.update("AAPL", valuation=VALUATION, ohlcv_fetcher=fake_ohlcv("2026-10-09"),
+                                   market_loader=fake_market(), end="2026-10-09")[0], 0)
+
+    def test_rebuild_preserves_extra_and_delete(self):
+        _, meta = self._create()
+        ad.set_extra("AAPL", meta["end"], {"note": "x"})
+        self._create()
+        self.assertEqual(ad.load_dataset("AAPL").loc[meta["end"], "note"], "x")
+        ad.set_extra("AAPL", meta["end"], {"note": None})
+        self.assertNotIn("note", ad.load_dataset("AAPL").columns)
+        with self.assertRaises(KeyError):
+            ad.set_extra("AAPL", "1999-01-04", {"note": 1})
+        self.assertGreater(ad.delete_dataset("AAPL"), 0)
+        self.assertEqual(ad.list_datasets(), [])
+        self.assertTrue(ad.load_dataset("AAPL").empty)
+
+    def test_valuation_from_db(self):
+        import valuation_db
+
+        valuation_db.upsert_rows([{
+            "market": ad.MARKET, "ticker": "AAPL", "raw": {"Hisse": "AAPL"},
+            "scored": {"Hisse": "AAPL", "Nihai Skor": 55, "Alt Sektör İskontosu %": -8.2, "F/K": 31.0,
+                       "Alt Sektör Ort. F/K": 28.6, "Ana Sektör": "Technology", "Alt Sektör (İş Modeli)": "Donanım"},
+            "fetched_at": "2026-10-07T21:00:00Z", "scored_at": "2026-10-07T21:00:00Z",
+        }])
+        v = ad.load_valuation("AAPL")
+        self.assertEqual(v["valuation_score"], 55.0)
+        self.assertEqual(v["valuation_sector_discount_pct"], -8.2)
+        self.assertEqual(ad.YAHOO_SECTOR_TO_ETF[v["sector"]], "XLK")
+        self.assertIsNone(ad.load_valuation("MSFT"))
+
+
+if __name__ == "__main__":
+    unittest.main()

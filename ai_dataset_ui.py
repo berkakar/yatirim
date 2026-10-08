@@ -1,0 +1,279 @@
+"""Analiz > "🤖 Yapay Zeka Analiz Modülü" - NASDAQ 100 hissesi için transformer
+eğitim veri setini hazırlar, tabloda gösterir ve veritabanına kaydeder
+(hesaplama ve kayıt: ai_dataset.py)."""
+
+import os
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import pandas as pd
+import streamlit as st
+
+import ai_dataset as ad
+from ui_style import freshness_caption
+
+TR_TZ = ZoneInfo("Europe/Istanbul")
+
+# Görünen sütunları seçmek için gruplar (sıra tablodaki sırayla aynı).
+_GROUPS = (
+    ("Fiyat & Hacim", lambda c: c in ("open", "high", "low", "close", "volume", "vwap", "vwap_is_proxy",
+                                      "ret_1d_pct")),
+    ("EMA", lambda c: c.startswith("ema") or c.startswith("dist_ema")),
+    ("Hisse Duyarlılığı", lambda c: c.startswith("sent_") or c in ("rsi14", "stock_sentiment")),
+    ("Direnç", lambda c: c.startswith("resistance_")),
+    ("Değerleme", lambda c: c.startswith("valuation_")),
+    ("NASDAQ 100 Parametreleri", lambda c: c.startswith(f"{ad.MARKET_PREFIX}__")),
+    ("Hissenin Sektör ETF'si", lambda c: c.startswith("sector_etf__")),
+    ("Tüm Sektör ETF'leri", lambda c: "__" in c),
+    ("Zaman (Temporal Embedding)", lambda c: c in ad.TEMPORAL_COLS),
+)
+_DEFAULT_GROUPS = ("Fiyat & Hacim", "EMA", "Hisse Duyarlılığı", "Direnç", "Değerleme",
+                   "NASDAQ 100 Parametreleri", "Hissenin Sektör ETF'si")
+
+_GLOSSARY = """
+| Sütun | Açıklama |
+|---|---|
+| `open, high, low, close, volume` | Yahoo günlük barı (bölünme/temettü düzeltmeli) |
+| `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; 1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
+| `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
+| `stock_sentiment` | Hisse duyarlılığı 0-100: `sent_momentum` (50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası), `sent_volatility` (oynaklığın ters yüzdelik sırası) ve `rsi14` ortalaması |
+| `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
+| `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
+| `valuation_*` | Değerleme & Ucuzluk Skoru (Nihai Skor), alt sektör F/K iskontosu, F/K, alt sektör ortalama F/K. `valuation_is_snapshot`=1: geçmiş skor tutulmadığı için bugünkü skor |
+| `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
+| `<etf>__*`, `sector_etf__*` | Sektör ETF arşivi (sector_etf_daily): kapanış, 1/5/21 gün getiri, SPY'ye göre 5 gün fark; `sector_etf__` hissenin kendi sektörü |
+| `time_idx, year, month, day_of_month, day_of_week, day_of_year, week_of_year, quarter, is_month_start/end` | Temporal embedding için takvim indeksleri |
+| `*_sin, *_cos` | Haftanın günü, ayın günü, ay, yılın günü, yılın haftası için döngüsel kodlama |
+| `interpolated_cells` | O satırda interpolasyonla doldurulan hücre sayısı |
+| `source` | `backfill`: ilk hazırlama · `daily`: sonradan eklenen gün |
+"""
+
+
+def _fmt_time(iso_text):
+    if not iso_text:
+        return "—"
+    try:
+        dt = datetime.strptime(iso_text, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=ZoneInfo("UTC"))
+    except ValueError:
+        return iso_text
+    return f"{dt.astimezone(TR_TZ):%d.%m.%Y %H:%M} TRT"
+
+
+def _alpaca_vwap_fetcher(username):
+    """Kullanıcının Alpaca anahtarlarıyla (Hesabım; yoksa ortam değişkenleri)
+    VWAP çekici - anahtar yoksa None."""
+    try:
+        import alpaca_account
+        from alpaca_client import DEFAULT_DATA_URL, AlpacaClient
+
+        mode = alpaca_account.load_account_mode(username)
+        key_id, secret = alpaca_account.user_keys(username, mode)
+        if not (key_id and secret):
+            key_id, secret = os.environ.get("APCA_API_KEY_ID"), os.environ.get("APCA_API_SECRET_KEY")
+        if not (key_id and secret):
+            return None
+        client = AlpacaClient(key_id, secret, alpaca_account.trading_url(mode),
+                              os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL))
+        return ad.alpaca_vwap_fetcher(client)
+    except Exception:
+        return None
+
+
+def _archive_coverage():
+    """Günlük arşivdeki NASDAQ 100 ve sektör satırlarının tarih aralığı."""
+    import market_archive
+
+    try:
+        rows = market_archive.summary()
+    except Exception:
+        return None, None
+    sent = next((r for r in rows if r["table"] == market_archive.SENTIMENT_TABLE and r["key"] == ad.MARKET), None)
+    sectors = [r for r in rows if r["table"] == market_archive.SECTOR_TABLE]
+    sec = None
+    if sectors:
+        sec = {"first": max(r["first"] for r in sectors), "last": min(r["last"] for r in sectors),
+               "rows": sum(r["rows"] for r in sectors)}
+    return sent, sec
+
+
+def _render_archive_status(keep_years):
+    sent, sec = _archive_coverage()
+    need = (pd.Timestamp.now().normalize() - pd.DateOffset(years=keep_years)).strftime("%Y-%m-%d")
+    c1, c2 = st.columns(2)
+    c1.caption(f"📚 NASDAQ 100 duyarlılık arşivi: **{sent['first']} → {sent['last']}** ({sent['rows']} gün)"
+               if sent else "📚 NASDAQ 100 duyarlılık arşivi: **boş**")
+    c2.caption(f"🏭 Sektör ETF arşivi: **{sec['first']} → {sec['last']}**" if sec else "🏭 Sektör ETF arşivi: **boş**")
+    short = (not sent or sent["first"] > need) or (not sec or sec["first"] > need)
+    if short:
+        st.warning(f"Günlük arşiv {keep_years} yıllık veri setini kapsamıyor ({need} öncesi eksik). Eksik "
+                   "günler interpolasyon/taşımayla doldurulur; doğru veri için önce arşivi doldurun.")
+        if st.button(f"📥 Arşivi {keep_years} yıllık doldur (NASDAQ 100 + sektör ETF'leri)", key="ai_archive_backfill",
+                     help="Yahoo'dan NASDAQ 100 hisseleri ve sektör ETF'leri indirilir - birkaç dakika sürebilir."):
+            import market_sentiment as ms
+
+            with st.spinner("Arşiv dolduruluyor..."):
+                failures = ms.backfill(["nasdaq100"], years=keep_years, sectors=True)
+            if failures:
+                st.error("Arşivin bir kısmı doldurulamadı - Yahoo'ya ulaşılamamış olabilir.")
+            else:
+                st.success("Arşiv dolduruldu.")
+                st.rerun()
+
+
+def _render_create(username, nasdaq_tickers):
+    st.subheader("1️⃣ Veri Setini Hazırla")
+    options = sorted(dict.fromkeys(ad.normalize_ticker(t) for t in nasdaq_tickers if t))
+    c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
+    picked = c1.selectbox("NASDAQ 100 hissesi", options, key="ai_ticker_pick") if options else None
+    typed = c2.text_input("veya sembol yazın", key="ai_ticker_typed", placeholder="örn. AAPL").strip()
+    fetch_years = c3.number_input("Çekilecek yıl", min_value=3, max_value=10, value=ad.DEFAULT_FETCH_YEARS,
+                                  key="ai_fetch_years", help="En az 3 yıl: ilk yıl EMA200 ve göstergelerin ısınması için.")
+    keep_years = c4.number_input("Saklanacak yıl", min_value=1, max_value=int(fetch_years) - 1,
+                                 value=min(ad.DEFAULT_KEEP_YEARS, int(fetch_years) - 1), key="ai_keep_years")
+    ticker = ad.normalize_ticker(typed or picked)
+
+    o1, o2 = st.columns(2)
+    use_alpaca = o1.checkbox("VWAP'ı Alpaca'dan al", value=True, key="ai_use_alpaca",
+                             help="Alpaca anahtarı yoksa ya da veri gelmezse tipik fiyat (Y+D+K)/3 kullanılır.")
+    fetch_val = o2.checkbox("Değerleme skoru yoksa Yahoo'dan çek", value=True, key="ai_fetch_valuation",
+                            help="Hissenin NASDAQ 100 Ucuzluk Skoru veritabanında yoksa Değerleme modülündeki "
+                                 "gibi anlık çekilir ve kaydedilir.")
+    _render_archive_status(int(keep_years))
+
+    existing = ad.get_dataset_info(ticker) if ticker else None
+    if existing:
+        st.info(f"{ticker} için kayıtlı veri seti var ({existing['start']} → {existing['end']}). Yeniden hazırlamak "
+                "kayıtlı günlerin üzerine yazar; elle eklenen alanlar korunur. Yalnızca yeni günler için "
+                "aşağıdaki **Yeni günleri ekle** düğmesini kullanın.")
+    if not st.button("🚀 Veriyi Hazırla ve Kaydet", type="primary", disabled=not ticker, key="ai_build"):
+        return
+    with st.status(f"{ticker} veri seti hazırlanıyor...", expanded=True) as status:
+        try:
+            fetcher = _alpaca_vwap_fetcher(username) if use_alpaca else None
+            if use_alpaca and fetcher is None:
+                st.write("ℹ️ Alpaca anahtarı bulunamadı - VWAP için tipik fiyat kullanılacak.")
+            df, meta = ad.create(ticker, int(fetch_years), int(keep_years), vwap_fetcher=fetcher,
+                                 fetch_valuation=fetch_val, progress=lambda m: st.write(f"• {m}"))
+        except Exception as e:
+            status.update(label=f"{ticker}: hazırlanamadı", state="error")
+            st.error(str(e))
+            return
+        status.update(label=f"{ticker}: {len(df)} gün × {len(df.columns)} sütun kaydedildi", state="complete")
+    st.session_state["ai_view_select"] = ticker
+    st.session_state["ai_last_warnings"] = {ticker: meta["warnings"]}
+
+
+def _select_columns(df):
+    present = []
+    for name, match in _GROUPS:
+        cols = [c for c in df.columns if match(c)]
+        if cols:
+            present.append((name, cols))
+    groups = st.multiselect("Gösterilecek sütun grupları", [n for n, _ in present],
+                            default=[n for n, _ in present if n in _DEFAULT_GROUPS], key="ai_col_groups")
+    shown = []
+    for name, cols in present:
+        if name in groups:
+            shown += [c for c in cols if c not in shown]
+    known = {c for _, cols in present for c in cols}
+    shown += [c for c in df.columns if c not in known and c not in ("interpolated_cells", "source")]
+    return shown + ["interpolated_cells", "source"]
+
+
+def _render_dataset(ticker, username):
+    info = ad.get_dataset_info(ticker)
+    df = ad.load_dataset(ticker)
+    if info is None or df.empty:
+        st.info("Kayıtlı veri yok.")
+        return
+    meta = info["meta"]
+    val = meta.get("valuation") or {}
+    m = st.columns(5)
+    m[0].metric("Gün", f"{len(df)}")
+    m[1].metric("Sütun", f"{len(df.columns) - 1}")
+    m[2].metric("Ucuzluk Skoru", f"{val['valuation_score']:.0f}" if val.get("valuation_score") is not None else "—")
+    m[3].metric("Sektör ETF'si", meta.get("sector_etf") or "—", help=val.get("sector"))
+    m[4].metric("VWAP", "Alpaca" if meta.get("vwap_source") == "alpaca" else "Tipik fiyat")
+    freshness_caption(f"{info['start']} → {info['end']} · son kayıt {_fmt_time(info['updated_at'])} · "
+                      f"interpolasyonla doldurulan hücre: {int(df['interpolated_cells'].sum())}")
+    for w in (st.session_state.get("ai_last_warnings") or {}).get(ticker) or meta.get("warnings") or []:
+        st.warning(w)
+
+    cols = _select_columns(df)
+    view = df[cols].sort_index(ascending=False).reset_index()
+    view["date"] = view["date"].dt.strftime("%Y-%m-%d")
+    num_cols = [c for c in view.columns if pd.api.types.is_float_dtype(view[c])]
+    view[num_cols] = view[num_cols].round(4)
+    st.dataframe(view, hide_index=True, use_container_width=True, height=520,
+                 column_config={"date": st.column_config.TextColumn("Tarih")})
+
+    b1, b2, b3 = st.columns(3)
+    if b1.button("🔄 Yeni günleri ekle", key=f"ai_update_{ticker}",
+                 help="Son kayıtlı günden sonraki işlem günlerini hesaplayıp ekler; var olan günler değişmez."):
+        with st.spinner("Yeni günler hesaplanıyor..."):
+            try:
+                fetcher = _alpaca_vwap_fetcher(username) if meta.get("vwap_source") == "alpaca" else None
+                added, _ = ad.update(ticker, vwap_fetcher=fetcher)
+            except Exception as e:
+                st.error(str(e))
+            else:
+                st.success(f"{added} yeni gün eklendi." if added else "Eklenecek yeni gün yok.")
+                if added:
+                    st.rerun()
+    b2.download_button("⬇️ CSV indir", df.to_csv(date_format="%Y-%m-%d").encode("utf-8"),
+                       file_name=f"ai_dataset_{ticker}.csv", mime="text/csv", key=f"ai_csv_{ticker}")
+    confirm = b3.checkbox("Silmeyi onayla", key=f"ai_del_ok_{ticker}")
+    if b3.button("🗑️ Veri setini sil", disabled=not confirm, key=f"ai_del_{ticker}"):
+        ad.delete_dataset(ticker)
+        st.rerun()
+
+    with st.expander("➕ Bir güne veri ekle"):
+        st.caption("Seçilen güne yeni bir alan (ör. haber duyarlılığı) ekler veya günceller. Bu alanlar veri seti "
+                   "yeniden hazırlansa da korunur; boş bırakılan değer alanı siler.")
+        e1, e2, e3, e4 = st.columns([1.2, 1.5, 1, 0.8])
+        day = e1.selectbox("Gün", list(df.index.strftime("%Y-%m-%d"))[::-1], key=f"ai_extra_day_{ticker}")
+        field = e2.text_input("Alan adı", key=f"ai_extra_field_{ticker}", placeholder="örn. news_sentiment").strip()
+        value = e3.text_input("Değer", key=f"ai_extra_value_{ticker}")
+        e4.write("")
+        if e4.button("Kaydet", key=f"ai_extra_save_{ticker}", disabled=not field):
+            if field in set(meta.get("columns", [])) | {"source", "date"}:
+                st.error(f"'{field}' hesaplanan bir sütun - farklı bir ad seçin.")
+            else:
+                parsed = None
+                if value.strip():
+                    try:
+                        parsed = float(value.replace(",", "."))
+                    except ValueError:
+                        parsed = value.strip()
+                ad.set_extra(ticker, day, {field: parsed})
+                st.rerun()
+
+    with st.expander("📖 Sütun açıklamaları ve eğitimde dikkat edilecekler"):
+        st.markdown(_GLOSSARY)
+        st.caption("Değerler gün kapanışıyla hesaplanır - ertesi günü tahmin ederken hedef değişkeni bir gün ileri "
+                   "kaydırın. Direnç seviyeleri yalnızca o güne kadar oluşmuş tepeleri kullanır (sızıntı yok). "
+                   "İç boşluklarda doğrusal interpolasyon bir sonraki bilinen değeri kullanır; "
+                   "`interpolated_cells` > 0 olan satırları gerekirse ayıklayın.")
+
+
+def _render_saved(username):
+    st.subheader("2️⃣ Kayıtlı Veri Setleri")
+    datasets = ad.list_datasets()
+    if not datasets:
+        st.info("Henüz kayıtlı veri seti yok - yukarıdan bir hisse seçip hazırlayın.")
+        return
+    st.dataframe(pd.DataFrame([{
+        "Hisse": d["ticker"], "Gün": d["rows"], "Başlangıç": d["start"], "Bitiş": d["end"],
+        "Sütun": len(d["meta"].get("columns", [])), "Son Güncelleme": _fmt_time(d["updated_at"]),
+    } for d in datasets]), hide_index=True, use_container_width=True)
+    tickers = [d["ticker"] for d in datasets]
+    if st.session_state.get("ai_view_select") not in tickers:
+        st.session_state.pop("ai_view_select", None)
+    ticker = st.selectbox("Görüntülenecek veri seti", tickers, key="ai_view_select")
+    _render_dataset(ticker, username)
+
+
+def render_ai_dataset(username, nasdaq_tickers):
+    _render_create(username, nasdaq_tickers)
+    st.divider()
+    _render_saved(username)

@@ -88,6 +88,7 @@ from trade_journal_page import render_algo_analiz, render_live_positions
 from version_info import get_version_label
 from connection_status import check_all_connections
 from market_sentiment_ui import render_market_sentiment, render_sector_etfs
+from ai_dataset_ui import render_ai_dataset
 import user_registry
 from account_ui import (
     enforce_active_session, render_auth_screen, render_forced_password_change, render_my_account, render_user_admin,
@@ -105,6 +106,7 @@ MODULE_GROUPS = {
         "📐 Hisse Patern Analizi",
         "📊 Bağımsız Hisse Grafiği",
         "🔪 Bıçak Kanalı Testi",
+        "🤖 Yapay Zeka Analiz Modülü",
     ],
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": [
@@ -1689,6 +1691,20 @@ elif module == "🧠 Algo Analiz":
 # ==============================================================================
 elif module == "🔪 Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
+
+# ==============================================================================
+# 12b. MODÜL: YAPAY ZEKA ANALİZ MODÜLÜ (transformer eğitim veri seti)
+# ==============================================================================
+elif module == "🤖 Yapay Zeka Analiz Modülü":
+    st.header("🤖 Yapay Zeka Analiz Modülü")
+    st.caption(
+        "NASDAQ 100'den seçilen hisse için transformer eğitiminde kullanılacak günlük veri setini hazırlar: "
+        "3 yıllık açılış / VWAP / kapanış / hacim ve duyarlılık çekilir, EMA20 / EMA50 / EMA200 ile 1-2-3 aylık "
+        "direnç seviyeleri (fiyata en yakını ve % uzaklığı) gün başına hesaplanır, Ucuzluk Skoru eklenir; son 2 "
+        "yıl NASDAQ 100 parametreleri ve sektör ETF'leriyle birleştirilip temporal embedding özellikleri eklenir, "
+        "boşluklar interpolasyonla doldurulur ve veritabanına kaydedilir. Kayıtlı setlere sonradan gün eklenebilir."
+    )
+    render_ai_dataset(username, st.session_state.ticker_lists.get("NASDAQ 100", []))
 
 elif module == "👤 Hesabım":
     render_my_account(current_user)
