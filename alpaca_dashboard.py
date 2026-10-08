@@ -9,7 +9,6 @@ from alpaca_client import AlpacaClient
 from backtest import TIMEFRAME_LABELS
 from buy_algorithms import ALGORITHMS
 from config import load_initial_capital, save_initial_capital
-from stop_tags import parse_shield_real_stop
 from ui_style import zebra_style, freshness_caption
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
@@ -187,29 +186,6 @@ def render_account_summary(client: AlpacaClient, username: str, positions: list[
         c4.metric("Portföyün Anlık Kârı", "—")
 
 
-def render_positions_summary_table(positions: list[dict]):
-    """Açık pozisyonların kısa özeti - hisse, güncel fiyat, ortalama maliyet ve
-    kâr/zarar - Giriş Sayfası'nda gösterilir. Alpaca Canlı Pozisyonlar
-    sayfasındaki stop-loss detaylarını (render_alpaca_dashboard) içermez."""
-    if not positions:
-        st.info("Açık pozisyon yok.")
-        return
-
-    rows = []
-    for pos in positions:
-        rows.append({
-            "Hisse": pos["symbol"],
-            "Adet": abs(float(pos["qty"])),
-            "Ortalama Maliyet": round(float(pos["avg_entry_price"]), 2),
-            "Güncel Fiyat": round(float(pos["current_price"]), 2),
-            "Kâr/Zarar ($)": round(float(pos["unrealized_pl"]), 2),
-            "Kâr/Zarar (%)": round(float(pos["unrealized_plpc"]) * 100, 2),
-        })
-
-    freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
-    st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
-
-
 def render_realized_pnl_table(client: AlpacaClient, orders: list[dict], history_days: int):
     """Son `history_days` gün içindeki dolan emirleri sembole göre eşleştirip
     (bkz. AlpacaClient.compute_realized_pnl_by_symbol) her sembolün kapanmış
@@ -258,43 +234,14 @@ def render_alpaca_dashboard(username):
         return
     st.divider()
 
-    if not positions:
-        st.info("Açık pozisyon yok.")
-    else:
-        rows = []
-        for pos in positions:
-            symbol = pos["symbol"]
-            stop_order = client.get_open_stop_order(symbol)
-            entry = float(pos["avg_entry_price"])
-            current = float(pos["current_price"])
-            stop_price = float(stop_order["stop_price"]) if stop_order else None
-            # [2026-09-28 · Öneri 3] Açılış kalkanı aktifse resting emir felaket
-            # seviyesinde bekliyor; tabloda asıl (09:45'te geri dönülecek) stop gösterilir.
-            shield_real = parse_shield_real_stop(stop_order.get("client_order_id")) if stop_order else None
-            shield_note = f"🛡️ kalkan (felaket {stop_price:.2f})" if shield_real is not None else ""
-            if shield_real is not None:
-                stop_price = shield_real
+    # Fonksiyon içi import: trade_journal_page bu modülden TR_TZ alıyor (döngüsel import).
+    from trade_journal_page import render_live_positions
+    render_live_positions(username, positions)
 
-            rows.append({
-                "Hisse": symbol,
-                "Yön": "Long" if float(pos["qty"]) > 0 else "Short",
-                "Adet": abs(float(pos["qty"])),
-                "Ortalama Giriş": round(entry, 2),
-                "Güncel Fiyat": round(current, 2),
-                "Kâr/Zarar %": round(float(pos["unrealized_plpc"]) * 100, 2),
-                "Stop Fiyatı": round(stop_price, 2) if stop_price is not None else "—",
-                "Stoptan Uzaklık %": round((current - stop_price) / current * 100, 2) if stop_price is not None else "—",
-                "Açılış Kalkanı": shield_note,
-            })
-
-        freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan anlık çekildi).")
-        st.dataframe(zebra_style(pd.DataFrame(rows)), use_container_width=True, hide_index=True)
-        st.caption("Stoplar, sunucudaki stop botu tarafından her hissenin seçili stop-loss algoritmasıyla seans içinde "
-                   "5 dakikada bir güncellenir.")
-
+    if positions:
         with st.expander("🛡️ Stop-Loss Mantığı Nasıl Çalışır?"):
             st.markdown(
-                "Yukarıdaki 'Stop Fiyatı' sütunu, elle değil, aşağıdaki kurallarla otomatik "
+                "Yukarıdaki 'Güncel Stop $' sütunu, elle değil, aşağıdaki kurallarla otomatik "
                 "yönetilen structure-based bir trailing-stop sistemini yansıtır:\n\n"
                 "**[2026-09-28 güncellemesi - ayrıntılar: 🧠 Algo Analiz > Değişiklik Günlüğü]**\n\n"
                 "- İlk stop, hisse için seçili stop-loss algoritmasına göre kurulur (varsayılan: girişin "
@@ -311,7 +258,7 @@ def render_alpaca_dashboard(username):
                 "- Pozisyona ilave alım yapıldığında stopun adedi otomatik güncellenir.\n"
                 "- **Açılış kalkanı:** Seans dışında (after-hours/pre-market) extended-hours guard "
                 "stopu asıl seviyenin %4 altındaki bir *felaket stopuna* çeker; asıl seviye emrin "
-                "etiketinde saklanır ('Açılış Kalkanı' sütunu). Seans açılışından 15 dakika sonra "
+                "etiketinde saklanır ('Güncel Stop $' sütunu bu asıl seviyeyi gösterir). Seans açılışından 15 dakika sonra "
                 "stop asıl seviyeye geri döner; fiyat o seviyenin altındaysa pozisyon market "
                 "emriyle kapatılır. Böylece açılışın ilk dakikalarındaki oynaklık stopu "
                 "tetiklemez.\n"

@@ -1,6 +1,7 @@
 import unittest
+from datetime import datetime, timezone
 
-from trade_journal import SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, build_round_trips, summarize
+from trade_journal import SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, build_round_trips, recent_fills, summarize
 
 
 def _o(**kw):
@@ -59,6 +60,20 @@ class TradeJournalTest(unittest.TestCase):
         self.assertEqual(s["trades"], 1)
         self.assertAlmostEqual(s["total_pnl"], 50)
         self.assertIsNone(s["expectancy_r"])
+
+    def test_recent_fills_includes_legs_newest_first(self):
+        orders = [
+            _o(id="b1", symbol="MSFT", side="buy", type="limit", filled_avg_price="100",
+               filled_at="2026-10-07T13:40:00Z",
+               legs=[{"id": "s1", "side": "sell", "type": "stop", "status": "filled", "filled_avg_price": "98",
+                      "filled_qty": "10", "filled_at": "2026-10-08T14:00:00Z"}]),
+            _o(id="b0", symbol="AAPL", side="buy", type="market", filled_avg_price="200",
+               filled_at="2026-10-05T14:00:00Z"),
+            {"id": "c1", "symbol": "NVDA", "side": "sell", "type": "stop", "status": "canceled"},
+        ]
+        fills = recent_fills(orders, datetime(2026, 10, 6, 21, tzinfo=timezone.utc))
+        self.assertEqual([o["id"] for o in fills], ["s1", "b1"])
+        self.assertEqual(fills[0]["symbol"], "MSFT")
 
 
 if __name__ == "__main__":

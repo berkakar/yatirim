@@ -108,6 +108,14 @@ def _flatten(orders: list[dict]) -> list[dict]:
     return result
 
 
+def recent_fills(orders: list[dict], since: datetime) -> list[dict]:
+    """`since`ten sonra dolan emirler (OTO/bracket bacakları dahil), en yeni
+    en üstte - Canlı Pozisyonlar'daki "bugün ve dün gerçekleşen emirler"
+    tablosu için."""
+    fills = [o for o in _flatten(orders) if _is_filled(o) and _parse(o["filled_at"]) >= since]
+    return sorted(fills, key=lambda o: _parse(o["filled_at"]), reverse=True)
+
+
 def _stop_orders(orders: list[dict]) -> list[dict]:
     return [o for o in orders if o.get("type") in ("stop", "stop_limit")]
 

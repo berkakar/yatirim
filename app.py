@@ -68,7 +68,7 @@ from dtw_analysis import (
     save_cached_dtw_results
 )
 from alpaca_client import AlpacaClient
-from alpaca_dashboard import render_alpaca_dashboard, render_account_summary, render_positions_summary_table
+from alpaca_dashboard import render_alpaca_dashboard, render_account_summary
 from alpaca_account_ui import (
     get_user_alpaca, has_alpaca_account, is_live, missing_keys_warning, render_account_mode_badge,
     render_account_mode_setting,
@@ -84,7 +84,7 @@ from hisse_patern import render_hisse_patern
 from bicak_kanali_test import render_bicak_kanali_test
 from backtest import render_backtest
 from stop_loss_settings import render_stop_loss_settings
-from trade_journal_page import render_algo_analiz
+from trade_journal_page import render_algo_analiz, render_live_positions
 from version_info import get_version_label
 from connection_status import check_all_connections
 from market_sentiment_ui import render_market_sentiment
@@ -453,7 +453,7 @@ if module == NAV_HOME:
             alpaca_client = AlpacaClient(key_id, secret_key, trading_url)
             alpaca_positions = alpaca_client.get_all_positions()
             render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
-            render_positions_summary_table(alpaca_positions)
+            render_live_positions(username, alpaca_positions)
         except Exception as e:
             st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
     elif has_alpaca_account(username):
