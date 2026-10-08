@@ -303,12 +303,13 @@ def trim_years(df: pd.DataFrame, years: int) -> pd.DataFrame:
 
 
 # Veri setindeki değerleme sütunu -> skor tablosu alanı (valuation_scores_daily.scored).
+# PEG bilerek yok: Yahoo'nun analist beklentisine dayalı PEG'inin geçmişi yok
+# (yeniden hesapta bugünkü değerden türetiliyor) - özellik olarak kullanılmaz.
 VALUATION_FIELDS = {
     "valuation_score": "Nihai Skor",
     "valuation_sector_discount_pct": "Alt Sektör İskontosu %",
     "valuation_pe": "F/K",
     "valuation_sector_pe": "Alt Sektör Ort. F/K",
-    "valuation_peg": "PEG",
     "valuation_eps_growth_pct": "EPS Büyümesi %",
     "valuation_revenue_growth_pct": "Gelir Büyümesi %",
     "valuation_roe_pct": "Öz Sermaye Getirisi (ROE) %",

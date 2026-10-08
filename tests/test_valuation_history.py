@@ -160,7 +160,7 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(df.loc["2026-10-06", "valuation_score"], 77)
         self.assertEqual(df.loc["2026-10-06", "valuation_is_reconstructed"], 0)
         self.assertGreater(df["valuation_roe_pct"].nunique(), 3)          # çeyrekten çeyreğe değişiyor
-        self.assertFalse(df["valuation_peg"].isna().any())
+        self.assertNotIn("valuation_peg", df.columns)                     # PEG veri setinde yok
 
 
 if __name__ == "__main__":
