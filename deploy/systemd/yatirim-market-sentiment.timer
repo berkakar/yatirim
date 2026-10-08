@@ -1,8 +1,9 @@
 [Unit]
-Description=Piyasa Duyarlılığı (NASDAQ 100 + NYSE) - hafta içi ABD kapanışından sonra
+Description=Piyasa Duyarlılığı (NASDAQ 100 + NYSE + BIST 100) - hafta içi ABD kapanışından sonra
 
 [Timer]
-# Günlük barlar ve opsiyon hacimleri kapanıştan sonra kesinleşir; değerleme
+# Günlük barlar ve opsiyon hacimleri kapanıştan sonra kesinleşir (BIST 23:40 TRT
+# itibarıyla çoktan kapanmış olur, aynı çalıştırmada hesaplanır); değerleme
 # servislerinden (17:15 / 18:45 ET) önce biter, Yahoo'ya aynı anda gidilmez.
 OnCalendar=Mon..Fri *-*-* 16:40:00 America/New_York
 Unit=yatirim-job@market-sentiment.service

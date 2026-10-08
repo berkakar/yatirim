@@ -131,7 +131,7 @@ fi
 
 cat <<EOF
 
-Piyasa Duyarlılığı servisi açık (hafta içi 16:40 ET).
+Piyasa Duyarlılığı servisi açık (hafta içi 16:40 ET; NASDAQ 100, NYSE, BIST 100).
   Durum:          sudo bash $SRC/enable_sentiment.sh status
   Şimdi hesapla:  sudo bash $SRC/enable_sentiment.sh run
   Loglar:         journalctl -u yatirim-job@market-sentiment --since today
