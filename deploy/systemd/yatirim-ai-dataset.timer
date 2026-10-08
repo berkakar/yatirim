@@ -1,0 +1,14 @@
+[Unit]
+Description=Yapay Zeka Analiz Modülü - kayıtlı eğitim veri setlerine günlük güncelleme (ABD kapanışından sonra)
+
+[Timer]
+# Piyasa Duyarlılığı arşivi (16:40 ET) ve NASDAQ 100 Ucuzluk Skoru (17:15 ET, ~30 dk)
+# yazıldıktan sonra; NYSE değerleme servisinden (18:45 ET) önce biter, Yahoo'ya aynı
+# anda gidilmez.
+OnCalendar=Mon..Fri *-*-* 18:15:00 America/New_York
+Unit=yatirim-job@ai-dataset.service
+AccuracySec=1s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

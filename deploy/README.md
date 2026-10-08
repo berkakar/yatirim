@@ -35,6 +35,7 @@ Streamlit arayüzü de isteğe bağlı olarak aynı Droplet'e taşınabilir (bkz
 | `valuation-nasdaq100` | — (yeni) | Hafta içi 17:15 ET |
 | `valuation-nyse` | — (yeni) | Hafta içi 18:45 ET |
 | `market-sentiment` | — (yeni) | Hafta içi 16:40 ET |
+| `ai-dataset` | — (yeni) | Hafta içi 18:15 ET |
 | `valuation-russell2000` | — (yeni) | Haftada 1 döngü: Cumartesi 00:05 ET başlar, saatte 1 paket (timer saat başı +5 dk tetiklenir, döngü yoksa boşta çıkar) |
 
 Sadece elle tetiklenen `kap_refresh_holdings.yml`, `orb_stop_status.yml` ve ORB'nin
@@ -145,6 +146,35 @@ sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh status     # timer + kayı
 sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh run        # şimdi yeniden hesapla
 sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh disable    # timer'ı kapat
 journalctl -u yatirim-job@market-sentiment --since today          # zamanlanmış çalışmaların logu
+```
+
+## Yapay Zeka Analiz Modülü: günlük veri seti güncellemesi
+
+`ai-dataset` işi `ai_dataset.py update --all`'u hafta içi 18:15 ET'de çalıştırır. Arayüzdeki
+**🤖 Yapay Zeka Analiz Modülü**'nde kaydedilmiş her eğitim veri setine, son kayıtlı günden
+sonraki işlem günlerini ekler (`ai_dataset_daily`, kaynak `daily`). Var olan günler değişmez.
+Saat, yeni günün tüm parçaları hazır olsun diye seçildi:
+
+- 16:40 ET `market-sentiment`: NASDAQ 100 duyarlılık ve sektör ETF arşivi (`sentiment_daily`,
+  `sector_etf_daily`)
+- 17:15 ET `valuation-nasdaq100`: günün Ucuzluk Skoru (`valuation_scores_daily`)
+- 18:15 ET `ai-dataset`: fiyat / hacim Yahoo'dan, VWAP Alpaca'dan (veri seti Alpaca VWAP'ıyla
+  hazırlandıysa; anahtarlar `/etc/yatirim/env` içindeki `APCA_API_KEY_ID` / `APCA_API_SECRET_KEY`,
+  yoksa tipik fiyat), diğerleri veritabanındaki arşivlerden. NYSE değerleme servisinden
+  (18:45 ET) önce biter.
+
+Veri setleri arasında 5 sn beklenir. Bir hisse hata verse de diğerleri güncellenir; hata varsa
+iş başarısız sayılır ve Telegram'a bildirilir. Tatil günlerinde eklenecek gün olmaz, iş
+"0 yeni gün" ile biter.
+
+Devreye alma (root olarak; dosyalar `/opt/yatirim/app`'ten alınır):
+
+```bash
+sudo bash /opt/yatirim/app/deploy/enable_ai_dataset.sh            # kur, timer'ı aç, şimdi güncelle
+sudo bash /opt/yatirim/app/deploy/enable_ai_dataset.sh status     # timer + kayıtlı veri setleri
+sudo bash /opt/yatirim/app/deploy/enable_ai_dataset.sh run        # şimdi güncelle
+sudo bash /opt/yatirim/app/deploy/enable_ai_dataset.sh disable    # timer'ı kapat
+journalctl -u yatirim-job@ai-dataset --since today                 # zamanlanmış çalışmaların logu
 ```
 
 ## Günlük kullanım

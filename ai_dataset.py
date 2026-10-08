@@ -54,7 +54,8 @@ Eğitimde dikkat:
 
 Kullanım:
     python ai_dataset.py build --ticker AAPL
-    python ai_dataset.py update --all            # kayıtlı setlere yeni günler
+    python ai_dataset.py update --all            # kayıtlı setlere yeni günler (sunucuda
+                                                 # hafta içi 18:15 ET: deploy/jobs.sh ai-dataset)
     python ai_dataset.py export --ticker AAPL --out data/ml
     python ai_dataset.py status
 """
@@ -76,6 +77,7 @@ MARKET_PREFIX = "nasdaq_100"
 DATASET_VERSION = 1
 DEFAULT_FETCH_YEARS = 3
 DEFAULT_KEEP_YEARS = 2
+UPDATE_PAUSE_S = 5  # zamanlanmış güncellemede veri setleri arası bekleme (Yahoo)
 
 SOURCE_BACKFILL = "backfill"
 SOURCE_DAILY = "daily"
@@ -796,6 +798,58 @@ def update(ticker: str, vwap_fetcher=None, **kwargs) -> tuple[int, dict]:
     return added, meta
 
 
+def env_vwap_fetcher():
+    """Zamanlanmış iş için Alpaca VWAP çekici - anahtarlar ortam
+    değişkenlerinden (APCA_API_KEY_ID / APCA_API_SECRET_KEY, /etc/yatirim/env).
+    Anahtar yoksa None (yeni günlerde tipik fiyat kullanılır)."""
+    key_id, secret = os.environ.get("APCA_API_KEY_ID"), os.environ.get("APCA_API_SECRET_KEY")
+    if not (key_id and secret):
+        return None
+    from alpaca_client import DEFAULT_DATA_URL, AlpacaClient
+
+    client = AlpacaClient(key_id, secret, data_url=os.environ.get("APCA_API_DATA_URL", DEFAULT_DATA_URL))
+    return alpaca_vwap_fetcher(client)
+
+
+def run_updates(tickers=None, pause_s: float = UPDATE_PAUSE_S, sleep=None, vwap_fetcher_factory=env_vwap_fetcher,
+                updater=None) -> int:
+    """Kayıtlı veri setlerine (tickers verilmezse hepsine) yeni günleri ekler -
+    deploy/jobs.sh'daki `ai-dataset` işi. VWAP'ı Alpaca'dan alınmış setlerde
+    Alpaca kullanılır. Bir hisse hata verse de diğerleri devam eder; hata
+    varsa 1 döner (run_job.sh Telegram'a bildirir)."""
+    import time
+
+    sleep = sleep or time.sleep
+    updater = updater or update
+    datasets = {d["ticker"]: d for d in list_datasets()}
+    tickers = list(datasets) if tickers is None else [normalize_ticker(t) for t in tickers]
+    if not tickers:
+        log("Kayıtlı veri seti yok - yapılacak iş yok.")
+        return 0
+    fetcher, fetcher_ready = None, False
+    failures = 0
+    for i, t in enumerate(tickers):
+        if i and pause_s:
+            sleep(pause_s)  # Yahoo'ya nefes aldırmak için
+        try:
+            vwap = None
+            if (datasets.get(t) or {}).get("params", {}).get("vwap_source") == "alpaca":
+                if not fetcher_ready:
+                    fetcher, fetcher_ready = vwap_fetcher_factory(), True
+                    if fetcher is None:
+                        log("UYARI: Alpaca anahtarı yok - yeni günlerde VWAP için tipik fiyat kullanılacak.")
+                vwap = fetcher
+            added, meta = updater(t, vwap_fetcher=vwap)
+            log(f"{t}: {added} yeni gün eklendi (son gün {meta.get('end')})")
+            for w in meta.get("warnings") or []:
+                log(f"  uyarı: {w}")
+        except Exception as ex:
+            failures += 1
+            log(f"HATA {t}: {ex}")
+    log(f"{len(tickers)} veri seti güncellendi, {failures} hata.")
+    return 1 if failures else 0
+
+
 def export(ticker: str, out_dir: str, fmt: str = "csv") -> str:
     df = load_dataset(ticker)
     if df.empty:
@@ -843,16 +897,7 @@ def main(argv=None):
             log(f"UYARI: {w}")
         return 0
     if args.cmd == "update":
-        tickers = [d["ticker"] for d in list_datasets()] if args.all else [args.ticker]
-        failures = 0
-        for t in tickers:
-            try:
-                added, _ = update(t)
-                log(f"{t}: {added} yeni gün eklendi")
-            except Exception as ex:
-                failures += 1
-                log(f"HATA {t}: {ex}")
-        return 1 if failures else 0
+        return run_updates(None if args.all else [args.ticker])
     if args.cmd == "export":
         print(export(args.ticker, args.out, args.format))
         return 0
