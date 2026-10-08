@@ -72,6 +72,19 @@ OUTPUT_ORDER = ("Hisse", "Alt Sektör (İş Modeli)", "Ana Sektör", "Nihai Skor
                 "Varlık Devir Hızı")
 
 
+def day_index(index) -> pd.DatetimeIndex:
+    """Saat dilimsiz, gün başına normalize, nanosaniye çözünürlüklü tarih
+    indeksi. pandas 2+ tarihleri farklı çözünürlükte ([s] / [us] / [ns])
+    üretebilir; merge_asof gibi işlemler çözünürlükler aynı değilse hata
+    verir. Yahoo / Alpaca / veritabanı / arşivden gelen her indeks buradan
+    geçirilir."""
+    idx = pd.DatetimeIndex(pd.to_datetime(index))
+    if idx.tz is not None:
+        idx = idx.tz_localize(None)
+    idx = idx.normalize()
+    return idx.as_unit("ns") if hasattr(idx, "as_unit") else idx
+
+
 def log(msg):
     print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {msg}", flush=True)
 
@@ -95,10 +108,10 @@ def fetch_fundamentals(ticker: str) -> dict:
     try:
         ed = t.get_earnings_dates(limit=40)
         if ed is not None and not ed.empty:
-            idx = pd.to_datetime(ed.index)
+            idx = pd.DatetimeIndex(pd.to_datetime(ed.index))
             if idx.tz is not None:
-                idx = idx.tz_convert("America/New_York").tz_localize(None)
-            out["earnings_dates"] = sorted(set(idx.normalize()))
+                idx = idx.tz_convert("America/New_York")
+            out["earnings_dates"] = sorted(set(day_index(idx)))
     except Exception:  # açıklama günü yoksa dönem sonu + gecikme kullanılır
         pass
     return out
@@ -113,7 +126,7 @@ def _statement(df) -> pd.DataFrame:
     if df is None or getattr(df, "empty", True):
         return pd.DataFrame()
     t = df.T.copy()
-    t.index = pd.to_datetime(t.index).tz_localize(None).normalize()
+    t.index = day_index(t.index)
     t = t[~t.index.duplicated(keep="first")].sort_index()
     return t.apply(pd.to_numeric, errors="coerce")
 
@@ -177,8 +190,9 @@ def announce_dates(period_ends, earnings_dates, lag_days: int) -> pd.DatetimeInd
     """Her dönemin değerinin geçerli olduğu ilk gün: dönem sonundan sonraki ilk
     bilanço açıklamasının ertesi günü (açıklama çoğunlukla kapanıştan sonra);
     yoksa dönem sonu + lag_days."""
-    ed = pd.DatetimeIndex(sorted(earnings_dates)) if earnings_dates is not None and len(earnings_dates) \
-        else pd.DatetimeIndex([])
+    ed = day_index(sorted(earnings_dates)) if earnings_dates is not None and len(earnings_dates) \
+        else day_index([])
+    period_ends = day_index(period_ends)
     out = []
     for pe in pd.DatetimeIndex(period_ends):
         after = ed[(ed > pe) & (ed <= pe + pd.Timedelta(days=ANNOUNCE_WINDOW_DAYS))]
@@ -207,9 +221,17 @@ def anchor_points(fundamentals: dict) -> pd.DataFrame:
     return out[~out.index.duplicated(keep="last")]
 
 
+def _on_days(points: pd.Series, days) -> tuple:
+    points = points.dropna()
+    if len(points):
+        points = points.copy()
+        points.index = day_index(points.index)
+    return points, day_index(days)
+
+
 def _step(points: pd.Series, days: pd.DatetimeIndex) -> pd.Series:
     """Her güne o gün veya öncesindeki son nokta; ilk noktadan önce ilk nokta."""
-    points = points.dropna()
+    points, days = _on_days(points, days)
     if points.empty:
         return pd.Series(np.nan, index=days)
     return points.reindex(points.index.union(days)).ffill().bfill().reindex(days)
@@ -217,7 +239,7 @@ def _step(points: pd.Series, days: pd.DatetimeIndex) -> pd.Series:
 
 def _interp(points: pd.Series, days: pd.DatetimeIndex) -> pd.Series:
     """Noktalar arasında zamana göre doğrusal; uçlarda en yakın nokta."""
-    points = points.dropna()
+    points, days = _on_days(points, days)
     points = points[~points.index.duplicated(keep="last")]
     if points.empty:
         return pd.Series(np.nan, index=days)
@@ -239,10 +261,11 @@ def daily_metrics(closes: pd.Series, anchors: pd.DataFrame, current_raw: dict, d
     olmayan oranlar için sabit değer. days verilirse kapanışlar bu günlere
     hizalanır (benzer hisselerin tatil / eksik günleri için ileri taşıma)."""
     closes = closes.dropna()
+    closes.index = day_index(closes.index)
     if days is None:
-        days = pd.DatetimeIndex(closes.index)
+        days = day_index(closes.index)
     else:
-        days = pd.DatetimeIndex(days)
+        days = day_index(days)
         closes = closes.reindex(closes.index.union(days)).ffill().bfill().reindex(days)
     today = days.max()
     anchors = anchors if anchors is not None else pd.DataFrame()
@@ -327,7 +350,7 @@ def download_closes(tickers, start: str) -> pd.DataFrame:
     closes = data["Close"]
     if isinstance(closes, pd.Series):
         closes = closes.to_frame(tickers[0])
-    closes.index = pd.to_datetime(closes.index).tz_localize(None).normalize()
+    closes.index = day_index(closes.index)
     return closes
 
 
