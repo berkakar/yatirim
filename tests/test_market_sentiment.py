@@ -171,6 +171,34 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(failures, 1)
         self.assertEqual(ms.load_all()["NYSE"]["score"], 42)
 
+    def test_sector_snapshot_and_save(self):
+        dates = pd.bdate_range("2026-08-01", periods=30)
+        closes = pd.DataFrame({
+            "XLK": np.linspace(100, 129, 30),            # güçlü
+            "XLE": np.linspace(100, 71, 30),             # zayıf
+            "XLF": [np.nan] * 30,                        # veri yok -> atlanır
+            "SPY": np.linspace(100, 110, 30),
+        }, index=dates)
+        snap = ms.build_sector_snapshot(closes)
+        self.assertEqual([r["symbol"] for r in snap["sectors"]], ["XLK", "XLE"])
+        xlk = snap["sectors"][0]
+        self.assertAlmostEqual(xlk["week_pct"], (129 / 124 - 1) * 100, places=2)
+        self.assertAlmostEqual(xlk["day_pct"], (129 / 128 - 1) * 100, places=2)
+        self.assertAlmostEqual(xlk["vs_benchmark"], round(xlk["week_pct"], 2) - snap["benchmark"]["week_pct"], places=1)
+        self.assertEqual(len(xlk["trend"]), ms.SECTOR_TREND_BARS)
+        self.assertEqual(snap["as_of"], dates[-1].strftime("%Y-%m-%d"))
+
+        self.assertEqual(ms.run_sectors(downloader=lambda t: closes), 0)
+        self.assertEqual(ms.load_sectors()["sectors"][0]["symbol"], "XLK")
+        self.assertEqual(ms.load_all(), {})  # duyarlılık kaydına karışmaz
+
+    def test_run_sectors_keeps_old_record_on_failure(self):
+        ms.save_sectors({"as_of": "2026-10-01", "sectors": [{"symbol": "XLK"}]})
+        def boom(tickers):
+            raise RuntimeError("Yahoo yok")
+        self.assertEqual(ms.run_sectors(downloader=boom), 1)
+        self.assertEqual(ms.load_sectors()["as_of"], "2026-10-01")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -31,9 +31,15 @@ anlık verisi olduğundan skora katılmaz, bilgi olarak gösterilir.
 Sonuç `market_sentiment_cache` kaydına (storage, ortak) yazılır; arayüz Giriş
 Sayfası'nda buradan okur (bkz. market_sentiment_ui.py).
 
+Aynı çalıştırmada ABD sektör ETF'lerinin (SPDR Select Sector, 11 sektör) son
+kapanışı, günlük ve son bir haftalık (5 işlem günü) değişimi ve haftalık
+değişimin S&P 500'e (SPY) göre farkı da hesaplanıp `market_sector_etfs`
+kaydına yazılır (duyarlılık skoruna katılmaz).
+
 Kullanım (Droplet'te yatirim-market-sentiment.timer hafta içi kapanıştan sonra çağırır):
     python market_sentiment.py                 # tüm piyasalar
-    python market_sentiment.py --market nyse
+    python market_sentiment.py --market nyse   # yalnızca NYSE (sektörler hariç)
+    python market_sentiment.py --sectors-only  # yalnızca sektör ETF'leri
 """
 
 import argparse
@@ -75,6 +81,25 @@ MARKETS = {
         "volatility": None, "volatility_label": "XU100 20 günlük oynaklık", "options": None,
         "safe_haven": "TRY=X", "safe_haven_label": "USD/TRY", "usd_fx": "TRY=X",
     },
+}
+
+SECTOR_STORAGE_NAME = "market_sector_etfs"
+SECTOR_BENCHMARK = "SPY"
+SECTOR_DOWNLOAD_PERIOD = "3mo"
+WEEK_BARS = 5          # "son bir hafta" = son 5 işlem günü
+SECTOR_TREND_BARS = 20  # tablodaki mini grafik: son ~1 ay
+SECTOR_ETFS = {
+    "XLK": "Teknoloji",
+    "XLC": "İletişim Hizmetleri",
+    "XLY": "Tüketici (Döngüsel)",
+    "XLP": "Temel Tüketim",
+    "XLE": "Enerji",
+    "XLF": "Finans",
+    "XLV": "Sağlık",
+    "XLI": "Sanayi",
+    "XLB": "Hammadde",
+    "XLRE": "Gayrimenkul",
+    "XLU": "Kamu Hizmetleri",
 }
 
 COMPONENTS = {
@@ -261,6 +286,46 @@ def build_snapshot(market_cfg: dict, comp: pd.DataFrame, universe_size: int, put
     }
 
 
+def _pct_change(series: pd.Series, bars: int):
+    """Son kapanışın `bars` işlem günü önceki kapanışa göre % değişimi."""
+    s = series.dropna()
+    if len(s) <= bars or not s.iloc[-1 - bars]:
+        return None
+    return float(s.iloc[-1] / s.iloc[-1 - bars] - 1) * 100
+
+
+def build_sector_snapshot(closes: pd.DataFrame) -> dict:
+    """Sektör ETF'lerinin son kapanış, günlük / haftalık % değişim ve haftalık
+    değişimin SPY'ye göre farkı; haftalık değişime göre büyükten küçüğe."""
+    bench = closes[SECTOR_BENCHMARK] if SECTOR_BENCHMARK in closes else pd.Series(dtype=float)
+    bench_week = _pct_change(bench, WEEK_BARS)
+    rows = []
+    for symbol, name in SECTOR_ETFS.items():
+        s = closes[symbol].dropna() if symbol in closes else pd.Series(dtype=float)
+        if s.empty:
+            continue
+        week = _pct_change(s, WEEK_BARS)
+        rows.append({
+            "symbol": symbol, "name": name,
+            "close": _round(float(s.iloc[-1]), 2),
+            "day_pct": _round(_pct_change(s, 1), 2),
+            "week_pct": _round(week, 2),
+            "vs_benchmark": _round(week - bench_week, 2) if week is not None and bench_week is not None else None,
+            "trend": [_round(float(v), 2) for v in s.tail(SECTOR_TREND_BARS)],
+        })
+    if not rows:
+        raise RuntimeError("sektör ETF verisi gelmedi")
+    rows.sort(key=lambda r: r["week_pct"] if r["week_pct"] is not None else float("-inf"), reverse=True)
+    valid = closes[[r["symbol"] for r in rows]].dropna(how="all")
+    return {
+        "as_of": valid.index[-1].strftime("%Y-%m-%d"),
+        "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "benchmark": {"symbol": SECTOR_BENCHMARK, "day_pct": _round(_pct_change(bench, 1), 2),
+                      "week_pct": _round(bench_week, 2)},
+        "sectors": rows,
+    }
+
+
 # ------------------------------------------------------------------------------
 # Yahoo Finance
 # ------------------------------------------------------------------------------
@@ -389,6 +454,40 @@ def save_snapshot(snapshot: dict) -> None:
     storage.update(STORAGE_NAME, storage.SHARED, merge, {})
 
 
+def compute_sectors(downloader=None) -> dict:
+    symbols = list(SECTOR_ETFS) + [SECTOR_BENCHMARK]
+    log(f"Sektör ETF'leri: {', '.join(symbols)} indiriliyor")
+    if downloader is None:
+        closes = download_closes(symbols, period=SECTOR_DOWNLOAD_PERIOD)
+    else:
+        closes = downloader(symbols)
+    return build_sector_snapshot(closes)
+
+
+def save_sectors(snapshot: dict) -> None:
+    storage.write(SECTOR_STORAGE_NAME, storage.SHARED, snapshot)
+
+
+def load_sectors() -> dict:
+    """Son sektör ETF kaydı ({} = henüz hesaplanmadı) - arayüz için."""
+    data = storage.read(SECTOR_STORAGE_NAME, storage.SHARED, {})
+    return data if isinstance(data, dict) else {}
+
+
+def run_sectors(downloader=None) -> int:
+    """Sektör ETF'lerini hesaplayıp kaydeder; hata olursa eski kayıt kalır, 1 döner."""
+    try:
+        snap = compute_sectors(downloader)
+        save_sectors(snap)
+        best, worst = snap["sectors"][0], snap["sectors"][-1]
+        log(f"Sektörler ({snap['as_of']}): en iyi {best['symbol']} {best['week_pct']}%, "
+            f"en zayıf {worst['symbol']} {worst['week_pct']}% (1 hafta)")
+        return 0
+    except Exception as e:
+        log(f"HATA sektör ETF'leri: {e}")
+        return 1
+
+
 def load_all() -> dict:
     """{piyasa: snapshot} - arayüz için."""
     data = storage.read(STORAGE_NAME, storage.SHARED, {})
@@ -415,12 +514,19 @@ def run(slugs, pause_s=MARKET_PAUSE_S, sleep=time.sleep, **kwargs) -> int:
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Piyasa Duyarlılığı (Korku/Açgözlülük) servisi")
     parser.add_argument("--market", choices=sorted(MARKETS), action="append",
-                        help="yalnızca bu piyasa (tekrarlanabilir); verilmezse hepsi")
+                        help="yalnızca bu piyasa (tekrarlanabilir); verilmezse hepsi ve sektör ETF'leri")
+    parser.add_argument("--sectors-only", action="store_true", help="yalnızca sektör ETF'leri")
     args = parser.parse_args(argv)
     if not storage.enabled():
         log(f"UYARI: YATIRIM_DB_PATH tanımlı değil - sonuçlar yerel {storage.db_path()} dosyasına yazılacak.")
-    slugs = args.market or list(MARKETS)
-    return 1 if run(slugs) else 0
+    failures = 0
+    if not args.sectors_only:
+        failures += run(args.market or list(MARKETS))
+    if args.sectors_only or not args.market:
+        if not args.sectors_only:
+            time.sleep(MARKET_PAUSE_S)
+        failures += run_sectors()
+    return 1 if failures else 0
 
 
 if __name__ == "__main__":
