@@ -109,6 +109,12 @@ job_define() {
       # Russell 2000 saatte yalnızca 1 paket (50 hisse) çeker - bkz. SERVICES.
       [ "$1" = "valuation-russell2000" ] && JOB_TIMEOUT=900
       ;;
+    market-sentiment)
+      # Piyasa Duyarlılığı (Korku/Açgözlülük) - NASDAQ 100 ve NYSE (market_sentiment.py).
+      # Sonuç storage'daki market_sentiment_cache kaydına yazılır; commit'lenecek dosya yok.
+      JOB_CMDS=("python market_sentiment.py")
+      JOB_TIMEOUT=900
+      ;;
     *)
       return 1
       ;;
@@ -130,4 +136,5 @@ ALL_JOBS=(
   valuation-nasdaq100
   valuation-nyse
   valuation-russell2000
+  market-sentiment
 )
