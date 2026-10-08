@@ -71,6 +71,7 @@ import numpy as np
 import pandas as pd
 
 import storage
+from valuation_history import day_index
 
 MARKET = "NASDAQ 100"
 MARKET_PREFIX = "nasdaq_100"
@@ -168,7 +169,7 @@ def download_ohlcv(ticker: str, start: str, end: str | None = None) -> pd.DataFr
     if data is None or data.empty:
         raise RuntimeError(f"{ticker}: Yahoo'dan günlük veri alınamadı")
     data = data.rename(columns=str.lower)[["open", "high", "low", "close", "volume"]]
-    data.index = pd.to_datetime(data.index).tz_localize(None).normalize()
+    data.index = day_index(data.index)
     data = data[~data.index.duplicated(keep="last")].sort_index()
     return data.dropna(subset=["close"])
 
@@ -181,8 +182,7 @@ def alpaca_vwap_fetcher(client):
         bars = client.get_raw_bars_multi([ticker], "1Day", f"{start}T00:00:00Z", adjustment="all").get(ticker) or []
         if not bars:
             return pd.Series(dtype=float)
-        idx = (pd.to_datetime([b["t"] for b in bars], utc=True).tz_convert("America/New_York")
-               .tz_localize(None).normalize())
+        idx = day_index(pd.to_datetime([b["t"] for b in bars], utc=True).tz_convert("America/New_York"))
         s = pd.Series([b.get("vw") for b in bars], index=idx, dtype=float)
         return s[~s.index.duplicated(keep="last")]
     return fetch
@@ -196,7 +196,13 @@ def add_vwap(df: pd.DataFrame, vwap: pd.Series | None = None) -> pd.DataFrame:
     """vwap sütunu: verilen seri, eksik günlerde tipik fiyat (Y+D+K)/3."""
     out = df.copy()
     typical = (out["high"] + out["low"] + out["close"]) / 3
-    real = vwap.reindex(out.index) if vwap is not None and len(vwap) else pd.Series(np.nan, index=out.index)
+    if vwap is not None and len(vwap):
+        vwap = vwap.copy()
+        vwap.index = day_index(vwap.index)
+        vwap = vwap[~vwap.index.duplicated(keep="last")]
+        real = vwap.reindex(out.index)
+    else:
+        real = pd.Series(np.nan, index=out.index)
     real = real.where(real > 0)
     out["vwap"] = real.fillna(typical)
     out["vwap_is_proxy"] = real.isna().astype(int)
@@ -333,8 +339,11 @@ def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFram
     (as-of). Geçmişten önceki günlere en eski geçmiş satırı, geçmiş hiç yoksa
     `valuation` (bugünkü skor) yazılır; bu günler `valuation_is_snapshot`=1."""
     out = df.copy()
+    out.index = day_index(out.index)
     if history is not None and not history.empty:
-        hist = history.reindex(columns=list(VALUATION_COLS) + ["valuation_is_reconstructed"]).sort_index()
+        hist = history.reindex(columns=list(VALUATION_COLS) + ["valuation_is_reconstructed"])
+        hist.index = day_index(hist.index)
+        hist = hist[~hist.index.duplicated(keep="last")].sort_index()
         asof = pd.merge_asof(pd.DataFrame(index=out.index), hist, left_index=True, right_index=True)
         has = pd.Series(hist.index.min() <= out.index, index=out.index)
         fallback = hist.iloc[0].to_dict()
@@ -459,7 +468,7 @@ def load_valuation_history(ticker: str, market: str = MARKET) -> pd.DataFrame:
         **{col: _num(r["scored"].get(key)) for col, key in VALUATION_FIELDS.items()},
         "valuation_is_reconstructed": int(r["source"] == valuation_db.SOURCE_RECONSTRUCTED),
     } for r in rows])
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = day_index(df["date"])
     return df.set_index("date").astype(float)
 
 
@@ -508,7 +517,9 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
     start = (end_ts - pd.DateOffset(years=fetch_years) - pd.Timedelta(days=7)).strftime("%Y-%m-%d")
 
     step(f"{ticker}: {fetch_years} yıllık günlük fiyat ve hacim çekiliyor")
-    raw = ohlcv_fetcher(ticker, start)
+    raw = ohlcv_fetcher(ticker, start).copy()
+    raw.index = day_index(raw.index)
+    raw = raw[~raw.index.duplicated(keep="last")].sort_index()
     raw = raw[raw.index <= end_ts]
     if raw.empty:
         raise RuntimeError(f"{ticker}: fiyat verisi boş")
@@ -565,7 +576,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
         warnings.append("Günlük arşivde (sentiment_daily / sector_etf_daily) bu aralıkta veri yok; "
                         "piyasa ve sektör sütunları eklenemedi. Arşivi doldurup yeniden oluşturun.")
     else:
-        market.index = pd.to_datetime(market.index)
+        market.index = day_index(market.index)
         coverage = market.index.intersection(df.index)
         missing_days = len(df) - len(coverage)
         if missing_days:
@@ -705,7 +716,7 @@ def load_dataset(ticker: str, start: str | None = None, end: str | None = None) 
         rec["date"], rec["source"] = date, source
         records.append(rec)
     df = pd.DataFrame(records)
-    df["date"] = pd.to_datetime(df["date"])
+    df["date"] = day_index(df["date"])
     df = df.set_index("date")
     order = json.loads(meta_row[0]).get("columns", []) if meta_row else []
     cols = [c for c in order if c in df.columns]

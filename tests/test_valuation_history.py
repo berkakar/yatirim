@@ -212,5 +212,58 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(day["Alt Sektör İskontosu %"], 1.0)
 
 
+class MixedDatetimeUnitTests(ReconstructTests):
+    """Sunucu hatası (2026-10-08): 'incompatible merge keys [0] dtype('<M8[s]') and
+    dtype('<M8[us]')' - Yahoo / arşiv / veritabanı farklı çözünürlükte tarih üretince."""
+
+    test_writes_reconstructed_without_touching_service_rows = None
+    test_requires_current_score = None
+    test_ai_dataset_marks_reconstructed_days = None
+    test_sub_sector_median_uses_peer_history = None
+    test_small_sub_sector_discount_is_one = None
+
+    def test_create_with_mixed_units(self):
+        import ai_dataset as ad
+        from tests.test_ai_dataset import fake_market, fake_ohlcv
+
+        self._peer_rows({"P1": 20.0, "P2": 50.0, "P3": 35.0})
+
+        def ohlcv(ticker, start, end=None):
+            df = fake_ohlcv()(ticker, start)
+            df.index = pd.DatetimeIndex(df.index).as_unit("s")
+            return df
+
+        def market(start, end):
+            df = fake_market()(start, end)
+            df.index = pd.DatetimeIndex(df.index).as_unit("us")
+            return df
+
+        def peer_prices(tickers, start):
+            days = pd.DatetimeIndex(pd.bdate_range(start, "2026-10-07")).as_unit("ms")
+            return pd.DataFrame({t: 100.0 for t in tickers}, index=days)
+
+        def fundamentals(_t=None):
+            f = fake_fundamentals()
+            for k in ("quarterly_income", "quarterly_balance", "annual_income", "annual_balance"):
+                f[k].columns = pd.DatetimeIndex(f[k].columns).as_unit("s")
+            f["earnings_dates"] = list(pd.DatetimeIndex(EARNINGS).tz_localize("America/New_York").as_unit("us"))
+            return f
+
+        df, meta = ad.create(
+            "AAPL", ohlcv_fetcher=ohlcv, market_loader=market, end="2026-10-07",
+            vwap_fetcher=lambda t, start: pd.Series(
+                101.0, index=pd.DatetimeIndex(pd.bdate_range("2026-01-02", "2026-10-07")).as_unit("ms")),
+            reconstruct_valuation=lambda t, c: vh.reconstruct(t, c, fetcher=fundamentals,
+                                                               price_fetcher=peer_prices))
+        self.assertEqual(df.index.dtype, np.dtype("datetime64[ns]"))
+        self.assertFalse(any("hesaplanamadı" in w for w in meta["warnings"]), meta["warnings"])
+        self.assertEqual(int(df["valuation_is_snapshot"].sum()), 0)
+        self.assertEqual(df.loc["2026-10-06", "valuation_score"], 77)
+        self.assertEqual(df.loc["2026-10-07", "vwap"], 101.0)
+        self.assertEqual(df.loc["2026-10-07", "vwap_is_proxy"], 0)
+        self.assertFalse(df["nasdaq_100__score"].isna().any())
+        self.assertGreater(len(meta["valuation_reconstruction"]["written_peers"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
