@@ -12,9 +12,13 @@
     Hesaplar: algo_analiz.py, trade_journal.py, trade_journal_analysis.py.
   - 📝 Değişiklik Günlüğü: sistemde yapılan değişikliklerin gerekçeleri, kod
     yerleri, ayarları ve takip ölçütleri (changelog.py).
+
+render_live_positions: Genel Bakış ve 🦙 Alpaca Canlı Pozisyonlar sayfalarındaki
+açık pozisyonlar tablosu (Hisse Hareketleri'nin açık pozisyon hali) ve altında
+bugün ve dün gerçekleşen emirler.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -33,7 +37,9 @@ from github_config import DEFAULT_CONFIG, read_json_from_github
 from rules_version import MIN_TRADES_FOR_EVALUATION
 from stop_algorithms import STOP_ALGORITHMS
 from theme import get_palette, get_plotly_template
-from trade_journal import MODULE_LABELS, SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, walk_fills
+from trade_journal import (
+    MODULE_LABELS, SESSION_EXTENDED, SESSION_OPENING, SESSION_REGULAR, entry_source, exit_reason, recent_fills, walk_fills,
+)
 from trade_journal_analysis import (
     STATUS_CLOSED, STATUS_OPEN, closed_records, filter_records, group_summary, open_r_multiple, open_records,
 )
@@ -45,6 +51,9 @@ JOURNAL_DAYS_OPTIONS = [30, 60, 90, 180, 365, 1095]
 # Açık pozisyonun giriş emri seçili pencerede yoksa o sembolün geçmişi bu
 # kadar geriye sorgulanır (sadece eksik semboller için, önbellekli).
 OPEN_ENTRY_LOOKBACK_DAYS = 1095
+# Canlı Pozisyonlar tablosu: açık pozisyonların giriş emri önce bu pencerede
+# aranır (bulunamayan semboller OPEN_ENTRY_LOOKBACK_DAYS ile tamamlanır).
+LIVE_ORDER_DAYS = 30
 
 GROUP_ALGO_STOP = "Algoritma + Stop Loss"
 GROUP_ALGO = "Sadece Algoritma"
@@ -140,6 +149,29 @@ def _module_allocations(username: str) -> list[tuple[str, float, set]]:
         module_symbols = set().union(*(m[2] for m in out))
         out.append((PBP_LABEL, float(pbp["cash_allocation_pct"]), set(pbp.get("weights") or {}) - module_symbols))
     return out
+
+
+def _complete_open_lots(key_id: str, secret_key: str, trading_url: str, positions: list[dict], lots: dict) -> None:
+    """Giriş emri pencerede olmayan açık pozisyonların lotunu sembolün uzun
+    geçmişinden tamamlar (sadece eksik semboller, önbellekli)."""
+    for sym in [p["symbol"] for p in positions if p.get("symbol") not in lots]:
+        try:
+            _, sym_lots = walk_fills(_fetch_symbol_orders(key_id, secret_key, trading_url, sym))
+        except Exception:
+            continue
+        if sym in sym_lots:
+            lots[sym] = sym_lots[sym]
+
+
+def _enrich_records(records: list, open_orders: list[dict], username: str) -> None:
+    """Stop senaryosu (güncel stop) ve stop algoritmasını kayıtlara yazar."""
+    apply_stop_scenario(records, open_stop_levels(open_orders))
+    pbp_config, module_algos, module_holdings = _stop_configs(username)
+    for r in records:
+        try:
+            r.stop_algorithm = resolve_stop_algorithm_id(r, pbp_config, module_algos, module_holdings)
+        except Exception:
+            r.stop_algorithm = None
 
 
 def _rules_since(username: str) -> tuple[datetime | None, str | None]:
@@ -493,6 +525,108 @@ def _render_movements(records: list, split_tf: bool):
 
 
 # ------------------------------------------------------------------------------
+# Canlı pozisyonlar (Genel Bakış + 🦙 Alpaca Canlı Pozisyonlar)
+# ------------------------------------------------------------------------------
+
+# Hisse Hareketleri'nden açık pozisyonda anlamsız olan sütunlar çıkarılır.
+_LIVE_DROP_COLS = ["Durum", "Çıkış (TRT)", "Çıkış Sebebi"]
+_LIVE_PNL_COLS = ["Gerçekleşen $", "Açık K/Z $", "Toplam $", "Stop senaryosu $", "K/Z %", "R"]
+
+
+def _live_positions_dataframe(records: list) -> pd.DataFrame:
+    # _movements_dataframe ile aynı sıra (en yeni giriş üstte; sort kararlı).
+    records = sorted(records, key=lambda r: r.entry_time or datetime.min.replace(tzinfo=TR_TZ), reverse=True)
+    df = _movements_dataframe(records, split_timeframe=True).drop(columns=_LIVE_DROP_COLS)
+    df = df.rename(columns={"Son/Çıkış $": "Güncel $"})
+    dist = [round((r.last_price - r.current_stop) / r.last_price * 100, 2)
+            if r.current_stop is not None and r.last_price else None for r in records]
+    df.insert(df.columns.get_loc("Güncel Stop $") + 1, "Stoptan Uzaklık %", dist)
+    return df
+
+
+def _recent_fills_dataframe(fills: list[dict]) -> pd.DataFrame:
+    rows = []
+    for o in fills:
+        qty = float(o["filled_qty"])
+        price = float(o["filled_avg_price"])
+        is_buy = o.get("side") == "buy"
+        rows.append({
+            "Gerçekleşme (TRT)": datetime.fromisoformat(o["filled_at"].replace("Z", "+00:00"))
+                                 .astimezone(TR_TZ).strftime("%d.%m.%y %H:%M"),
+            "Hisse": o.get("symbol"),
+            "Yön": "Alış" if is_buy else "Satış",
+            "Tip": {"market": "Piyasa", "limit": "Limit", "stop": "Stop", "stop_limit": "Stop-Limit"}
+                   .get(o.get("type"), o.get("type")),
+            "Adet": qty,
+            "Fiyat $": round(price, 2),
+            "Tutar $": round(qty * price, 2),
+            "Açıklama": f"Giriş: {entry_source(o.get('client_order_id'))}" if is_buy
+                        else f"Çıkış: {exit_reason(o)}",
+        })
+    return pd.DataFrame(rows)
+
+
+def render_live_positions(username: str, positions: list[dict] | None = None):
+    """Açık pozisyonlar tablosu (🧠 Algo Analiz > Hisse Hareketleri'nin
+    sadece açık pozisyonlar hali) ve hemen altında bugün ve dün gerçekleşen
+    (dolan) emirler. `positions` verilirse tekrar çekilmez."""
+    key_id, secret_key, trading_url = get_user_alpaca(username)
+    if not key_id or not secret_key:
+        return
+    try:
+        if positions is None:
+            positions = _fetch_positions(key_id, secret_key, trading_url)
+        open_orders = _fetch_open_orders(key_id, secret_key, trading_url)
+        orders = _fetch_orders(key_id, secret_key, trading_url, LIVE_ORDER_DAYS)
+    except Exception as e:
+        st.warning(f"⚠️ Alpaca pozisyon/emir verisi alınamadı: {e}")
+        return
+
+    st.markdown("### 📌 Açık Pozisyonlar")
+    st.caption("Alpaca'daki açık pozisyonlar - giriş algoritması, stop loss algoritması, stop hareketleri ve "
+               "anlık K/Z (🧠 Algo Analiz > Hisse Hareketleri tablosunun sadece açık pozisyonlar hali).")
+    if not positions:
+        st.info("Açık pozisyon yok.")
+    else:
+        _, lots = walk_fills(orders)
+        _complete_open_lots(key_id, secret_key, trading_url, positions, lots)
+        records = open_records(positions, lots)
+        _enrich_records(records, open_orders, username)
+        freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT "
+                          "(pozisyon/stoplar 1 dk, emir geçmişi 5 dk önbellek).")
+        _table(_live_positions_dataframe(records), _LIVE_PNL_COLS,
+               column_config={
+                   "Stop Hareketleri": st.column_config.TextColumn(
+                       "Stop Hareketleri", width="large",
+                       help="Girişten bu yana kurulan stop seviyeleri, eskiden yeniye. "
+                            "Hücrenin üzerine gelince tamamı görünür."),
+                   "Stop Güncelleme": st.column_config.NumberColumn(
+                       "Stop Güncelleme", help="İlk stoptan sonra stopun kaç kez taşındığı."),
+               })
+        st.caption(
+            "Güncel Stop: Alpaca'daki açık stop emirlerinin adet ağırlıklı seviyesi (açılış kalkanı aktifse "
+            "09:45 ET'de dönülecek gerçek seviye). Stop senaryosu: stoplar tetiklenirse oluşacak toplam K/Z. "
+            "Gerçekleşen: pozisyondan yapılan kısmi satışların K/Z'si. R = (güncel − giriş) / (giriş − ilk stop). "
+            "Stop hareketleri: İlk: ilk stop, BE: breakeven, Yapısal: yapısal trail, ATR trail: chandelier, "
+            "Kalkan: açılış kalkanı. Giriş emri bulunamayan pozisyonda algoritma 'Bilinmiyor' görünür. Stoplar "
+            "sunucudaki stop botu tarafından seçili stop-loss algoritmasıyla seans içinde 5 dakikada bir güncellenir."
+        )
+
+    today = datetime.now(TR_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday = today - timedelta(days=1)
+    st.markdown("### 🧾 Bugün ve Dün Gerçekleşen Emirler")
+    st.caption(f"{yesterday:%d.%m.%Y} ve {today:%d.%m.%Y} (TRT) tarihlerinde dolan alış/satış emirleri, en yeni "
+               "en üstte. Bekleyen, iptal edilen ve trail ile değiştirilen stop emirleri listelenmez.")
+    fills = recent_fills(orders, yesterday)
+    if not fills:
+        st.info("Bugün ve dün gerçekleşen emir yok.")
+        return
+    _table(_recent_fills_dataframe(fills))
+    st.caption("Açıklama: alışlarda girişi yapan algoritma (periyoduyla), satışlarda çıkış sebebi - stop türü "
+               "(ilk stop, breakeven, yapısal / ATR trail, açılış kalkanı), modül çıkışı ya da market / elle.")
+
+
+# ------------------------------------------------------------------------------
 # 5. Çıkış sebebi ve seans dilimi istatistikleri
 # ------------------------------------------------------------------------------
 
@@ -570,22 +704,9 @@ def _render_algo_analiz(username: str):
         return
 
     trips, lots = walk_fills(orders)
-    for sym in [p["symbol"] for p in positions if p.get("symbol") not in lots]:
-        try:
-            _, sym_lots = walk_fills(_fetch_symbol_orders(key_id, secret_key, trading_url, sym))
-        except Exception:
-            continue
-        if sym in sym_lots:
-            lots[sym] = sym_lots[sym]
-
+    _complete_open_lots(key_id, secret_key, trading_url, positions, lots)
     all_records = closed_records(trips) + open_records(positions, lots)
-    apply_stop_scenario(all_records, open_stop_levels(open_orders))
-    pbp_config, module_algos, module_holdings = _stop_configs(username)
-    for r in all_records:
-        try:
-            r.stop_algorithm = resolve_stop_algorithm_id(r, pbp_config, module_algos, module_holdings)
-        except Exception:
-            r.stop_algorithm = None
+    _enrich_records(all_records, open_orders, username)
     all_open = [r for r in all_records if r.status == STATUS_OPEN]
     records = filter_records(all_records, since=rules_since if scope == "rules" else None,
                              include_manual=include_manual)
