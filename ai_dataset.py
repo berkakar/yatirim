@@ -26,7 +26,8 @@ Adımlar (build_dataset):
        geçmişin başlangıcından önceki günlere en eski bilinen skor.
     6. Günlük arşivle birleştirme (market_archive): NASDAQ 100 duyarlılık
        parametreleri (nasdaq_100__*), 11 sektör ETF'si + SPY (<etf>__*) ve
-       hissenin kendi sektör ETF'si (sector_etf__*).
+       hissenin sektör ETF'si meta'da (sector_etf). Birbirinden türetilebilen
+       sütunlar alınmaz (REMOVED_FEATURES).
     7. Temporal embedding için takvim özellikleri (ham indeks + sin/cos).
     8. Boş hücreler zamana göre doğrusal interpolasyonla doldurulur; serinin
        sonundaki boşluk ileri taşınır (geleceği bilemeyiz), başındaki geri.
@@ -75,7 +76,7 @@ from valuation_history import day_index
 
 MARKET = "NASDAQ 100"
 MARKET_PREFIX = "nasdaq_100"
-DATASET_VERSION = 1
+DATASET_VERSION = 2  # 2: türetilmiş sütunlar çıkarıldı (REMOVED_FEATURES)
 DEFAULT_FETCH_YEARS = 3
 DEFAULT_KEEP_YEARS = 2
 UPDATE_PAUSE_S = 5  # zamanlanmış güncellemede veri setleri arası bekleme (Yahoo)
@@ -111,6 +112,19 @@ VALUATION_EXCLUDED_KEY = "_excluded"  # valuation.EXCLUDED_KEY (streamlit'e bağ
 # Arşivden alınmayan sütunlar: put/call yalnızca canlı satırlarda var (geçmişi
 # yok, interpolasyonla uydurulmamalı), universe_size özellik değil.
 _MARKET_SKIP = ("put_call_ratio", "put_call_score")
+
+# Veri setinden çıkarılan sütunlar (2026-10-08): diğer sütunlardan birebir türetilebildikleri için
+# eğitimde tekrar (çoklu doğrusallık) yaratıyorlardı. Eski kayıtlarda varsa yüklenirken atılır.
+#   sector_etf__*               hissenin kendi ETF'sinin kopyası (ör. xlk__*)
+#   <etf>__rel_5d_vs_benchmark  = <etf>__ret_5d - spy__ret_5d (SPY'de her gün 0)
+#   nasdaq_100__score           5 bileşenin ortalaması
+#   stock_sentiment             sent_momentum, sent_volatility, rsi14 ortalaması
+REMOVED_FEATURES = ("nasdaq_100__score", "stock_sentiment")
+
+
+def is_removed_feature(col: str) -> bool:
+    return (col in REMOVED_FEATURES or col.startswith("sector_etf__")
+            or col.endswith("__rel_5d_vs_benchmark"))
 
 # Interpolasyona girmeyen sütunlar (bayrak / takvim / sayaç).
 _NO_FILL = ("vwap_is_proxy", "valuation_is_snapshot", "valuation_is_reconstructed", "resistance_nearest_window",
@@ -229,9 +243,9 @@ def rsi(close: pd.Series, period: int = RSI_PERIOD) -> pd.Series:
 
 
 def add_stock_sentiment(df: pd.DataFrame) -> pd.DataFrame:
-    """Hisse duyarlılığı (0-100): momentum ve oynaklık bileşenleri Piyasa
+    """Hisse duyarlılığı bileşenleri (0-100): momentum ve oynaklık Piyasa
     Duyarlılığı'ndaki gibi yüzdelik sıradır (oynaklık ters çevrilir) + RSI.
-    En az iki bileşen varsa ortalama."""
+    Bileşik ortalama (stock_sentiment) bileşenlerden türediği için tutulmaz."""
     import market_sentiment as ms
 
     out = df.copy()
@@ -244,8 +258,6 @@ def add_stock_sentiment(df: pd.DataFrame) -> pd.DataFrame:
     vol_vs_avg = vol / vol.rolling(50, min_periods=50).mean() - 1
     out["sent_volatility"] = 100 - ms.rolling_percentile(vol_vs_avg, SENTIMENT_PERCENTILE_WINDOW)
     out["rsi14"] = rsi(close)
-    parts = out[["sent_momentum", "sent_volatility", "rsi14"]]
-    out["stock_sentiment"] = parts.mean(axis=1).where(parts.notna().sum(axis=1) >= 2)
     return out
 
 
@@ -360,9 +372,9 @@ def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFram
     return out
 
 
-def market_columns(frame: pd.DataFrame, sector_etf: str | None = None) -> pd.DataFrame:
-    """market_archive.feature_frame çıktısından NASDAQ 100 ve sektör ETF
-    sütunları + hissenin kendi sektör ETF'si `sector_etf__*` olarak."""
+def market_columns(frame: pd.DataFrame) -> pd.DataFrame:
+    """market_archive.feature_frame çıktısından NASDAQ 100 parametreleri ve 11
+    sektör ETF'si + SPY sütunları (türetilmiş olanlar hariç - REMOVED_FEATURES)."""
     import market_sentiment as ms
 
     if frame is None or frame.empty:
@@ -371,18 +383,11 @@ def market_columns(frame: pd.DataFrame, sector_etf: str | None = None) -> pd.Dat
     keep = []
     for col in frame.columns:
         prefix, _, feat = col.partition("__")
-        if feat in _MARKET_SKIP:
+        if feat in _MARKET_SKIP or is_removed_feature(col):
             continue
         if prefix == MARKET_PREFIX or prefix in etfs:
             keep.append(col)
-    out = frame[keep].apply(pd.to_numeric, errors="coerce")
-    if sector_etf:
-        own = sector_etf.lower()
-        for col in keep:
-            prefix, _, feat = col.partition("__")
-            if prefix == own:
-                out[f"sector_etf__{feat}"] = out[col]
-    return out
+    return frame[keep].apply(pd.to_numeric, errors="coerce")
 
 
 def temporal_features(index: pd.DatetimeIndex) -> pd.DataFrame:
@@ -418,6 +423,53 @@ def temporal_features(index: pd.DatetimeIndex) -> pd.DataFrame:
 TEMPORAL_COLS = tuple(temporal_features(pd.DatetimeIndex([pd.Timestamp("2024-01-02")])).columns)
 
 
+def sector_etf_symbols() -> list:
+    """Veri setinde olması gereken sektör ETF'leri + karşılaştırma (SPY)."""
+    import market_sentiment as ms
+
+    return list(ms.SECTOR_ETFS) + [ms.SECTOR_BENCHMARK]
+
+
+def etf_coverage(columns) -> tuple[list, list]:
+    """(veride olan ETF'ler, eksik ETF'ler) - `<etf>__close` sütununa göre."""
+    cols = set(columns)
+    present = [s for s in sector_etf_symbols() if f"{s.lower()}__close" in cols]
+    return present, [s for s in sector_etf_symbols() if s not in present]
+
+
+# Meta sütunlar (kaynak / bayrak / sayaç / alt sektör): veritabanında ve tabloda tutulur,
+# eğitim verisine (training_frame / export / CSV) ve tekrar analizine girmez.
+META_COLS = ("sub_sector", "vwap_is_proxy", "valuation_is_snapshot", "valuation_is_reconstructed",
+             "interpolated_cells", "source")
+
+
+def redundancy_report(df: pd.DataFrame, threshold: float = 0.95) -> dict:
+    """Birbirinin yerine geçebilecek sütunlar: sabit sütunlar, birebir aynı
+    sütunlar ve mutlak Pearson korelasyonu >= threshold olan çiftler (en
+    yüksekten). Bayrak / kaynak sütunları hariç."""
+    num = df.select_dtypes("number")
+    num = num.drop(columns=[c for c in META_COLS if c in num.columns])
+    constant = [c for c in num.columns if num[c].nunique(dropna=True) <= 1]
+    num = num.drop(columns=constant)
+    identical, seen = [], {}
+    for c in num.columns:
+        key = tuple(np.round(num[c].to_numpy(dtype=float), 10))
+        if key in seen:
+            identical.append((seen[key], c))
+        else:
+            seen[key] = c
+    corr = num.corr().abs()
+    cols = list(corr.columns)
+    pairs = []
+    for i, a in enumerate(cols):
+        for b in cols[i + 1:]:
+            r = corr.at[a, b]
+            if pd.notna(r) and r >= threshold:
+                pairs.append((a, b, float(r)))
+    pairs.sort(key=lambda p: -p[2])
+    return {"constant": constant, "identical": identical, "pairs": pairs}
+
+
 def fill_gaps(df: pd.DataFrame, skip=()) -> tuple[pd.DataFrame, dict]:
     """Sayısal sütunlardaki boşlukları doldurur: içeride zamana göre doğrusal
     interpolasyon, sonda ileri taşıma, başta geri taşıma. Döner: (çerçeve,
@@ -429,7 +481,9 @@ def fill_gaps(df: pd.DataFrame, skip=()) -> tuple[pd.DataFrame, dict]:
     out[cols] = filled
     after = out[cols].isna()
     changed = before & ~after
-    out["interpolated_cells"] = changed.sum(axis=1).astype(int)
+    # concat: çok sayıda join'den sonra tek sütun eklemek pandas'ta PerformanceWarning verir.
+    out = pd.concat([out.drop(columns="interpolated_cells", errors="ignore"),
+                     changed.sum(axis=1).astype(int).rename("interpolated_cells")], axis=1)
     report = {c: int(n) for c, n in changed.sum().items() if n}
     return out, report
 
@@ -571,7 +625,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
 
     step("NASDAQ 100 parametreleri ve sektör ETF'leri ile birleştiriliyor")
     first, last = df.index.min().strftime("%Y-%m-%d"), df.index.max().strftime("%Y-%m-%d")
-    market = market_columns(market_loader(first, last), sector_etf)
+    market = market_columns(market_loader(first, last))
     if market.empty:
         warnings.append("Günlük arşivde (sentiment_daily / sector_etf_daily) bu aralıkta veri yok; "
                         "piyasa ve sektör sütunları eklenemedi. Arşivi doldurup yeniden oluşturun.")
@@ -583,7 +637,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
             warnings.append(f"Arşivde {missing_days} işlem günü eksik; bu günler interpolasyonla dolduruldu.")
         df = df.join(market, how="left")
         if sector_etf is None and valuation is not None:
-            warnings.append(f"'{valuation.get('sector')}' sektörü bir ETF ile eşleşmedi; sector_etf__* yok.")
+            warnings.append(f"'{valuation.get('sector')}' sektörü bir sektör ETF'si ile eşleşmedi.")
 
     step("Boşluklar interpolasyonla dolduruluyor, temporal özellikler ekleniyor")
     df, fill_report = fill_gaps(df, skip=_NO_FILL)
@@ -718,6 +772,7 @@ def load_dataset(ticker: str, start: str | None = None, end: str | None = None) 
     df = pd.DataFrame(records)
     df["date"] = day_index(df["date"])
     df = df.set_index("date")
+    df = df.drop(columns=[c for c in df.columns if is_removed_feature(c) and c not in extra_cols])
     order = json.loads(meta_row[0]).get("columns", []) if meta_row else []
     cols = [c for c in order if c in df.columns]
     cols += [c for c in df.columns if c not in cols and c not in extra_cols and c != "source"]
@@ -861,10 +916,19 @@ def run_updates(tickers=None, pause_s: float = UPDATE_PAUSE_S, sleep=None, vwap_
     return 1 if failures else 0
 
 
-def export(ticker: str, out_dir: str, fmt: str = "csv") -> str:
+def training_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Eğitim verisi: meta sütunlar (kaynak, bayraklar, doldurulan hücre
+    sayısı, alt sektör) ve çıkarılan türetilmiş sütunlar olmadan."""
+    return df.drop(columns=[c for c in df.columns if c in META_COLS or is_removed_feature(c)])
+
+
+def export(ticker: str, out_dir: str, fmt: str = "csv", all_columns: bool = False) -> str:
+    """Eğitim verisini yazar (all_columns=True: meta sütunlar da)."""
     df = load_dataset(ticker)
     if df.empty:
         raise KeyError(f"{normalize_ticker(ticker)} için kayıtlı veri seti yok")
+    if not all_columns:
+        df = training_frame(df)
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, f"ai_dataset_{normalize_ticker(ticker)}.{fmt}")
     if fmt == "parquet":
@@ -896,6 +960,7 @@ def main(argv=None):
     e.add_argument("--ticker", required=True)
     e.add_argument("--out", default=os.path.join("data", "ml"))
     e.add_argument("--format", choices=("csv", "parquet"), default="csv")
+    e.add_argument("--all-columns", action="store_true", help="meta sütunları da yaz")
     sub.add_parser("status", help="kayıtlı veri setleri")
     args = parser.parse_args(argv)
 
@@ -910,7 +975,7 @@ def main(argv=None):
     if args.cmd == "update":
         return run_updates(None if args.all else [args.ticker])
     if args.cmd == "export":
-        print(export(args.ticker, args.out, args.format))
+        print(export(args.ticker, args.out, args.format, args.all_columns))
         return 0
     rows = list_datasets()
     if not rows:

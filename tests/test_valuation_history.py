@@ -261,7 +261,7 @@ class MixedDatetimeUnitTests(ReconstructTests):
         self.assertEqual(df.loc["2026-10-06", "valuation_score"], 77)
         self.assertEqual(df.loc["2026-10-07", "vwap"], 101.0)
         self.assertEqual(df.loc["2026-10-07", "vwap_is_proxy"], 0)
-        self.assertFalse(df["nasdaq_100__score"].isna().any())
+        self.assertFalse(df["nasdaq_100__momentum"].isna().any())
         self.assertGreater(len(meta["valuation_reconstruction"]["written_peers"]), 0)
 
 
