@@ -34,6 +34,7 @@ Streamlit arayüzü de isteğe bağlı olarak aynı Droplet'e taşınabilir (bkz
 | `valuation-bist100` | — (yeni) | Hafta içi 18:40 TRT |
 | `valuation-nasdaq100` | — (yeni) | Hafta içi 17:15 ET |
 | `valuation-nyse` | — (yeni) | Hafta içi 18:45 ET |
+| `market-sentiment` | — (yeni) | Hafta içi 16:40 ET |
 | `valuation-russell2000` | — (yeni) | Haftada 1 döngü: Cumartesi 00:05 ET başlar, saatte 1 paket (timer saat başı +5 dk tetiklenir, döngü yoksa boşta çıkar) |
 
 Sadece elle tetiklenen `kap_refresh_holdings.yml`, `orb_stop_status.yml` ve ORB'nin
@@ -109,6 +110,36 @@ journalctl -u yatirim-valuation-fill -f                                       # 
 
 İlk doldurma arka planda (systemd-run) ve piyasalar sırayla çalışır; terminali kapatmak
 onu durdurmaz.
+
+## Piyasa Duyarlılığı servisi
+
+`market-sentiment` işi `market_sentiment.py`'yi hafta içi 16:40 ET'de (ABD kapanışından
+sonra) çalıştırır ve NASDAQ 100 ile NYSE için 0-100 arası bir Korku/Açgözlülük skoru
+hesaplar. Veri Yahoo Finance'ten tek istekte çekilir (günlük kapanışlar, ~3 yıl):
+
+| Bileşen | NASDAQ 100 | NYSE |
+|---|---|---|
+| Momentum (endeks / 125 günlük ortalama) | `^NDX` | `^NYA` |
+| Oynaklık (endeks / 50 günlük ortalaması, ters) | `^VXN` | `^VIX` |
+| Genişlik (% hisse > 50 günlük ortalama) | NASDAQ 100 listesi | NYSE listesi |
+| Yeni zirve / dip (52 hafta, son 5 gün) | NASDAQ 100 listesi | NYSE listesi |
+| Güvenli liman (endeks − TLT, 20 gün) | `^NDX`, `TLT` | `^NYA`, `TLT` |
+| Put/call oranı (bilgi, skora katılmaz) | `QQQ` | `SPY` |
+
+Listeler tüm kullanıcıların ilgili piyasa listelerinin birleşimidir. Sonuç storage'daki
+`market_sentiment_cache` kaydına yazılır, **Giriş Sayfası** buradan gösterir. Kayıt yoksa
+sayfadaki *🔄 Şimdi hesapla* düğmesi servisi beklemeden çalıştırır.
+
+Devreye alma (PR main'e alındıktan sonra, root olarak):
+
+```bash
+cd /root/yatirim && git pull --ff-only origin main
+install -m 644 deploy/jobs.sh /opt/yatirim/bin/
+install -m 644 deploy/systemd/yatirim-market-sentiment.timer /etc/systemd/system/
+systemctl daemon-reload && systemctl enable --now yatirim-market-sentiment.timer
+systemctl start yatirim-job@market-sentiment       # ilk hesaplamayı hemen yap
+journalctl -u yatirim-job@market-sentiment -n 30
+```
 
 ## Günlük kullanım
 

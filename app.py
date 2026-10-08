@@ -87,6 +87,7 @@ from stop_loss_settings import render_stop_loss_settings
 from trade_journal_page import render_algo_analiz
 from version_info import get_version_label
 from connection_status import check_all_connections
+from market_sentiment_ui import render_market_sentiment
 import user_registry
 from account_ui import (
     enforce_active_session, render_auth_screen, render_forced_password_change, render_my_account, render_user_admin,
@@ -440,7 +441,7 @@ if (module == NAV_HOME or category == "🤖 Algoritmik Ticaret") and has_alpaca_
 # ==============================================================================
 if module == NAV_HOME:
     st.header("🏠 Genel Bakış")
-    st.caption("Hesap özeti, liste durumu ve bu oturumdaki son tarama sonuçları.")
+    st.caption("Hesap özeti, piyasa duyarlılığı, liste durumu ve bu oturumdaki son tarama sonuçları.")
 
     if has_alpaca_account(username):
         render_account_mode_setting(username)
@@ -460,6 +461,9 @@ if module == NAV_HOME:
     else:
         st.info("Alpaca hesabınız bağlı değil - **👤 Hesap → 👤 Hesabım** sayfasından Sanal Para ve "
                 "Gerçek Para anahtarlarınızı girebilirsiniz.")
+
+    st.divider()
+    render_market_sentiment()
 
     st.divider()
     st.subheader("🔌 Bağlantılar")
