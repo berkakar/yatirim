@@ -66,6 +66,13 @@ for cfg in ms.MARKETS.values():
         continue
     print(f"{cfg['market']:<11} {s['score']:>5} {s['icon']} {s['label']:<17} kapanış: {s['as_of']} "
           f"| hesaplandı: {s['updated_at']} | {s.get('universe_size', 0)} hisse")
+sec = ms.load_sectors()
+if sec.get("sectors"):
+    print(f"\nSektör ETF'leri (kapanış: {sec['as_of']}, 1 hafta %):")
+    for r in sec["sectors"]:
+        print(f"  {r['symbol']:<5} {r['name']:<22} {r['week_pct']:>+7.2f}")
+else:
+    print("\nSektör ETF'leri henüz hesaplanmadı")
 PY
 }
 
@@ -131,7 +138,7 @@ fi
 
 cat <<EOF
 
-Piyasa Duyarlılığı servisi açık (hafta içi 16:40 ET; NASDAQ 100, NYSE, BIST 100).
+Piyasa Duyarlılığı servisi açık (hafta içi 16:40 ET; NASDAQ 100, NYSE, BIST 100 + ABD sektör ETF'leri).
   Durum:          sudo bash $SRC/enable_sentiment.sh status
   Şimdi hesapla:  sudo bash $SRC/enable_sentiment.sh run
   Loglar:         journalctl -u yatirim-job@market-sentiment --since today

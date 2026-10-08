@@ -87,7 +87,7 @@ from stop_loss_settings import render_stop_loss_settings
 from trade_journal_page import render_algo_analiz, render_live_positions
 from version_info import get_version_label
 from connection_status import check_all_connections
-from market_sentiment_ui import render_market_sentiment
+from market_sentiment_ui import render_market_sentiment, render_sector_etfs
 import user_registry
 from account_ui import (
     enforce_active_session, render_auth_screen, render_forced_password_change, render_my_account, render_user_admin,
@@ -464,6 +464,8 @@ if module == NAV_HOME:
 
     st.divider()
     render_market_sentiment()
+    st.divider()
+    render_sector_etfs()
 
     st.divider()
     st.subheader("🔌 Bağlantılar")
