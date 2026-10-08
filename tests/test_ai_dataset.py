@@ -31,12 +31,14 @@ def fake_market(missing=(5, 100)):
     def load(start, end):
         dates = pd.bdate_range(start, end).delete(list(missing))
         return pd.DataFrame({
-            "nasdaq_100__score": np.linspace(20, 80, len(dates)),
+            "nasdaq_100__momentum": np.linspace(20, 80, len(dates)),
+            "nasdaq_100__score": 50.0,                       # türetilmiş - veri setine alınmaz
             "nasdaq_100__put_call_ratio": np.nan,
             "nyse__score": 50.0,
             "xlk__ret_5d": np.linspace(-2, 2, len(dates)),
             "xlv__ret_5d": 0.5,
             "spy__close": 500.0,
+            "xlk__rel_5d_vs_benchmark": 1.0,                 # türetilmiş - veri setine alınmaz
         }, index=dates)
     return load
 
@@ -124,14 +126,15 @@ class CalculationTests(unittest.TestCase):
         self.assertTrue((no_hist["valuation_score"] == 62.0).all())
         self.assertTrue((no_hist["valuation_is_snapshot"] == 1).all())
 
-    def test_market_columns_keep_nasdaq_and_etfs_and_add_own_sector(self):
+    def test_market_columns_keep_nasdaq_and_etfs_without_derived(self):
         frame = fake_market(missing=())("2026-01-01", "2026-01-10")
-        out = ad.market_columns(frame, "XLK")
-        self.assertIn("nasdaq_100__score", out)
-        self.assertNotIn("nasdaq_100__put_call_ratio", out)
-        self.assertNotIn("nyse__score", out)
+        out = ad.market_columns(frame)
+        self.assertIn("nasdaq_100__momentum", out)
         self.assertIn("xlv__ret_5d", out)
-        pd.testing.assert_series_equal(out["sector_etf__ret_5d"], out["xlk__ret_5d"], check_names=False)
+        self.assertIn("xlk__ret_5d", out)
+        for col in ("nasdaq_100__score", "nasdaq_100__put_call_ratio", "nyse__score", "xlk__rel_5d_vs_benchmark"):
+            self.assertNotIn(col, out)
+        self.assertFalse([c for c in out if c.startswith("sector_etf__")])
 
 
 class DatasetTests(unittest.TestCase):
@@ -155,13 +158,15 @@ class DatasetTests(unittest.TestCase):
         self.assertGreater(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2))
         self.assertLess(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2) + pd.Timedelta(days=5))
         self.assertGreater(len(df), 500)
-        for col in ("open", "vwap", "close", "volume", "ema20", "ema50", "ema200", "stock_sentiment",
+        for col in ("open", "vwap", "close", "volume", "ema20", "ema50", "ema200", "sent_momentum", "rsi14",
                     "resistance_1m", "resistance_2m", "resistance_3m", "resistance_nearest_dist_pct",
-                    "valuation_score", "nasdaq_100__score", "xlk__ret_5d", "sector_etf__ret_5d", "month_sin"):
+                    "valuation_score", "nasdaq_100__momentum", "xlk__ret_5d", "month_sin"):
             self.assertIn(col, df.columns)
             self.assertFalse(df[col].isna().any(), col)
+        for col in ("stock_sentiment", "nasdaq_100__score", "xlk__rel_5d_vs_benchmark", "sector_etf__ret_5d"):
+            self.assertNotIn(col, df.columns)                            # türetilmiş sütunlar çıkarıldı
         self.assertEqual(meta["sector_etf"], "XLK")
-        self.assertEqual(meta["filled"].get("nasdaq_100__score"), 2)   # arşivde eksik iki gün
+        self.assertEqual(meta["filled"].get("nasdaq_100__momentum"), 2)  # arşivde eksik iki gün
         self.assertEqual(int((df["interpolated_cells"] > 0).sum()), 2)
         self.assertTrue((df["source"] == ad.SOURCE_BACKFILL).all())
         self.assertTrue((df["valuation_is_snapshot"] == 1).all())
@@ -286,6 +291,33 @@ class ScheduledUpdateTests(unittest.TestCase):
             self.assertIsNone(ad.env_vwap_fetcher())
         with mock.patch.dict(os.environ, {"APCA_API_KEY_ID": "k", "APCA_API_SECRET_KEY": "s"}):
             self.assertTrue(callable(ad.env_vwap_fetcher()))
+
+
+class TrainingFrameTests(unittest.TestCase):
+    setUp = DatasetTests.setUp
+    tearDown = DatasetTests.tearDown
+
+    def test_training_export_drops_meta_and_old_derived_columns(self):
+        df, meta = ad.create("aapl", valuation=VALUATION, end=END, ohlcv_fetcher=fake_ohlcv(),
+                             market_loader=fake_market())
+        for col in ad.META_COLS:
+            self.assertIn(col, df.columns)                               # tabloda / veritabanında duruyor
+        train = ad.training_frame(df)
+        self.assertFalse(set(ad.META_COLS) & set(train.columns))
+        self.assertIn("close", train.columns)
+        out = tempfile.mkdtemp()
+        path = ad.export("AAPL", out)
+        self.assertFalse(set(ad.META_COLS) & set(pd.read_csv(path).columns))
+        full = pd.read_csv(ad.export("AAPL", out, all_columns=True))
+        self.assertIn("interpolated_cells", full.columns)
+
+    def test_old_saved_rows_lose_removed_columns_on_load(self):
+        df = pd.DataFrame({"close": [1.0], "stock_sentiment": [50.0], "sector_etf__ret_5d": [1.0],
+                           "xlk__rel_5d_vs_benchmark": [0.2], "nasdaq_100__score": [40.0]},
+                          index=pd.to_datetime(["2026-10-07"]))
+        meta = {"ticker": "OLD", "start": "2026-10-07", "end": "2026-10-07", "columns": list(df.columns)}
+        ad.save_dataset(df, meta, {})
+        self.assertEqual(list(ad.load_dataset("OLD").columns), ["close", "source"])
 
 
 class RedundancyTests(unittest.TestCase):

@@ -17,40 +17,41 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # Görünen sütunları seçmek için gruplar (sıra tablodaki sırayla aynı).
 _GROUPS = (
-    ("Fiyat & Hacim", lambda c: c in ("open", "high", "low", "close", "volume", "vwap", "vwap_is_proxy",
-                                      "ret_1d_pct")),
+    ("Fiyat & Hacim", lambda c: c in ("open", "high", "low", "close", "volume", "vwap", "ret_1d_pct")),
     ("EMA", lambda c: c.startswith("ema") or c.startswith("dist_ema")),
-    ("Hisse Duyarlılığı", lambda c: c.startswith("sent_") or c in ("rsi14", "stock_sentiment")),
+    ("Hisse Duyarlılığı", lambda c: c.startswith("sent_") or c == "rsi14"),
     ("Direnç", lambda c: c.startswith("resistance_")),
-    ("Değerleme", lambda c: c.startswith("valuation_")),
+    ("Değerleme", lambda c: c.startswith("valuation_") and c not in ad.META_COLS),
     ("NASDAQ 100 Parametreleri", lambda c: c.startswith(f"{ad.MARKET_PREFIX}__")),
-    ("Hissenin Sektör ETF'si", lambda c: c.startswith("sector_etf__")),
     ("Tüm Sektör ETF'leri", lambda c: c.partition("__")[0].upper() in ad.sector_etf_symbols()),
     ("Zaman (Temporal Embedding)", lambda c: c in ad.TEMPORAL_COLS),
+    ("Meta (eğitime girmez)", lambda c: c in ad.META_COLS),
 )
 _DEFAULT_GROUPS = ("Fiyat & Hacim", "EMA", "Hisse Duyarlılığı", "Direnç", "Değerleme",
-                   "NASDAQ 100 Parametreleri", "Hissenin Sektör ETF'si", "Tüm Sektör ETF'leri")
+                   "NASDAQ 100 Parametreleri", "Tüm Sektör ETF'leri")
 
 _GLOSSARY = """
 | Sütun | Açıklama |
 |---|---|
-| `sub_sector` | Hissenin alt sektörü (iş modeli grubu; Değerleme modülündeki "İş Modeli Grubu") - sabit kategorik özellik |
+| `sub_sector` | *Meta.* Hissenin alt sektörü (iş modeli grubu; Değerleme modülündeki "İş Modeli Grubu") |
 | `ret_*` | Getiri (return), %: `ret_1d_pct` hissenin günlük getirisi; ETF'lerde `ret_1d / ret_5d / ret_21d` 1 / 5 / 21 işlem günlük getiri |
 | `open, high, low, close, volume` | Yahoo günlük barı (bölünme/temettü düzeltmeli) |
-| `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; 1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
+| `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; *meta* `vwap_is_proxy`=1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
-| `stock_sentiment` | Hisse duyarlılığı 0-100: `sent_momentum` (50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası), `sent_volatility` (oynaklığın ters yüzdelik sırası) ve `rsi14` ortalaması |
+| `sent_momentum`, `sent_volatility`, `rsi14` | Hisse duyarlılığı bileşenleri 0-100: 50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası, oynaklığın ters yüzdelik sırası, RSI(14) |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
-| `valuation_is_reconstructed` | 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
-| `valuation_is_snapshot` | 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
+| `valuation_is_reconstructed` | *Meta.* 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
+| `valuation_is_snapshot` | *Meta.* 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
-| `<etf>__*`, `sector_etf__*` | Sektör ETF arşivi (sector_etf_daily): kapanış, 1/5/21 gün getiri, SPY'ye göre 5 gün fark; `sector_etf__` hissenin kendi sektörü |
+| `<etf>__*` | 11 sektör ETF'si + SPY (sector_etf_daily): kapanış ve 1 / 5 / 21 günlük getiri |
 | `time_idx, year, month, day_of_month, day_of_week, day_of_year, week_of_year, quarter, is_month_start/end` | Temporal embedding için takvim indeksleri |
 | `*_sin, *_cos` | Haftanın günü, ayın günü, ay, yılın günü, yılın haftası için döngüsel kodlama |
-| `interpolated_cells` | O satırda interpolasyonla doldurulan hücre sayısı |
-| `source` | `backfill`: ilk hazırlama · `daily`: sonradan eklenen gün |
+| `interpolated_cells` | *Meta.* O satırda interpolasyonla doldurulan hücre sayısı |
+| `source` | *Meta.* `backfill`: ilk hazırlama · `daily`: sonradan eklenen gün |
+| *Çıkarılanlar* | `sector_etf__*` (kendi ETF'sinin kopyası), `<etf>__rel_5d_vs_benchmark` (= ETF ret_5d − SPY ret_5d), `nasdaq_100__score` (5 bileşenin ortalaması), `stock_sentiment` (3 bileşenin ortalaması) - diğer sütunlardan türetilebildikleri için veri setinde yok |
+| *Meta sütunlar* | Tabloda "Meta (eğitime girmez)" grubunda; eğitim verisi CSV'sine ve `ai_dataset.py export`'a girmez (`--all-columns` ile girer) |
 """
 
 
@@ -193,13 +194,14 @@ def _select_columns(df):
             present.append((name, cols))
     groups = st.multiselect("Gösterilecek sütun grupları", [n for n, _ in present],
                             default=[n for n, _ in present if n in _DEFAULT_GROUPS], key="ai_col_groups")
-    shown = ["sub_sector"] if "sub_sector" in df.columns else []
+    shown = []
     for name, cols in present:
         if name in groups:
             shown += [c for c in cols if c not in shown]
     known = {c for _, cols in present for c in cols}
-    shown += [c for c in df.columns if c not in known and c not in shown and c not in ("interpolated_cells", "source")]
-    return shown + ["interpolated_cells", "source"]
+    # Elle eklenen alanlar vb. gruba girmeyen sütunlar her zaman gösterilir.
+    shown += [c for c in df.columns if c not in known and c not in shown]
+    return shown
 
 
 def _render_dataset(ticker, username):
@@ -233,7 +235,7 @@ def _render_dataset(ticker, username):
                    "veri setini yeniden hazırlayın.")
     else:
         st.caption(f"🏭 Sektör ETF'leri veride: {', '.join(present_etfs)} - her biri için kapanış, 1 / 5 / 21 "
-                   "günlük getiri (`ret_*`) ve SPY'ye göre 5 günlük fark.")
+                   "günlük getiri (`ret_*`).")
 
     cols = _select_columns(df)
     view = df[cols].sort_index(ascending=False).reset_index()
@@ -256,8 +258,9 @@ def _render_dataset(ticker, username):
                 st.success(f"{added} yeni gün eklendi." if added else "Eklenecek yeni gün yok.")
                 if added:
                     st.rerun()
-    b2.download_button("⬇️ CSV indir", df.to_csv(date_format="%Y-%m-%d").encode("utf-8"),
-                       file_name=f"ai_dataset_{ticker}.csv", mime="text/csv", key=f"ai_csv_{ticker}")
+    b2.download_button("⬇️ Eğitim verisi (CSV)", ad.training_frame(df).to_csv(date_format="%Y-%m-%d").encode("utf-8"),
+                       file_name=f"ai_dataset_{ticker}.csv", mime="text/csv", key=f"ai_csv_{ticker}",
+                       help="Meta sütunlar (kaynak, bayraklar, doldurulan hücre sayısı, alt sektör) olmadan.")
     confirm = b3.checkbox("Silmeyi onayla", key=f"ai_del_ok_{ticker}")
     if b3.button("🗑️ Veri setini sil", disabled=not confirm, key=f"ai_del_{ticker}"):
         ad.delete_dataset(ticker)
