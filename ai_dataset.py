@@ -418,6 +418,52 @@ def temporal_features(index: pd.DatetimeIndex) -> pd.DataFrame:
 TEMPORAL_COLS = tuple(temporal_features(pd.DatetimeIndex([pd.Timestamp("2024-01-02")])).columns)
 
 
+def sector_etf_symbols() -> list:
+    """Veri setinde olması gereken sektör ETF'leri + karşılaştırma (SPY)."""
+    import market_sentiment as ms
+
+    return list(ms.SECTOR_ETFS) + [ms.SECTOR_BENCHMARK]
+
+
+def etf_coverage(columns) -> tuple[list, list]:
+    """(veride olan ETF'ler, eksik ETF'ler) - `<etf>__close` sütununa göre."""
+    cols = set(columns)
+    present = [s for s in sector_etf_symbols() if f"{s.lower()}__close" in cols]
+    return present, [s for s in sector_etf_symbols() if s not in present]
+
+
+# Model girdisi olmayan sütunlar (kaynak / bayrak / sayaç) - tekrar analizine girmez.
+META_COLS = ("sub_sector", "vwap_is_proxy", "valuation_is_snapshot", "valuation_is_reconstructed",
+             "interpolated_cells", "source")
+
+
+def redundancy_report(df: pd.DataFrame, threshold: float = 0.95) -> dict:
+    """Birbirinin yerine geçebilecek sütunlar: sabit sütunlar, birebir aynı
+    sütunlar ve mutlak Pearson korelasyonu >= threshold olan çiftler (en
+    yüksekten). Bayrak / kaynak sütunları hariç."""
+    num = df.select_dtypes("number")
+    num = num.drop(columns=[c for c in META_COLS if c in num.columns])
+    constant = [c for c in num.columns if num[c].nunique(dropna=True) <= 1]
+    num = num.drop(columns=constant)
+    identical, seen = [], {}
+    for c in num.columns:
+        key = tuple(np.round(num[c].to_numpy(dtype=float), 10))
+        if key in seen:
+            identical.append((seen[key], c))
+        else:
+            seen[key] = c
+    corr = num.corr().abs()
+    cols = list(corr.columns)
+    pairs = []
+    for i, a in enumerate(cols):
+        for b in cols[i + 1:]:
+            r = corr.at[a, b]
+            if pd.notna(r) and r >= threshold:
+                pairs.append((a, b, float(r)))
+    pairs.sort(key=lambda p: -p[2])
+    return {"constant": constant, "identical": identical, "pairs": pairs}
+
+
 def fill_gaps(df: pd.DataFrame, skip=()) -> tuple[pd.DataFrame, dict]:
     """Sayısal sütunlardaki boşlukları doldurur: içeride zamana göre doğrusal
     interpolasyon, sonda ileri taşıma, başta geri taşıma. Döner: (çerçeve,
@@ -429,7 +475,9 @@ def fill_gaps(df: pd.DataFrame, skip=()) -> tuple[pd.DataFrame, dict]:
     out[cols] = filled
     after = out[cols].isna()
     changed = before & ~after
-    out["interpolated_cells"] = changed.sum(axis=1).astype(int)
+    # concat: çok sayıda join'den sonra tek sütun eklemek pandas'ta PerformanceWarning verir.
+    out = pd.concat([out.drop(columns="interpolated_cells", errors="ignore"),
+                     changed.sum(axis=1).astype(int).rename("interpolated_cells")], axis=1)
     report = {c: int(n) for c, n in changed.sum().items() if n}
     return out, report
 

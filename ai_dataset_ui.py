@@ -25,16 +25,17 @@ _GROUPS = (
     ("Değerleme", lambda c: c.startswith("valuation_")),
     ("NASDAQ 100 Parametreleri", lambda c: c.startswith(f"{ad.MARKET_PREFIX}__")),
     ("Hissenin Sektör ETF'si", lambda c: c.startswith("sector_etf__")),
-    ("Tüm Sektör ETF'leri", lambda c: "__" in c),
+    ("Tüm Sektör ETF'leri", lambda c: c.partition("__")[0].upper() in ad.sector_etf_symbols()),
     ("Zaman (Temporal Embedding)", lambda c: c in ad.TEMPORAL_COLS),
 )
 _DEFAULT_GROUPS = ("Fiyat & Hacim", "EMA", "Hisse Duyarlılığı", "Direnç", "Değerleme",
-                   "NASDAQ 100 Parametreleri", "Hissenin Sektör ETF'si")
+                   "NASDAQ 100 Parametreleri", "Hissenin Sektör ETF'si", "Tüm Sektör ETF'leri")
 
 _GLOSSARY = """
 | Sütun | Açıklama |
 |---|---|
 | `sub_sector` | Hissenin alt sektörü (iş modeli grubu; Değerleme modülündeki "İş Modeli Grubu") - sabit kategorik özellik |
+| `ret_*` | Getiri (return), %: `ret_1d_pct` hissenin günlük getirisi; ETF'lerde `ret_1d / ret_5d / ret_21d` 1 / 5 / 21 işlem günlük getiri |
 | `open, high, low, close, volume` | Yahoo günlük barı (bölünme/temettü düzeltmeli) |
 | `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; 1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
@@ -225,6 +226,15 @@ def _render_dataset(ticker, username):
     for w in (st.session_state.get("ai_last_warnings") or {}).get(ticker) or meta.get("warnings") or []:
         st.warning(w)
 
+    present_etfs, missing_etfs = ad.etf_coverage(df.columns)
+    if missing_etfs:
+        st.warning(f"Sektör ETF'leri veride eksik: **{', '.join(missing_etfs)}** "
+                   f"({len(present_etfs)}/{len(present_etfs) + len(missing_etfs)} var). Günlük arşivi doldurup "
+                   "veri setini yeniden hazırlayın.")
+    else:
+        st.caption(f"🏭 Sektör ETF'leri veride: {', '.join(present_etfs)} - her biri için kapanış, 1 / 5 / 21 "
+                   "günlük getiri (`ret_*`) ve SPY'ye göre 5 günlük fark.")
+
     cols = _select_columns(df)
     view = df[cols].sort_index(ascending=False).reset_index()
     view["date"] = view["date"].dt.strftime("%Y-%m-%d")
@@ -254,6 +264,8 @@ def _render_dataset(ticker, username):
         st.rerun()
 
     _render_valuation_history(ticker)
+
+    _render_redundancy(df)
 
     with st.expander("➕ Bir güne veri ekle"):
         st.caption("Seçilen güne yeni bir alan (ör. haber duyarlılığı) ekler veya günceller. Bu alanlar veri seti "
@@ -305,6 +317,27 @@ def _render_valuation_history(ticker):
         out = view.sort_index(ascending=False).reset_index()
         out["date"] = out["date"].dt.strftime("%Y-%m-%d")
         st.dataframe(out.rename(columns={"date": "Tarih"}), hide_index=True, use_container_width=True)
+
+
+def _render_redundancy(df):
+    with st.expander("🔍 Birbirinin yerine geçebilecek sütunlar (bu veri setinde)"):
+        st.caption("Sabit sütunlar, birebir aynı sütunlar ve mutlak korelasyonu eşiğin üstünde olan çiftler. "
+                   "Fiyat seviyesi gibi zamanla birlikte yükselen sütunlar (kapanış, EMA, direnç seviyesi, ETF "
+                   "kapanışları) doğal olarak yüksek korelasyonlu çıkar; eğitimde bunların yüzde / getiri "
+                   "karşılıkları tercih edilir.")
+        threshold = st.slider("Korelasyon eşiği", 0.80, 0.99, 0.95, 0.01, key="ai_corr_threshold")
+        rep = ad.redundancy_report(df, threshold)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Sabit sütun", len(rep["constant"]))
+        c2.metric("Birebir aynı çift", len(rep["identical"]))
+        c3.metric(f"|r| ≥ {threshold:.2f} çift", len(rep["pairs"]))
+        if rep["constant"]:
+            st.markdown("**Sabit (bilgi taşımıyor):** " + ", ".join(f"`{c}`" for c in rep["constant"]))
+        if rep["identical"]:
+            st.markdown("**Birebir aynı:** " + ", ".join(f"`{a}` = `{b}`" for a, b in rep["identical"]))
+        if rep["pairs"]:
+            st.dataframe(pd.DataFrame(rep["pairs"], columns=["Sütun 1", "Sütun 2", "|r|"]).round(3),
+                         hide_index=True, use_container_width=True, height=360)
 
 
 def _render_saved(username):

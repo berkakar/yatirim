@@ -288,5 +288,24 @@ class ScheduledUpdateTests(unittest.TestCase):
             self.assertTrue(callable(ad.env_vwap_fetcher()))
 
 
+class RedundancyTests(unittest.TestCase):
+    def test_report_finds_constant_identical_and_correlated(self):
+        idx = pd.bdate_range("2026-01-01", periods=50)
+        x = np.linspace(1, 50, 50)
+        df = pd.DataFrame({"close": x, "copy": x, "noisy": x + np.sin(x), "flat": 3.0,
+                           "other": np.cos(x), "vwap_is_proxy": 1, "source": "backfill", "sub_sector": "A"}, index=idx)
+        rep = ad.redundancy_report(df, 0.95)
+        self.assertEqual(rep["constant"], ["flat"])                    # bayrak sütunları sayılmaz
+        self.assertEqual(rep["identical"], [("close", "copy")])
+        self.assertIn(("close", "copy"), [(a, b) for a, b, _ in rep["pairs"]])
+        self.assertNotIn("other", {c for p in rep["pairs"] for c in p[:2]})
+
+    def test_etf_coverage(self):
+        present, missing = ad.etf_coverage(["xlk__close", "spy__close", "xlv__ret_5d"])
+        self.assertEqual(present, ["XLK", "SPY"])
+        self.assertIn("XLV", missing)                                  # yalnızca getirisi var, kapanışı yok
+        self.assertEqual(len(present) + len(missing), 12)
+
+
 if __name__ == "__main__":
     unittest.main()
