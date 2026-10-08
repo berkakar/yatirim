@@ -88,6 +88,7 @@ from trade_journal_page import render_algo_analiz, render_live_positions
 from version_info import get_version_label
 from connection_status import check_all_connections
 from market_sentiment_ui import render_market_sentiment, render_sector_etfs
+from ai_dataset_ui import render_ai_dataset
 import user_registry
 from account_ui import (
     enforce_active_session, render_auth_screen, render_forced_password_change, render_my_account, render_user_admin,
@@ -105,6 +106,7 @@ MODULE_GROUPS = {
         "📐 Hisse Patern Analizi",
         "📊 Bağımsız Hisse Grafiği",
         "🔪 Bıçak Kanalı Testi",
+        "🤖 Yapay Zeka Analiz Modülü",
     ],
     "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
     "🤖 Algoritmik Ticaret": [
@@ -1032,7 +1034,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n💡 40 Altı Kırmızı: Zayıf/Pahalı"),
             "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı. Eksi değer, hissenin akranlarına göre PRİMLİ (daha pahalı) işlem gördüğü anlamına gelir."),
             "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="💡 Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
-            "PEG": st.column_config.NumberColumn("PEG [10p]", help="💡 Optimum: < 1.0 (F/K ÷ EPS Büyümesi). Yalnızca F/K > 0 olan hisselerde hesaplanır; F/K yoksa veya negatifse Y."),
+            "PEG": st.column_config.NumberColumn("PEG [bilgi]", help="💡 F/K ÷ beklenen EPS büyümesi (Yahoo, analist beklentisi). Skora katılmaz - geçmişi olmadığı için 2026-10-08'de skordan çıkarıldı. Yalnızca F/K > 0 olan hisselerde gösterilir."),
             "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="💡 Optimum: > %10."),
             "Gelir Büyümesi %": st.column_config.NumberColumn("Gelir Büyümesi % [10p]", help="💡 Optimum: > %10."),
             "Öz Sermaye Getirisi (ROE) %": st.column_config.NumberColumn("Öz Sermaye Getirisi % [10p]", help="💡 Optimum: > %10."),
@@ -1060,32 +1062,32 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "almaz ve sektör ortalamasına katılmaz.  \n"
             "**ETF'ler** (örn. XLF, XLV) bilanço ve kârlılık verisi olmadığı için değerleme analizine dahil edilmez; "
             "tabloda gösterilmez ve alt sektör ortalamalarına katılmaz.  \n"
-            "**PEG** yalnızca F/K > 0 olan hisselerde hesaplanır."
+            "**PEG** bilgi amaçlıdır, skora katılmaz; yalnızca F/K > 0 olan hisselerde gösterilir."
         )
 
         st.divider()
         with st.expander("ℹ️ Nihai Skor nasıl hesaplanıyor? Parametrelerin anlamı", expanded=True):
             st.markdown("""
-**Nihai Skor**, aşağıdaki 14 kritere göre 0'dan başlayıp puan **eklenerek** hesaplanır (hiçbir kriterde puan düşülmez).
-Maksimum toplam **100 puan**dır. Bir kritere ait veri yfinance'ten gelmiyorsa (tabloda **Y**), o kriterden puan alınmaz —
+**Nihai Skor**, aşağıdaki 13 kritere göre 0'dan başlayıp puan **eklenerek** hesaplanır (hiçbir kriterde puan düşülmez).
+Kriterlerin toplamı en fazla **90 puan**dır; Nihai Skor bu toplamın **100 üzerinden** karşılığıdır (puan × 100 / 90).
+**PEG** skora katılmaz (Yahoo'nun PEG'i analist beklentisine dayanır ve geçmişi yoktur); tabloda bilgi olarak gösterilir. Bir kritere ait veri yfinance'ten gelmiyorsa (tabloda **Y**), o kriterden puan alınmaz —
 yani düşük skor her zaman "kötü şirket" anlamına gelmez, bazen sadece "eksik veri" anlamına gelir.
 
 | # | Kriter | Ağırlık | Ne anlama gelir? | Puanlama |
 |---|---|---|---|---|
 | 1 | **İş Modeli İskontosu %** | 15p | Hissenin F/K'sı, aynı mikro iş modelindeki (alt sektör) şirketlerin medyan F/K'sına göre ne kadar ucuz/pahalı. **Eksi değer = akranlarına göre daha pahalı (prim)**, bir hata değildir. | ≥30: 15p · 15-30: 10p · 0-15: 5p · <0 (prim): 0p · U (≤3 hisseli alt sektör, 1 kabul): 5p · Y: 0p |
-| 2 | **PEG** | 10p | F/K ÷ EPS büyüme oranı. 1'in altı, büyümesine göre ucuz demektir. **Yalnızca F/K > 0 olan hisselerde hesaplanır**; F/K negatif (zarar) veya yoksa PEG yanıltıcı olacağından **Y** gösterilir ve puan almaz. | ≤1.0: 10p · 1.0-1.5: 5p |
-| 3 | **EPS Büyümesi %** | 10p | Yıllık kâr büyümesi. Negatifse şirketin kârı küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
-| 4 | **Gelir Büyümesi %** | 10p | Yıllık ciro büyümesi. Negatifse ciro küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
-| 5 | **Öz Sermaye Getirisi (ROE) %** | 10p | Özsermayenin ne kadar verimli kullanıldığı. | ≥10: 10p · 5-10: 5p |
-| 6 | **Net Kâr Marjı %** | 8p | Cironun ne kadarının net kâra dönüştüğü. | ≥15: 8p · 8-15: 4p |
-| 7 | **Brüt Kâr Marjı %** | 7p | Maliyet sonrası kalan marj. Çok yüksek de (>60) ideal kabul edilmez, orta bant tercih edilir. | 30-60: 7p · >60: 5p |
-| 8 | **Faiz Karşılama Oranı** | 7p | FAVÖK'ün faiz giderini kaç kat karşıladığı - borç ödeme gücü. | ≥3: 7p · 1.5-3: 3p |
-| 9 | **Varlık Getirisi (ROA) %** | 6p | Toplam varlıkların ne kadar verimli kullanıldığı. | ≥5: 6p · 2-5: 3p |
-| 10 | **Borç / Özsermaye** | 5p | Borcun özsermayeye oranı - kaldıraç seviyesi. **Eksi değer, özsermayenin negatife düştüğü anlamına gelir (ciddi risk sinyali) ve puan almaz.** | 0-0.5: 5p · 0.5-1.0: 3p |
-| 11 | **Borç / Varlık %** | 4p | Varlıkların ne kadarının borçla finanse edildiği. | ≤50: 4p · 50-70: 2p |
-| 12 | **Cari Oran** | 3p | Kısa vadeli varlık / kısa vadeli borç. 1'in altı likidite sıkıntısına işaret eder. | 1.0-2.0: 3p · >2.0: 2p |
-| 13 | **Likidite Oranı (Asit-Test)** | 3p | Stoklar hariç kısa vadeli ödeme gücü. | ≥1.0: 3p |
-| 14 | **Varlık Devir Hızı** | 2p | Varlıkların ciro üretme hızı. | 1.0-2.0: 2p · >2.0: 1p |
+| 2 | **EPS Büyümesi %** | 10p | Yıllık kâr büyümesi. Negatifse şirketin kârı küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
+| 3 | **Gelir Büyümesi %** | 10p | Yıllık ciro büyümesi. Negatifse ciro küçülüyor demektir. | ≥10: 10p · 5-10: 5p |
+| 4 | **Öz Sermaye Getirisi (ROE) %** | 10p | Özsermayenin ne kadar verimli kullanıldığı. | ≥10: 10p · 5-10: 5p |
+| 5 | **Net Kâr Marjı %** | 8p | Cironun ne kadarının net kâra dönüştüğü. | ≥15: 8p · 8-15: 4p |
+| 6 | **Brüt Kâr Marjı %** | 7p | Maliyet sonrası kalan marj. Çok yüksek de (>60) ideal kabul edilmez, orta bant tercih edilir. | 30-60: 7p · >60: 5p |
+| 7 | **Faiz Karşılama Oranı** | 7p | FAVÖK'ün faiz giderini kaç kat karşıladığı - borç ödeme gücü. | ≥3: 7p · 1.5-3: 3p |
+| 8 | **Varlık Getirisi (ROA) %** | 6p | Toplam varlıkların ne kadar verimli kullanıldığı. | ≥5: 6p · 2-5: 3p |
+| 9 | **Borç / Özsermaye** | 5p | Borcun özsermayeye oranı - kaldıraç seviyesi. **Eksi değer, özsermayenin negatife düştüğü anlamına gelir (ciddi risk sinyali) ve puan almaz.** | 0-0.5: 5p · 0.5-1.0: 3p |
+| 10 | **Borç / Varlık %** | 4p | Varlıkların ne kadarının borçla finanse edildiği. | ≤50: 4p · 50-70: 2p |
+| 11 | **Cari Oran** | 3p | Kısa vadeli varlık / kısa vadeli borç. 1'in altı likidite sıkıntısına işaret eder. | 1.0-2.0: 3p · >2.0: 2p |
+| 12 | **Likidite Oranı (Asit-Test)** | 3p | Stoklar hariç kısa vadeli ödeme gücü. | ≥1.0: 3p |
+| 13 | **Varlık Devir Hızı** | 2p | Varlıkların ciro üretme hızı. | 1.0-2.0: 2p · >2.0: 1p |
 
 **Neden bazı yüzdeler eksi görünüyor?** İskonto, büyüme (EPS/Gelir) ve kârlılık (ROE/ROA/marj) gibi kalemler gerçek
 piyasa/finansal verilerdir; şirket küçülüyorsa veya akranlarına göre pahalıysa bu değerler doğal olarak eksi çıkar -
@@ -1689,6 +1691,20 @@ elif module == "🧠 Algo Analiz":
 # ==============================================================================
 elif module == "🔪 Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
+
+# ==============================================================================
+# 12b. MODÜL: YAPAY ZEKA ANALİZ MODÜLÜ (transformer eğitim veri seti)
+# ==============================================================================
+elif module == "🤖 Yapay Zeka Analiz Modülü":
+    st.header("🤖 Yapay Zeka Analiz Modülü")
+    st.caption(
+        "NASDAQ 100'den seçilen hisse için transformer eğitiminde kullanılacak günlük veri setini hazırlar: "
+        "3 yıllık açılış / VWAP / kapanış / hacim ve duyarlılık çekilir, EMA20 / EMA50 / EMA200 ile 1-2-3 aylık "
+        "direnç seviyeleri (fiyata en yakını ve % uzaklığı) gün başına hesaplanır, Ucuzluk Skoru eklenir; son 2 "
+        "yıl NASDAQ 100 parametreleri ve sektör ETF'leriyle birleştirilip temporal embedding özellikleri eklenir, "
+        "boşluklar interpolasyonla doldurulur ve veritabanına kaydedilir. Kayıtlı setlere sonradan gün eklenebilir."
+    )
+    render_ai_dataset(username, st.session_state.ticker_lists.get("NASDAQ 100", []))
 
 elif module == "👤 Hesabım":
     render_my_account(current_user)

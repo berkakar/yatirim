@@ -354,8 +354,9 @@ class SmallSectorAndMissingDataTest(unittest.TestCase):
         self.assertEqual(rows["S1"]["Alt Sektör İskontosu %"], 1.0)   # gerçek iskonto %81.8 değil
         self.assertEqual(rows["S2"]["Alt Sektör İskontosu %"], 1.0)
         self.assertIsNone(rows["NOPE"]["Alt Sektör İskontosu %"])
-        # Fark: iskonto 1 -> 5p / Y -> 0p, ve F/K yokken PEG de hesaplanmaz (10p).
-        self.assertEqual(rows["S1"]["Nihai Skor"] - rows["NOPE"]["Nihai Skor"], 15)
+        # Fark: iskonto 1 -> 5p / Y -> 0p (PEG 2026-10-08'den beri puanlanmıyor).
+        import valuation_rules
+        self.assertEqual(valuation_rules.raw_points(rows["S1"]) - valuation_rules.raw_points(rows["NOPE"]), 5)
         self.assertIsNone(rows["NOPE"]["PEG"])
         # Eksik F/K medyana katılmadı: Big medyanı 20.
         self.assertEqual(rows["A"]["Alt Sektör Ort. F/K"], 20.0)
@@ -453,3 +454,84 @@ class RateLimitDetectionTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DailyHistoryTest(ValuationServiceTestCase):
+    """valuation_scores_daily: her skor yazımı günün satırını yazar, eski günler kalır."""
+
+    def _write(self, ticker, score, at, market="NASDAQ 100", scored=None):
+        import valuation_db
+        valuation_db.upsert_rows([{
+            "market": market, "ticker": ticker, "raw": make_raw(ticker),
+            "scored": scored or {"Hisse": ticker, "Nihai Skor": score, "F/K": 20.0, "Alt Sektör İskontosu %": 5.0,
+                                 "Ana Sektör": "Technology"},
+            "fetched_at": at, "scored_at": at,
+        }])
+
+    def test_keeps_one_row_per_market_day(self):
+        import valuation_db
+        self._write("AAPL", 40, "2026-10-05T21:30:00Z")
+        self._write("AAPL", 42, "2026-10-05T23:00:00Z")   # aynı gün (New York) - günceller
+        self._write("AAPL", 50, "2026-10-06T21:30:00Z")
+        self._write("AAPL", 55, "2026-10-07T02:00:00Z")   # UTC 7 Ekim, New York'ta hâlâ 6 Ekim
+        hist = valuation_db.get_daily_history("NASDAQ 100", "AAPL")
+        self.assertEqual([(h["date"], h["score"]) for h in hist], [("2026-10-05", 42), ("2026-10-06", 55)])
+        self.assertEqual(hist[0]["sector_discount_pct"], 5.0)
+        self.assertEqual(hist[0]["scored"]["Ana Sektör"], "Technology")
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["score"], 55)   # anlık tablo son skor
+
+    def test_bist_uses_istanbul_date_and_etf_is_skipped(self):
+        import valuation_db
+        self._write("THYAO.IS", 30, "2026-10-05T21:30:00Z", market="BIST 100")   # İstanbul'da 6 Ekim 00:30
+        self._write("QQQ", None, "2026-10-05T21:30:00Z", scored={"Hisse": "QQQ", "_excluded": "ETF"})
+        self.assertEqual(valuation_db.get_daily_history("BIST 100", "THYAO.IS")[0]["date"], "2026-10-06")
+        self.assertEqual(valuation_db.get_daily_history("NASDAQ 100", "QQQ"), [])
+
+    def test_service_run_writes_history_and_history_survives_removal(self):
+        import valuation_db
+        self.run_market(FakeFetcher())
+        summary = valuation_db.daily_summary("NASDAQ 100")
+        self.assertEqual(summary[0]["tickers"], 4)
+        self.assertEqual(summary[0]["days"], 1)
+        valuation_db.delete_rows("NASDAQ 100", ["AAPL"])
+        self.assertEqual(len(valuation_db.get_daily_history("NASDAQ 100", "AAPL")), 1)
+
+    def test_existing_scores_are_seeded_once(self):
+        import sqlite3
+        import valuation_db
+        self._write("AAPL", 40, "2026-10-05T21:30:00Z")
+        conn = sqlite3.connect(storage.db_path())
+        conn.execute("DELETE FROM valuation_scores_daily")
+        conn.commit()
+        conn.close()
+        valuation_db._initialized_paths.clear()         # eski kurulumdaki gibi: geçmiş tablosu boş
+        hist = valuation_db.get_daily_history("NASDAQ 100", "AAPL")
+        self.assertEqual([(h["date"], h["score"], h["source"]) for h in hist],
+                         [("2026-10-05", 40, valuation_db.SOURCE_SEED)])
+
+
+class ScoreRulesTest(ValuationServiceTestCase):
+    def test_peg_not_scored_and_scaled_to_100(self):
+        import valuation_rules
+        base = {"Alt Sektör İskontosu %": 40, "EPS Büyümesi %": 20}
+        self.assertEqual(valuation_rules.score_row({**base, "PEG": 0.5}), valuation_rules.score_row(base))
+        self.assertEqual(valuation_rules.raw_points(base), 25)
+        self.assertEqual(valuation_rules.score_row(base), round(25 * 100 / 90))
+
+    def test_stored_scores_are_rescored_once(self):
+        import sqlite3
+        import valuation_db
+        import valuation_rules
+        scored = {"Hisse": "AAPL", "Nihai Skor": 99, "PEG": 0.5, "EPS Büyümesi %": 20.0}
+        valuation_db.upsert_rows([{"market": "NASDAQ 100", "ticker": "AAPL", "raw": make_raw("AAPL"),
+                                   "scored": scored, "fetched_at": "2026-10-05T21:00:00Z",
+                                   "scored_at": "2026-10-05T21:00:00Z"}])
+        conn = sqlite3.connect(storage.db_path())
+        conn.execute("UPDATE valuation_meta SET value = '1' WHERE key = 'score_version'")
+        conn.commit()
+        conn.close()
+        valuation_db._initialized_paths.clear()        # eski kurallarla kaydedilmiş veritabanı
+        expected = valuation_rules.score_row(scored)
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["score"], expected)
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["scored"]["Nihai Skor"], expected)
+        self.assertEqual(valuation_db.get_daily_history("NASDAQ 100", "AAPL")[0]["score"], expected)

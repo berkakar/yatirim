@@ -10,16 +10,49 @@ Bir satırın anahtarı (piyasa, hisse) ikilisidir: aynı hisse iki piyasanın
 evreninde olabilir ve skoru (alt sektör medyanı) o piyasanın akranlarına göre
 hesaplandığı için ayrı tutulur. Yeniden çekimde satırın üzerine yazılır.
 
+Günlük geçmiş (valuation_scores_daily): upsert_rows her yazımda skoru ayrıca
+(piyasa, hisse, gün) anahtarıyla bu tabloya da yazar - aynı gün tekrar
+skorlanırsa o günün satırı güncellenir, önceki günler değişmez. Gün, skorun
+hesaplandığı anın piyasanın yerel saatindeki tarihidir (ABD servisleri
+kapanıştan sonra çalıştığı için o işlem günü). Evrenden çıkan hissenin geçmişi
+silinmez. Tablo ilk oluşturulduğunda valuation_scores'taki mevcut skorlar ilk
+gün olarak aktarılır. Yahoo geçmiş temel veriyi vermediği için geçmiş, servis
+çalıştıkça birikir (yapay zeka veri seti bkz. ai_dataset.py). Servisin
+yazmadığı geçmiş günler valuation_history.py ile Yahoo'nun geçmiş bilanço
+tablolarından yeniden hesaplanıp `reconstructed` kaynağıyla yazılabilir; bu
+satırlar servis / seed satırlarının üzerine hiçbir zaman yazılmaz, servis ise
+aynı günü skorlarsa reconstructed satırın üzerine yazar.
+
 Zamanlar UTC, ISO 8601 metni ("2026-10-05T21:30:12Z").
 """
 
 import json
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 import storage
 
 SOURCE_SERVICE = "service"      # piyasa listesinden veya piyasaya bağlı bir kullanıcı grubundan
 SOURCE_ON_DEMAND = "on_demand"  # kullanıcı seçtiğinde veritabanında yoktu, arayüz anlık çekti
+SOURCE_SEED = "seed"            # günlük geçmiş tablosu oluşturulurken valuation_scores'tan aktarıldı
+SOURCE_RECONSTRUCTED = "reconstructed"  # geçmiş bilançolardan yeniden hesaplandı (valuation_history.py)
+
+DAILY_TABLE = "valuation_scores_daily"
+# Günlük geçmişin tarihi bu saat diliminde alınır (listede yoksa New York).
+MARKET_TZ = {"BIST 100": "Europe/Istanbul"}
+DEFAULT_MARKET_TZ = "America/New_York"
+
+# Geçmiş tablosunda ayrı sütun olarak tutulan skor tablosu alanları (geri kalanı
+# `scored` JSON'unda).
+DAILY_FIELDS = {
+    "score": "Nihai Skor",
+    "sector_discount_pct": "Alt Sektör İskontosu %",
+    "pe": "F/K",
+    "sector_pe": "Alt Sektör Ort. F/K",
+    "peg": "PEG",
+    "sector": "Ana Sektör",
+    "sub_sector": "Alt Sektör (İş Modeli)",
+}
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS valuation_scores (
@@ -51,6 +84,28 @@ CREATE TABLE IF NOT EXISTS valuation_cycles (
     state      TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS valuation_scores_daily (
+    market              TEXT NOT NULL,
+    ticker              TEXT NOT NULL,
+    date                TEXT NOT NULL,
+    score               INTEGER,
+    sector_discount_pct REAL,
+    pe                  REAL,
+    sector_pe           REAL,
+    peg                 REAL,
+    sector              TEXT,
+    sub_sector          TEXT,
+    scored              TEXT NOT NULL,
+    fetched_at          TEXT NOT NULL,
+    scored_at           TEXT NOT NULL,
+    source              TEXT NOT NULL,
+    PRIMARY KEY (market, ticker, date)
+);
+CREATE INDEX IF NOT EXISTS valuation_scores_daily_ticker ON valuation_scores_daily (ticker, date);
+CREATE TABLE IF NOT EXISTS valuation_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 _initialized_paths = set()
@@ -78,8 +133,79 @@ def _connect():
     if path not in _initialized_paths:
         with storage.connection() as conn:
             conn.executescript(_SCHEMA)
+            _rescore(conn)
+            _seed_daily(conn)
         _initialized_paths.add(path)
     return storage.connection()
+
+
+def market_date(market: str, iso_text: str) -> str:
+    """UTC zaman damgasının piyasanın yerel saatindeki tarihi (YYYY-MM-DD)."""
+    dt = parse_iso(iso_text) or utc_now()
+    return dt.astimezone(ZoneInfo(MARKET_TZ.get(market, DEFAULT_MARKET_TZ))).strftime("%Y-%m-%d")
+
+
+def _num(v):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if f == f and f not in (float("inf"), float("-inf")) else None
+
+
+def _daily_params(market, ticker, scored: dict, fetched_at, scored_at, source, date=None):
+    """Günlük geçmiş satırı - ETF / skorlanmayan kayıt için None."""
+    if scored.get("_excluded") or scored.get("Nihai Skor") is None:  # valuation.EXCLUDED_KEY
+        return None
+    values = []
+    for col, key in DAILY_FIELDS.items():
+        v = scored.get(key)
+        values.append(v if col in ("sector", "sub_sector") else _num(v))
+    return (market, ticker, date or market_date(market, scored_at), *values,
+            json.dumps(scored, ensure_ascii=False), fetched_at, scored_at, source)
+
+
+_DAILY_COLS = ("market", "ticker", "date") + tuple(DAILY_FIELDS) + ("scored", "fetched_at", "scored_at", "source")
+_DAILY_INSERT = f"INSERT INTO {DAILY_TABLE} ({', '.join(_DAILY_COLS)}) VALUES ({', '.join('?' * len(_DAILY_COLS))})"
+# Aynı gün tekrar skorlanırsa günün satırı son skorla güncellenir.
+_DAILY_UPSERT = (f"{_DAILY_INSERT} ON CONFLICT (market, ticker, date) DO UPDATE SET "
+                 + ", ".join(f"{c} = excluded.{c}" for c in _DAILY_COLS[3:]))
+
+
+def _rescore(conn) -> None:
+    """Puanlama kuralları değiştiyse (valuation_rules.SCORE_VERSION) kayıtlı
+    skorları saklanan kriter değerlerinden bir kez yeniden hesaplar - hem anlık
+    tabloda hem günlük geçmişte. Ham veri (raw) değişmez."""
+    import valuation_rules
+
+    row = conn.execute("SELECT value FROM valuation_meta WHERE key = 'score_version'").fetchone()
+    if row and int(row[0]) >= valuation_rules.SCORE_VERSION:
+        return
+    with storage.write_transaction(conn):
+        for table, keys in (("valuation_scores", ("market", "ticker")),
+                            (DAILY_TABLE, ("market", "ticker", "date"))):
+            updates = []
+            for rec in conn.execute(f"SELECT {', '.join(keys)}, scored FROM {table}").fetchall():
+                scored = json.loads(rec[-1])
+                if scored.get("_excluded") or scored.get("Nihai Skor") is None:
+                    continue
+                scored["Nihai Skor"] = valuation_rules.score_row(scored)
+                updates.append((scored["Nihai Skor"], json.dumps(scored, ensure_ascii=False)) + tuple(rec[:-1]))
+            where = " AND ".join(f"{k} = ?" for k in keys)
+            conn.executemany(f"UPDATE {table} SET score = ?, scored = ? WHERE {where}", updates)
+        conn.execute("INSERT OR REPLACE INTO valuation_meta (key, value) VALUES ('score_version', ?)",
+                     (str(valuation_rules.SCORE_VERSION),))
+
+
+def _seed_daily(conn) -> None:
+    """Geçmiş tablosu boşsa valuation_scores'taki mevcut skorları ilk gün olarak aktarır."""
+    if conn.execute(f"SELECT 1 FROM {DAILY_TABLE} LIMIT 1").fetchone():
+        return
+    rows = conn.execute("SELECT market, ticker, scored, fetched_at, scored_at FROM valuation_scores").fetchall()
+    params = [p for p in (_daily_params(m, t, json.loads(sc), f, sa, SOURCE_SEED) for m, t, sc, f, sa in rows) if p]
+    if params:
+        with storage.write_transaction(conn):
+            conn.executemany(f"{_DAILY_INSERT} ON CONFLICT (market, ticker, date) DO NOTHING", params)
 
 
 def _row_to_dict(row):
@@ -170,7 +296,10 @@ def upsert_rows(rows) -> None:
         )
         for r in rows
     ]
+    daily = [p for p in (_daily_params(r["market"], r["ticker"], r["scored"], r["fetched_at"], r["scored_at"],
+                                       r.get("source", SOURCE_SERVICE)) for r in rows) if p]
     with _connect() as conn, storage.write_transaction(conn):
+        conn.executemany(_DAILY_UPSERT, daily)
         conn.executemany(
             f"""INSERT INTO valuation_scores ({_COLUMNS}) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (market, ticker) DO UPDATE SET
@@ -179,6 +308,53 @@ def upsert_rows(rows) -> None:
                     source = excluded.source""",
             params,
         )
+
+
+def upsert_reconstructed(market: str, ticker: str, days) -> int:
+    """Yeniden hesaplanmış günler: [(gün 'YYYY-MM-DD', skor tablosu satırı)].
+    Yalnızca boş günlere ya da yine reconstructed olan günlere yazar. Yazılan
+    satır sayısını döner."""
+    now = to_iso(utc_now())
+    params = [p for p in (_daily_params(market, ticker, scored, now, now, SOURCE_RECONSTRUCTED, date=day)
+                          for day, scored in days) if p]
+    if not params:
+        return 0
+    sql = (_DAILY_UPSERT + f" WHERE {DAILY_TABLE}.source = '{SOURCE_RECONSTRUCTED}'")
+    with _connect() as conn, storage.write_transaction(conn):
+        before = conn.total_changes
+        conn.executemany(sql, params)
+        return conn.total_changes - before
+
+
+def get_daily_history(market: str, ticker: str, start: str | None = None, end: str | None = None) -> list[dict]:
+    """Hissenin günlük skor geçmişi (eskiden yeniye). Her satır: date, score,
+    sector_discount_pct, pe, sector_pe, peg, sector, sub_sector, scored (tam
+    skor tablosu satırı), fetched_at, scored_at, source."""
+    where, params = ["market = ?", "ticker = ?"], [market, ticker]
+    if start:
+        where.append("date >= ?")
+        params.append(start)
+    if end:
+        where.append("date <= ?")
+        params.append(end)
+    with _connect() as conn:
+        rows = conn.execute(f"SELECT {', '.join(_DAILY_COLS[2:])} FROM {DAILY_TABLE} "
+                            f"WHERE {' AND '.join(where)} ORDER BY date", params).fetchall()
+    out = []
+    for row in rows:
+        rec = dict(zip(_DAILY_COLS[2:], row))
+        rec["scored"] = json.loads(rec["scored"])
+        out.append(rec)
+    return out
+
+
+def daily_summary(market: str | None = None) -> list[dict]:
+    """Piyasa bazında geçmiş: hisse sayısı, gün sayısı, ilk / son gün."""
+    sql = (f"SELECT market, COUNT(DISTINCT ticker), COUNT(DISTINCT date), MIN(date), MAX(date) FROM {DAILY_TABLE}"
+           + (" WHERE market = ?" if market else "") + " GROUP BY market ORDER BY market")
+    with _connect() as conn:
+        rows = conn.execute(sql, (market,) if market else ()).fetchall()
+    return [{"market": m, "tickers": t, "days": d, "first": f, "last": la} for m, t, d, f, la in rows]
 
 
 def record_run(market: str, **info) -> None:
