@@ -130,15 +130,15 @@ Listeler tüm kullanıcıların ilgili piyasa listelerinin birleşimidir. Sonuç
 `market_sentiment_cache` kaydına yazılır, **Giriş Sayfası** buradan gösterir. Kayıt yoksa
 sayfadaki *🔄 Şimdi hesapla* düğmesi servisi beklemeden çalıştırır.
 
-Devreye alma (PR main'e alındıktan sonra, root olarak):
+Devreye alma: kod sunucuda `/opt/yatirim/app` altında main ile eşitlendiği için betik
+dosyaları oradan alır (ayrı klon gerekmez). Root olarak:
 
 ```bash
-cd /root/yatirim && git pull --ff-only origin main
-install -m 644 deploy/jobs.sh /opt/yatirim/bin/
-install -m 644 deploy/systemd/yatirim-market-sentiment.timer /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now yatirim-market-sentiment.timer
-systemctl start yatirim-job@market-sentiment       # ilk hesaplamayı hemen yap
-journalctl -u yatirim-job@market-sentiment -n 30
+sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh            # kur, timer'ı aç, ilk hesaplamayı yap
+sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh status     # timer + kayıtlı skorlar
+sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh run        # şimdi yeniden hesapla
+sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh disable    # timer'ı kapat
+journalctl -u yatirim-job@market-sentiment --since today          # zamanlanmış çalışmaların logu
 ```
 
 ## Günlük kullanım
