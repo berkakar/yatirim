@@ -110,6 +110,20 @@ class CalculationTests(unittest.TestCase):
         self.assertAlmostEqual(t["dow_sin"].iloc[0], 0.0)
         self.assertTrue(((t[[c for c in t.columns if c.endswith(("_sin", "_cos"))]].abs()) <= 1).all().all())
 
+    def test_add_valuation_uses_asof_history(self):
+        idx = pd.bdate_range("2026-10-01", "2026-10-09")
+        df = pd.DataFrame({"close": 1.0}, index=idx)
+        history = pd.DataFrame({"valuation_score": [50.0, 60.0], "valuation_sector_discount_pct": [1.0, 2.0],
+                                "valuation_pe": [np.nan, 20.0], "valuation_sector_pe": [25.0, 25.0]},
+                               index=pd.to_datetime(["2026-10-05", "2026-10-08"]))
+        out = ad.add_valuation(df, VALUATION, history)
+        self.assertEqual(out["valuation_score"].tolist(), [50, 50, 50, 50, 50, 60, 60])   # 1,2 | 5,6,7 | 8,9
+        self.assertEqual(out["valuation_is_snapshot"].tolist(), [1, 1, 0, 0, 0, 0, 0])
+        self.assertTrue(np.isnan(out.loc["2026-10-06", "valuation_pe"]))
+        no_hist = ad.add_valuation(df, VALUATION, None)
+        self.assertTrue((no_hist["valuation_score"] == 62.0).all())
+        self.assertTrue((no_hist["valuation_is_snapshot"] == 1).all())
+
     def test_market_columns_keep_nasdaq_and_etfs_and_add_own_sector(self):
         frame = fake_market(missing=())("2026-01-01", "2026-01-10")
         out = ad.market_columns(frame, "XLK")
@@ -159,14 +173,18 @@ class DatasetTests(unittest.TestCase):
     def test_update_appends_only_new_days_and_keeps_extra(self):
         df, meta = self._create()
         ad.set_extra("AAPL", meta["end"], {"news_sentiment": 0.4})
-        added, _ = ad.update("AAPL", valuation={**VALUATION, "valuation_score": 70.0},
+        history = pd.DataFrame({"valuation_score": [65.0, 70.0], "valuation_sector_discount_pct": [10.0, 11.0],
+                                "valuation_pe": [29.0, 28.0], "valuation_sector_pe": [34.0, 34.0]},
+                               index=pd.to_datetime(["2026-10-07", "2026-10-09"]))
+        added, _ = ad.update("AAPL", valuation=VALUATION, valuation_history=history,
                              ohlcv_fetcher=fake_ohlcv("2026-10-09"), market_loader=fake_market(), end="2026-10-09")
         self.assertEqual(added, 2)
         after = ad.load_dataset("AAPL")
         self.assertEqual(len(after), len(df) + 2)
         self.assertEqual(after.index.max(), pd.Timestamp("2026-10-09"))
         self.assertEqual(after["source"].iloc[-1], ad.SOURCE_DAILY)
-        self.assertEqual(after["valuation_score"].iloc[-1], 70.0)
+        self.assertEqual(after["valuation_score"].iloc[-1], 70.0)               # 2026-10-09 skoru
+        self.assertEqual(after["valuation_score"].iloc[-2], 65.0)               # 10-08: önceki günün skoru
         self.assertEqual(after["valuation_is_snapshot"].iloc[-1], 0)
         self.assertEqual(after["valuation_score"].iloc[-3], 62.0)        # eski gün değişmedi
         self.assertEqual(after.loc[meta["end"], "news_sentiment"], 0.4)
@@ -186,6 +204,25 @@ class DatasetTests(unittest.TestCase):
         self.assertGreater(ad.delete_dataset("AAPL"), 0)
         self.assertEqual(ad.list_datasets(), [])
         self.assertTrue(ad.load_dataset("AAPL").empty)
+
+    def test_build_uses_daily_valuation_history_from_db(self):
+        import valuation_db
+
+        def write(day_utc, score):
+            valuation_db.upsert_rows([{
+                "market": ad.MARKET, "ticker": "AAPL", "raw": {"Hisse": "AAPL"},
+                "scored": {"Hisse": "AAPL", "Nihai Skor": score, "F/K": 30.0, "Ana Sektör": "Technology"},
+                "fetched_at": day_utc, "scored_at": day_utc,
+            }])
+        write("2026-10-05T21:30:00Z", 40)
+        write("2026-10-07T21:30:00Z", 45)
+        df, meta = self._create()
+        self.assertEqual(meta["valuation_history_days"], 2)
+        self.assertEqual(df.loc["2026-10-02", "valuation_score"], 40)       # geçmişten önce: en eski skor
+        self.assertEqual(df.loc["2026-10-02", "valuation_is_snapshot"], 1)
+        self.assertEqual(df.loc["2026-10-06", "valuation_score"], 40)
+        self.assertEqual(df.loc["2026-10-07", "valuation_score"], 45)
+        self.assertEqual(df.loc["2026-10-07", "valuation_is_snapshot"], 0)
 
     def test_valuation_from_db(self):
         import valuation_db

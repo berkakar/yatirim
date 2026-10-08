@@ -19,7 +19,9 @@ Adımlar (build_dataset):
        Yalnızca o güne kadar bilinen barlar kullanılır (pivot, sağında
        PIVOT_K bar oluştuktan sonra görülür) - geleceğe sızıntı yok.
     5. 3 yıllık hesaplamadan son 2 yıl alınır (ilk yıl EMA200 / yüzdelik sıra
-       ısınması içindir). Değerleme & Ucuzluk Skoru (valuation_scores) eklenir.
+       ısınması içindir). Değerleme & Ucuzluk Skoru eklenir: her güne, o gün
+       veya öncesindeki son günlük skor (valuation_scores_daily); geçmişin
+       başladığı günden önceki günlere en eski bilinen skor.
     6. Günlük arşivle birleştirme (market_archive): NASDAQ 100 duyarlılık
        parametreleri (nasdaq_100__*), 11 sektör ETF'si + SPY (<etf>__*) ve
        hissenin kendi sektör ETF'si (sector_etf__*).
@@ -39,8 +41,10 @@ Satır kaynakları: `backfill` (ilk hazırlama / yeniden oluşturma), `daily`
 dokunmaz; set_extra() ile güne istenen değer eklenir.
 
 Eğitimde dikkat:
-- Değerleme skoru geçmişi tutulmadığı için backfill satırlarında bugünkü skor
-  sabit yazılır (`valuation_is_snapshot`=1); `daily` satırlarda o günün skoru.
+- Değerleme skorunun günlük geçmişi servis çalıştıkça birikir (Yahoo geçmiş
+  temel veriyi vermez). Geçmişin başlangıcından önceki günlere en eski bilinen
+  skor yazılır ve `valuation_is_snapshot`=1 ile işaretlenir; bu günlerde skor
+  gerçekte o gün bilinmiyordu (sızıntı) - eğitimde ayıklanabilir.
 - İç boşluklarda interpolasyon sonraki bilinen değeri kullanır; arşiv boşluğu
   çoksa `interpolated_cells` ile o satırları ayıklayın.
 - Değerler gün kapanışıyla hesaplanır; ertesi günü tahmin ederken hedef bir gün
@@ -295,12 +299,27 @@ def trim_years(df: pd.DataFrame, years: int) -> pd.DataFrame:
     return df[df.index > start]
 
 
-def add_valuation(df: pd.DataFrame, valuation: dict | None, snapshot: bool = True) -> pd.DataFrame:
+VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "valuation_pe", "valuation_sector_pe")
+
+
+def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Değerleme sütunları. Her güne, o gün veya öncesindeki son geçmiş satırı
+    (as-of). Geçmişten önceki günlere en eski geçmiş satırı, geçmiş hiç yoksa
+    `valuation` (bugünkü skor) yazılır; bu günler `valuation_is_snapshot`=1."""
     out = df.copy()
-    v = valuation or {}
-    for col in ("valuation_score", "valuation_sector_discount_pct", "valuation_pe", "valuation_sector_pe"):
-        out[col] = v.get(col, np.nan)
-    out["valuation_is_snapshot"] = 1 if snapshot else 0
+    if history is not None and not history.empty:
+        hist = history[list(VALUATION_COLS)].sort_index()
+        asof = pd.merge_asof(pd.DataFrame(index=out.index), hist, left_index=True, right_index=True)
+        has = pd.Series(hist.index.min() <= out.index, index=out.index)
+        fallback = hist.iloc[0].to_dict()
+    else:
+        asof = pd.DataFrame(index=out.index, columns=list(VALUATION_COLS), dtype=float)
+        has = pd.Series(False, index=out.index)
+        fallback = valuation or {}
+    for col in VALUATION_COLS:
+        value = fallback.get(col)
+        out[col] = asof[col].where(has, np.nan if value is None else value).astype(float)
+    out["valuation_is_snapshot"] = (~has).astype(int)
     return out
 
 
@@ -402,6 +421,21 @@ def valuation_from_scored(scored: dict, fetched_at=None) -> dict:
     }
 
 
+def load_valuation_history(ticker: str, market: str = MARKET) -> pd.DataFrame:
+    """valuation_scores_daily'deki günlük skor geçmişi - indeks gün, VALUATION_COLS."""
+    import valuation_db
+
+    rows = valuation_db.get_daily_history(market, ticker)
+    if not rows:
+        return pd.DataFrame(columns=list(VALUATION_COLS))
+    df = pd.DataFrame([{
+        "date": r["date"], "valuation_score": r["score"], "valuation_sector_discount_pct": r["sector_discount_pct"],
+        "valuation_pe": r["pe"], "valuation_sector_pe": r["sector_pe"],
+    } for r in rows])
+    df["date"] = pd.to_datetime(df["date"])
+    return df.set_index("date").astype(float)
+
+
 def load_valuation(ticker: str, market: str = MARKET, fetch_missing: bool = False) -> dict | None:
     """Değerleme & Ucuzluk Skoru: önce veritabanındaki satır; yoksa ve
     fetch_missing ise Değerleme modülündeki gibi anlık çekilip kaydedilir."""
@@ -433,7 +467,7 @@ def load_market_frame(start: str, end: str) -> pd.DataFrame:
 # ------------------------------------------------------------------------------
 
 def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int = DEFAULT_KEEP_YEARS,
-                  ohlcv_fetcher=download_ohlcv, vwap_fetcher=None, valuation=None,
+                  ohlcv_fetcher=download_ohlcv, vwap_fetcher=None, valuation=None, valuation_history=None,
                   market_loader=load_market_frame, end=None, progress=None) -> tuple[pd.DataFrame, dict]:
     """Bir hissenin eğitim tablosu. Döner: (çerçeve - indeks tarih, meta)."""
     ticker = normalize_ticker(ticker)
@@ -473,9 +507,16 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
     df = trim_years(df, keep_years)
 
     step("Değerleme & Ucuzluk Skoru ekleniyor")
-    if valuation is None:
+    has_history = valuation_history is not None and not valuation_history.empty
+    if valuation is None and not has_history:
         warnings.append(f"{ticker} için {MARKET} değerleme skoru bulunamadı; değerleme sütunları boş.")
-    df = add_valuation(df, valuation, snapshot=True)
+    df = add_valuation(df, valuation, valuation_history)
+    snapshot_days = int(df["valuation_is_snapshot"].sum())
+    if snapshot_days and (valuation is not None or has_history):
+        since = valuation_history.index.min().strftime("%Y-%m-%d") if has_history else None
+        warnings.append(f"Ucuzluk skoru geçmişi {'yok' if since is None else since + ' tarihinden başlıyor'}; "
+                        f"{snapshot_days} güne {'bugünkü' if since is None else 'en eski bilinen'} skor yazıldı "
+                        "(valuation_is_snapshot=1).")
     sector_etf = YAHOO_SECTOR_TO_ETF.get((valuation or {}).get("sector") or "")
 
     step("NASDAQ 100 parametreleri ve sektör ETF'leri ile birleştiriliyor")
@@ -510,6 +551,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
         "columns": list(df.columns),
         "vwap_source": vwap_source,
         "valuation": valuation,
+        "valuation_history_days": int(len(valuation_history)) if has_history else 0,
         "sector_etf": sector_etf,
         "filled": fill_report,
         "warnings": warnings,
@@ -679,8 +721,10 @@ def create(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int 
     """Veri setini hazırlayıp kaydeder (var olanın yerine - extra alanlar korunur)."""
     ticker = normalize_ticker(ticker)
     valuation = kwargs.pop("valuation", None) or load_valuation(ticker, fetch_missing=fetch_valuation)
+    history = kwargs.pop("valuation_history", None)
+    history = load_valuation_history(ticker) if history is None else history
     df, meta = build_dataset(ticker, fetch_years, keep_years, vwap_fetcher=vwap_fetcher,
-                             valuation=valuation, **kwargs)
+                             valuation=valuation, valuation_history=history, **kwargs)
     params = {"fetch_years": fetch_years, "keep_years": keep_years, "vwap_source": meta["vwap_source"]}
     save_dataset(df, meta, params, SOURCE_BACKFILL, replace=True)
     return load_dataset(ticker), meta
@@ -688,16 +732,18 @@ def create(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int 
 
 def update(ticker: str, vwap_fetcher=None, **kwargs) -> tuple[int, dict]:
     """Kayıtlı veri setine son kayıtlı günden sonraki günleri ekler (`daily`).
-    Var olan günler değişmez; yeni günlerde değerleme o günün skorudur."""
+    Var olan günler değişmez; yeni günlere o gün veya öncesindeki son günlük
+    skor yazılır (valuation_scores_daily)."""
     info = get_dataset_info(ticker)
     if info is None:
         raise KeyError(f"{normalize_ticker(ticker)} için kayıtlı veri seti yok - önce oluşturun")
     params = info["params"]
     valuation = kwargs.pop("valuation", None) or load_valuation(info["ticker"])
+    history = kwargs.pop("valuation_history", None)
+    history = load_valuation_history(info["ticker"]) if history is None else history
     df, meta = build_dataset(info["ticker"], params.get("fetch_years", DEFAULT_FETCH_YEARS),
                              params.get("keep_years", DEFAULT_KEEP_YEARS), vwap_fetcher=vwap_fetcher,
-                             valuation=valuation, **kwargs)
-    df = add_valuation(df, valuation, snapshot=False).reindex(columns=df.columns)
+                             valuation=valuation, valuation_history=history, **kwargs)
     added = save_dataset(df, meta, params, SOURCE_DAILY, only_after=info["end"])
     return added, meta
 

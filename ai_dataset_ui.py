@@ -39,7 +39,7 @@ _GLOSSARY = """
 | `stock_sentiment` | Hisse duyarlılığı 0-100: `sent_momentum` (50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası), `sent_volatility` (oynaklığın ters yüzdelik sırası) ve `rsi14` ortalaması |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
-| `valuation_*` | Değerleme & Ucuzluk Skoru (Nihai Skor), alt sektör F/K iskontosu, F/K, alt sektör ortalama F/K. `valuation_is_snapshot`=1: geçmiş skor tutulmadığı için bugünkü skor |
+| `valuation_*` | Değerleme & Ucuzluk Skoru (Nihai Skor), alt sektör F/K iskontosu, F/K, alt sektör ortalama F/K - o gün veya öncesindeki son günlük skor (`valuation_scores_daily`). `valuation_is_snapshot`=1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
 | `<etf>__*`, `sector_etf__*` | Sektör ETF arşivi (sector_etf_daily): kapanış, 1/5/21 gün getiri, SPY'ye göre 5 gün fark; `sector_etf__` hissenin kendi sektörü |
 | `time_idx, year, month, day_of_month, day_of_week, day_of_year, week_of_year, quarter, is_month_start/end` | Temporal embedding için takvim indeksleri |
@@ -191,7 +191,8 @@ def _render_dataset(ticker, username):
     m = st.columns(5)
     m[0].metric("Gün", f"{len(df)}")
     m[1].metric("Sütun", f"{len(df.columns) - 1}")
-    m[2].metric("Ucuzluk Skoru", f"{val['valuation_score']:.0f}" if val.get("valuation_score") is not None else "—")
+    last_score = df["valuation_score"].iloc[-1] if "valuation_score" in df else None
+    m[2].metric("Ucuzluk Skoru", f"{last_score:.0f}" if pd.notna(last_score) else "—", help="Son günün skoru")
     m[3].metric("Sektör ETF'si", meta.get("sector_etf") or "—", help=val.get("sector"))
     m[4].metric("VWAP", "Alpaca" if meta.get("vwap_source") == "alpaca" else "Tipik fiyat")
     freshness_caption(f"{info['start']} → {info['end']} · son kayıt {_fmt_time(info['updated_at'])} · "
@@ -227,6 +228,8 @@ def _render_dataset(ticker, username):
         ad.delete_dataset(ticker)
         st.rerun()
 
+    _render_valuation_history(ticker)
+
     with st.expander("➕ Bir güne veri ekle"):
         st.caption("Seçilen güne yeni bir alan (ör. haber duyarlılığı) ekler veya günceller. Bu alanlar veri seti "
                    "yeniden hazırlansa da korunur; boş bırakılan değer alanı siler.")
@@ -254,6 +257,28 @@ def _render_dataset(ticker, username):
                    "kaydırın. Direnç seviyeleri yalnızca o güne kadar oluşmuş tepeleri kullanır (sızıntı yok). "
                    "İç boşluklarda doğrusal interpolasyon bir sonraki bilinen değeri kullanır; "
                    "`interpolated_cells` > 0 olan satırları gerekirse ayıklayın.")
+
+
+def _render_valuation_history(ticker):
+    history = ad.load_valuation_history(ticker)
+    label = (f"📈 Ucuzluk skoru günlük geçmişi - {len(history)} gün "
+             f"({history.index.min():%d.%m.%Y} → {history.index.max():%d.%m.%Y})" if len(history)
+             else "📈 Ucuzluk skoru günlük geçmişi - henüz kayıt yok")
+    with st.expander(label):
+        st.caption(f"{ad.MARKET} değerleme servisi her çalıştığında hissenin skoru o günün satırı olarak "
+                   "`valuation_scores_daily` tablosuna yazılır (aynı gün tekrar skorlanırsa son skor kalır). "
+                   "Yahoo geçmiş temel veriyi vermediği için geçmiş servis çalıştıkça birikir; veri setindeki her "
+                   "gün o gün veya öncesindeki son skoru alır. Yeni günler **Yeni günleri ekle** ile eklenir.")
+        if history.empty:
+            return
+        view = history.rename(columns={
+            "valuation_score": "Ucuzluk Skoru", "valuation_sector_discount_pct": "Alt Sektör İskontosu %",
+            "valuation_pe": "F/K", "valuation_sector_pe": "Alt Sektör Ort. F/K"})
+        if len(view) > 1:
+            st.line_chart(view["Ucuzluk Skoru"], height=180)
+        out = view.sort_index(ascending=False).reset_index()
+        out["date"] = out["date"].dt.strftime("%Y-%m-%d")
+        st.dataframe(out.rename(columns={"date": "Tarih"}), hide_index=True, use_container_width=True)
 
 
 def _render_saved(username):
