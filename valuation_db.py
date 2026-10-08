@@ -17,7 +17,11 @@ hesaplandığı anın piyasanın yerel saatindeki tarihidir (ABD servisleri
 kapanıştan sonra çalıştığı için o işlem günü). Evrenden çıkan hissenin geçmişi
 silinmez. Tablo ilk oluşturulduğunda valuation_scores'taki mevcut skorlar ilk
 gün olarak aktarılır. Yahoo geçmiş temel veriyi vermediği için geçmiş, servis
-çalıştıkça birikir (yapay zeka veri seti bkz. ai_dataset.py).
+çalıştıkça birikir (yapay zeka veri seti bkz. ai_dataset.py). Servisin
+yazmadığı geçmiş günler valuation_history.py ile Yahoo'nun geçmiş bilanço
+tablolarından yeniden hesaplanıp `reconstructed` kaynağıyla yazılabilir; bu
+satırlar servis / seed satırlarının üzerine hiçbir zaman yazılmaz, servis ise
+aynı günü skorlarsa reconstructed satırın üzerine yazar.
 
 Zamanlar UTC, ISO 8601 metni ("2026-10-05T21:30:12Z").
 """
@@ -31,6 +35,7 @@ import storage
 SOURCE_SERVICE = "service"      # piyasa listesinden veya piyasaya bağlı bir kullanıcı grubundan
 SOURCE_ON_DEMAND = "on_demand"  # kullanıcı seçtiğinde veritabanında yoktu, arayüz anlık çekti
 SOURCE_SEED = "seed"            # günlük geçmiş tablosu oluşturulurken valuation_scores'tan aktarıldı
+SOURCE_RECONSTRUCTED = "reconstructed"  # geçmiş bilançolardan yeniden hesaplandı (valuation_history.py)
 
 DAILY_TABLE = "valuation_scores_daily"
 # Günlük geçmişin tarihi bu saat diliminde alınır (listede yoksa New York).
@@ -143,7 +148,7 @@ def _num(v):
     return f if f == f and f not in (float("inf"), float("-inf")) else None
 
 
-def _daily_params(market, ticker, scored: dict, fetched_at, scored_at, source):
+def _daily_params(market, ticker, scored: dict, fetched_at, scored_at, source, date=None):
     """Günlük geçmiş satırı - ETF / skorlanmayan kayıt için None."""
     if scored.get("_excluded") or scored.get("Nihai Skor") is None:  # valuation.EXCLUDED_KEY
         return None
@@ -151,7 +156,7 @@ def _daily_params(market, ticker, scored: dict, fetched_at, scored_at, source):
     for col, key in DAILY_FIELDS.items():
         v = scored.get(key)
         values.append(v if col in ("sector", "sub_sector") else _num(v))
-    return (market, ticker, market_date(market, scored_at), *values,
+    return (market, ticker, date or market_date(market, scored_at), *values,
             json.dumps(scored, ensure_ascii=False), fetched_at, scored_at, source)
 
 
@@ -273,6 +278,22 @@ def upsert_rows(rows) -> None:
                     source = excluded.source""",
             params,
         )
+
+
+def upsert_reconstructed(market: str, ticker: str, days) -> int:
+    """Yeniden hesaplanmış günler: [(gün 'YYYY-MM-DD', skor tablosu satırı)].
+    Yalnızca boş günlere ya da yine reconstructed olan günlere yazar. Yazılan
+    satır sayısını döner."""
+    now = to_iso(utc_now())
+    params = [p for p in (_daily_params(market, ticker, scored, now, now, SOURCE_RECONSTRUCTED, date=day)
+                          for day, scored in days) if p]
+    if not params:
+        return 0
+    sql = (_DAILY_UPSERT + f" WHERE {DAILY_TABLE}.source = '{SOURCE_RECONSTRUCTED}'")
+    with _connect() as conn, storage.write_transaction(conn):
+        before = conn.total_changes
+        conn.executemany(sql, params)
+        return conn.total_changes - before
 
 
 def get_daily_history(market: str, ticker: str, start: str | None = None, end: str | None = None) -> list[dict]:

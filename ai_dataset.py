@@ -19,9 +19,11 @@ Adımlar (build_dataset):
        Yalnızca o güne kadar bilinen barlar kullanılır (pivot, sağında
        PIVOT_K bar oluştuktan sonra görülür) - geleceğe sızıntı yok.
     5. 3 yıllık hesaplamadan son 2 yıl alınır (ilk yıl EMA200 / yüzdelik sıra
-       ısınması içindir). Değerleme & Ucuzluk Skoru eklenir: her güne, o gün
-       veya öncesindeki son günlük skor (valuation_scores_daily); geçmişin
-       başladığı günden önceki günlere en eski bilinen skor.
+       ısınması içindir). Değerleme & Ucuzluk Skoru ve oranları eklenir: her
+       güne, o gün veya öncesindeki son günlük skor (valuation_scores_daily).
+       Servisin yazmadığı geçmiş günler önce bilanço tablolarından yeniden
+       hesaplanır (valuation_history.py; `valuation_is_reconstructed`=1);
+       geçmişin başlangıcından önceki günlere en eski bilinen skor.
     6. Günlük arşivle birleştirme (market_archive): NASDAQ 100 duyarlılık
        parametreleri (nasdaq_100__*), 11 sektör ETF'si + SPY (<etf>__*) ve
        hissenin kendi sektör ETF'si (sector_etf__*).
@@ -108,7 +110,8 @@ VALUATION_EXCLUDED_KEY = "_excluded"  # valuation.EXCLUDED_KEY (streamlit'e bağ
 _MARKET_SKIP = ("put_call_ratio", "put_call_score")
 
 # Interpolasyona girmeyen sütunlar (bayrak / takvim / sayaç).
-_NO_FILL = ("vwap_is_proxy", "valuation_is_snapshot", "resistance_nearest_window", "interpolated_cells")
+_NO_FILL = ("vwap_is_proxy", "valuation_is_snapshot", "valuation_is_reconstructed", "resistance_nearest_window",
+            "interpolated_cells")
 
 DAILY_TABLE = "ai_dataset_daily"
 META_TABLE = "ai_datasets"
@@ -299,7 +302,27 @@ def trim_years(df: pd.DataFrame, years: int) -> pd.DataFrame:
     return df[df.index > start]
 
 
-VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "valuation_pe", "valuation_sector_pe")
+# Veri setindeki değerleme sütunu -> skor tablosu alanı (valuation_scores_daily.scored).
+VALUATION_FIELDS = {
+    "valuation_score": "Nihai Skor",
+    "valuation_sector_discount_pct": "Alt Sektör İskontosu %",
+    "valuation_pe": "F/K",
+    "valuation_sector_pe": "Alt Sektör Ort. F/K",
+    "valuation_peg": "PEG",
+    "valuation_eps_growth_pct": "EPS Büyümesi %",
+    "valuation_revenue_growth_pct": "Gelir Büyümesi %",
+    "valuation_roe_pct": "Öz Sermaye Getirisi (ROE) %",
+    "valuation_roa_pct": "Varlık Getirisi (ROA) %",
+    "valuation_net_margin_pct": "Net Kar Marjı %",
+    "valuation_gross_margin_pct": "Brüt Kar Marjı %",
+    "valuation_interest_coverage": "Faiz Karşılama Oranı",
+    "valuation_debt_equity": "Borç / Özsermaye",
+    "valuation_debt_assets_pct": "Borç / Varlık %",
+    "valuation_current_ratio": "Cari Oran",
+    "valuation_quick_ratio": "Likidite Oranı",
+    "valuation_asset_turnover": "Varlık Devir Hızı",
+}
+VALUATION_COLS = tuple(VALUATION_FIELDS)
 
 
 def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFrame | None = None) -> pd.DataFrame:
@@ -308,7 +331,7 @@ def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFram
     `valuation` (bugünkü skor) yazılır; bu günler `valuation_is_snapshot`=1."""
     out = df.copy()
     if history is not None and not history.empty:
-        hist = history[list(VALUATION_COLS)].sort_index()
+        hist = history.reindex(columns=list(VALUATION_COLS) + ["valuation_is_reconstructed"]).sort_index()
         asof = pd.merge_asof(pd.DataFrame(index=out.index), hist, left_index=True, right_index=True)
         has = pd.Series(hist.index.min() <= out.index, index=out.index)
         fallback = hist.iloc[0].to_dict()
@@ -320,6 +343,8 @@ def add_valuation(df: pd.DataFrame, valuation: dict | None, history: pd.DataFram
         value = fallback.get(col)
         out[col] = asof[col].where(has, np.nan if value is None else value).astype(float)
     out["valuation_is_snapshot"] = (~has).astype(int)
+    recon = asof["valuation_is_reconstructed"] if "valuation_is_reconstructed" in asof else 0
+    out["valuation_is_reconstructed"] = pd.Series(recon, index=out.index).where(has, 0).fillna(0).astype(int)
     return out
 
 
@@ -411,10 +436,7 @@ def _num(v):
 
 def valuation_from_scored(scored: dict, fetched_at=None) -> dict:
     return {
-        "valuation_score": _num(scored.get("Nihai Skor")),
-        "valuation_sector_discount_pct": _num(scored.get("Alt Sektör İskontosu %")),
-        "valuation_pe": _num(scored.get("F/K")),
-        "valuation_sector_pe": _num(scored.get("Alt Sektör Ort. F/K")),
+        **{col: _num(scored.get(key)) for col, key in VALUATION_FIELDS.items()},
         "sector": scored.get("Ana Sektör"),
         "sub_sector": scored.get("Alt Sektör (İş Modeli)"),
         "as_of": fetched_at,
@@ -422,15 +444,17 @@ def valuation_from_scored(scored: dict, fetched_at=None) -> dict:
 
 
 def load_valuation_history(ticker: str, market: str = MARKET) -> pd.DataFrame:
-    """valuation_scores_daily'deki günlük skor geçmişi - indeks gün, VALUATION_COLS."""
+    """valuation_scores_daily'deki günlük skor geçmişi - indeks gün, VALUATION_COLS
+    + valuation_is_reconstructed (bilançolardan yeniden hesaplanan gün)."""
     import valuation_db
 
     rows = valuation_db.get_daily_history(market, ticker)
     if not rows:
-        return pd.DataFrame(columns=list(VALUATION_COLS))
+        return pd.DataFrame(columns=list(VALUATION_COLS) + ["valuation_is_reconstructed"])
     df = pd.DataFrame([{
-        "date": r["date"], "valuation_score": r["score"], "valuation_sector_discount_pct": r["sector_discount_pct"],
-        "valuation_pe": r["pe"], "valuation_sector_pe": r["sector_pe"],
+        "date": r["date"],
+        **{col: _num(r["scored"].get(key)) for col, key in VALUATION_FIELDS.items()},
+        "valuation_is_reconstructed": int(r["source"] == valuation_db.SOURCE_RECONSTRUCTED),
     } for r in rows])
     df["date"] = pd.to_datetime(df["date"])
     return df.set_index("date").astype(float)
@@ -468,6 +492,7 @@ def load_market_frame(start: str, end: str) -> pd.DataFrame:
 
 def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int = DEFAULT_KEEP_YEARS,
                   ohlcv_fetcher=download_ohlcv, vwap_fetcher=None, valuation=None, valuation_history=None,
+                  reconstruct_valuation=None, history_loader=None,
                   market_loader=load_market_frame, end=None, progress=None) -> tuple[pd.DataFrame, dict]:
     """Bir hissenin eğitim tablosu. Döner: (çerçeve - indeks tarih, meta)."""
     ticker = normalize_ticker(ticker)
@@ -507,6 +532,14 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
     df = trim_years(df, keep_years)
 
     step("Değerleme & Ucuzluk Skoru ekleniyor")
+    reconstructed = None
+    if reconstruct_valuation is not None:
+        step(f"{ticker}: Ucuzluk Skoru geçmişi bilanço tablolarından yeniden hesaplanıyor")
+        try:
+            reconstructed = reconstruct_valuation(ticker, df["close"])
+            valuation_history = (history_loader or load_valuation_history)(ticker)
+        except Exception as e:  # Yahoo / skor yok - eldeki geçmişle devam
+            warnings.append(f"Ucuzluk Skoru geçmişi yeniden hesaplanamadı: {e}")
     has_history = valuation_history is not None and not valuation_history.empty
     if valuation is None and not has_history:
         warnings.append(f"{ticker} için {MARKET} değerleme skoru bulunamadı; değerleme sütunları boş.")
@@ -552,6 +585,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
         "vwap_source": vwap_source,
         "valuation": valuation,
         "valuation_history_days": int(len(valuation_history)) if has_history else 0,
+        "valuation_reconstruction": reconstructed,
         "sector_etf": sector_etf,
         "filled": fill_report,
         "warnings": warnings,
@@ -717,9 +751,17 @@ def delete_dataset(ticker: str) -> int:
 
 
 def create(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int = DEFAULT_KEEP_YEARS,
-           vwap_fetcher=None, fetch_valuation: bool = False, **kwargs) -> tuple[pd.DataFrame, dict]:
-    """Veri setini hazırlayıp kaydeder (var olanın yerine - extra alanlar korunur)."""
+           vwap_fetcher=None, fetch_valuation: bool = False, reconstruct_history: bool = False,
+           **kwargs) -> tuple[pd.DataFrame, dict]:
+    """Veri setini hazırlayıp kaydeder (var olanın yerine - extra alanlar korunur).
+    reconstruct_history: veri setinin günleri için Ucuzluk Skoru geçmişini önce
+    bilanço tablolarından yeniden hesaplayıp valuation_scores_daily'ye yazar
+    (valuation_history.py)."""
     ticker = normalize_ticker(ticker)
+    if reconstruct_history and "reconstruct_valuation" not in kwargs:
+        import valuation_history
+
+        kwargs["reconstruct_valuation"] = lambda t, closes: valuation_history.reconstruct(t, closes, MARKET)
     valuation = kwargs.pop("valuation", None) or load_valuation(ticker, fetch_missing=fetch_valuation)
     history = kwargs.pop("valuation_history", None)
     history = load_valuation_history(ticker) if history is None else history
@@ -773,6 +815,8 @@ def main(argv=None):
     b.add_argument("--fetch-years", type=int, default=DEFAULT_FETCH_YEARS)
     b.add_argument("--keep-years", type=int, default=DEFAULT_KEEP_YEARS)
     b.add_argument("--fetch-valuation", action="store_true", help="skor veritabanında yoksa Yahoo'dan çek")
+    b.add_argument("--no-reconstruct", action="store_true",
+                   help="Ucuzluk Skoru geçmişini bilançolardan yeniden hesaplama")
     u = sub.add_parser("update", help="kayıtlı veri setlerine yeni günleri ekler")
     g = u.add_mutually_exclusive_group(required=True)
     g.add_argument("--ticker")
@@ -786,6 +830,7 @@ def main(argv=None):
 
     if args.cmd == "build":
         df, meta = create(args.ticker, args.fetch_years, args.keep_years, fetch_valuation=args.fetch_valuation,
+                          reconstruct_history=not args.no_reconstruct,
                           progress=log)
         log(f"{meta['ticker']}: {len(df)} gün, {len(df.columns)} sütun kaydedildi ({meta['start']} → {meta['end']})")
         for w in meta["warnings"]:

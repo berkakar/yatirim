@@ -6,6 +6,7 @@ import os
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import numpy as np
 import pandas as pd
 import streamlit as st
 
@@ -39,7 +40,9 @@ _GLOSSARY = """
 | `stock_sentiment` | Hisse duyarlılığı 0-100: `sent_momentum` (50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası), `sent_volatility` (oynaklığın ters yüzdelik sırası) ve `rsi14` ortalaması |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
-| `valuation_*` | Değerleme & Ucuzluk Skoru (Nihai Skor), alt sektör F/K iskontosu, F/K, alt sektör ortalama F/K - o gün veya öncesindeki son günlük skor (`valuation_scores_daily`). `valuation_is_snapshot`=1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
+| `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, PEG, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
+| `valuation_is_reconstructed` | 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; PEG bugünkü PEG'in ima ettiği büyüme sabit kabul edilerek; alt sektör ortalama F/K bugünkü değerinde sabit |
+| `valuation_is_snapshot` | 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
 | `<etf>__*`, `sector_etf__*` | Sektör ETF arşivi (sector_etf_daily): kapanış, 1/5/21 gün getiri, SPY'ye göre 5 gün fark; `sector_etf__` hissenin kendi sektörü |
 | `time_idx, year, month, day_of_month, day_of_week, day_of_year, week_of_year, quarter, is_month_start/end` | Temporal embedding için takvim indeksleri |
@@ -132,12 +135,16 @@ def _render_create(username, nasdaq_tickers):
                                  value=min(ad.DEFAULT_KEEP_YEARS, int(fetch_years) - 1), key="ai_keep_years")
     ticker = ad.normalize_ticker(typed or picked)
 
-    o1, o2 = st.columns(2)
+    o1, o2, o3 = st.columns(3)
     use_alpaca = o1.checkbox("VWAP'ı Alpaca'dan al", value=True, key="ai_use_alpaca",
                              help="Alpaca anahtarı yoksa ya da veri gelmezse tipik fiyat (Y+D+K)/3 kullanılır.")
     fetch_val = o2.checkbox("Değerleme skoru yoksa Yahoo'dan çek", value=True, key="ai_fetch_valuation",
                             help="Hissenin NASDAQ 100 Ucuzluk Skoru veritabanında yoksa Değerleme modülündeki "
                                  "gibi anlık çekilir ve kaydedilir.")
+    reconstruct = o3.checkbox("Skor geçmişini bilançolardan hesapla", value=True, key="ai_reconstruct",
+                              help="Servisin yazmadığı geçmiş günlerin Ucuzluk Skoru Yahoo'nun çeyreklik / yıllık "
+                                   "bilanço tablolarından yeniden hesaplanıp valuation_scores_daily'ye yazılır "
+                                   "(servis günlerine dokunulmaz).")
     _render_archive_status(int(keep_years))
 
     existing = ad.get_dataset_info(ticker) if ticker else None
@@ -153,7 +160,7 @@ def _render_create(username, nasdaq_tickers):
             if use_alpaca and fetcher is None:
                 st.write("ℹ️ Alpaca anahtarı bulunamadı - VWAP için tipik fiyat kullanılacak.")
             df, meta = ad.create(ticker, int(fetch_years), int(keep_years), vwap_fetcher=fetcher,
-                                 fetch_valuation=fetch_val, progress=lambda m: st.write(f"• {m}"))
+                                 fetch_valuation=fetch_val, reconstruct_history=reconstruct, progress=lambda m: st.write(f"• {m}"))
         except Exception as e:
             status.update(label=f"{ticker}: hazırlanamadı", state="error")
             st.error(str(e))
@@ -267,13 +274,14 @@ def _render_valuation_history(ticker):
     with st.expander(label):
         st.caption(f"{ad.MARKET} değerleme servisi her çalıştığında hissenin skoru o günün satırı olarak "
                    "`valuation_scores_daily` tablosuna yazılır (aynı gün tekrar skorlanırsa son skor kalır). "
-                   "Yahoo geçmiş temel veriyi vermediği için geçmiş servis çalıştıkça birikir; veri setindeki her "
-                   "gün o gün veya öncesindeki son skoru alır. Yeni günler **Yeni günleri ekle** ile eklenir.")
+                   "Servisin yazmadığı geçmiş günler, veri seti hazırlanırken bilanço tablolarından yeniden "
+                   "hesaplanır (Kaynak: Yeniden hesaplandı). Veri setindeki her gün o gün veya öncesindeki son "
+                   "kaydı alır. Yeni günler **Yeni günleri ekle** ile eklenir.")
         if history.empty:
             return
-        view = history.rename(columns={
-            "valuation_score": "Ucuzluk Skoru", "valuation_sector_discount_pct": "Alt Sektör İskontosu %",
-            "valuation_pe": "F/K", "valuation_sector_pe": "Alt Sektör Ort. F/K"})
+        view = history.rename(columns={col: key for col, key in ad.VALUATION_FIELDS.items()})
+        view = view.rename(columns={"Nihai Skor": "Ucuzluk Skoru"})
+        view["Kaynak"] = np.where(view.pop("valuation_is_reconstructed") == 1, "Yeniden hesaplandı", "Servis")
         if len(view) > 1:
             st.line_chart(view["Ucuzluk Skoru"], height=180)
         out = view.sort_index(ascending=False).reset_index()
