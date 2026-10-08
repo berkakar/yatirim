@@ -1,5 +1,5 @@
 """
-Piyasa Duyarlılığı (Korku / Açgözlülük) servisi - NASDAQ 100 ve NYSE.
+Piyasa Duyarlılığı (Korku / Açgözlülük) servisi - NASDAQ 100, NYSE ve BIST 100.
 
 Yahoo Finance'in hazır bir duyarlılık skoru yok; bu modül piyasa verisinden,
 CNN Fear & Greed endeksine benzer bir mantıkla 0-100 arası bir skor üretir
@@ -13,6 +13,16 @@ CNN Fear & Greed endeksine benzer bir mantıkla 0-100 arası bir skor üretir
 5. Güvenli liman    - endeksin 20 günlük getirisi - TLT (uzun vadeli tahvil) 20 günlük
                       getirisi; yüzdelik sıra
 
+BIST 100 farkları (Yahoo'da BIST için oynaklık endeksi ve opsiyon verisi yok):
+- Oynaklık: XU100'ün 20 günlük gerçekleşen (yıllıklandırılmış) oynaklığı.
+- Güvenli liman: TLT yerine dolar/TL (TRY=X) - Türk yatırımcının kaçtığı yer.
+- Momentum ve yeni zirve/dip dolar bazında (fiyat / USDTRY) hesaplanır; TL
+  bazında enflasyon yüzünden yapısal olarak açgözlülük tarafına kayarlardı.
+  Genişlik (ortalamanın üstündeki hisse yüzdesi) TL bazında kalır.
+- Yahoo'nun hatalı BIST mumları (günlük %10,5 marjını aşan sıçrama, donmuş
+  fiyat - bkz. yf_data_quality.py) olan hisseler genişlik ölçülerinden çıkarılır.
+- Put/call oranı yok.
+
 Bileşik skor bu beşinin ortalamasıdır. Hepsi geçmiş fiyatlardan her gün için
 yeniden hesaplanabildiği için grafikteki geçmiş de aynı formülle üretilir (ilk
 çalıştırmadan itibaren dolu). Opsiyon put/call oranı (QQQ / SPY) yalnızca o günün
@@ -22,7 +32,7 @@ Sonuç `market_sentiment_cache` kaydına (storage, ortak) yazılır; arayüz Gir
 Sayfası'nda buradan okur (bkz. market_sentiment_ui.py).
 
 Kullanım (Droplet'te yatirim-market-sentiment.timer hafta içi kapanıştan sonra çağırır):
-    python market_sentiment.py                 # iki piyasa
+    python market_sentiment.py                 # tüm piyasalar
     python market_sentiment.py --market nyse
 """
 
@@ -40,18 +50,30 @@ STORAGE_NAME = "market_sentiment_cache"
 HISTORY_DAYS = 180         # kaydedilen bileşik skor geçmişi (işlem günü)
 PERCENTILE_WINDOW = 252    # yüzdelik sıranın hesaplandığı pencere (~1 yıl)
 DOWNLOAD_PERIOD = "3y"     # 125 günlük ortalama + 252 günlük pencere + geçmiş için yeterli
-MARKET_PAUSE_S = 20        # iki piyasa arasında Yahoo'ya nefes aldırmak için
+MARKET_PAUSE_S = 20        # piyasalar arasında Yahoo'ya nefes aldırmak için
 
-SAFE_HAVEN = "TLT"
+REALIZED_VOL_WINDOW = 20  # oynaklık endeksi olmayan piyasada gerçekleşen oynaklık penceresi
+# Yeni zirve/dip (252) + 50 günlük ortalama penceresi: bu kadar son barda hatalı mum
+# olan hisse bugünkü genişlik ölçülerini bozar, çıkarılır.
+QUALITY_LOOKBACK = 300
 
+# volatility None ise endeksin gerçekleşen oynaklığı kullanılır; usd_fx verilirse
+# momentum ve yeni zirve/dip o kura bölünerek (dolar bazında) hesaplanır.
 MARKETS = {
     "nasdaq100": {
         "market": "NASDAQ 100", "index": "^NDX", "index_label": "Nasdaq-100",
         "volatility": "^VXN", "volatility_label": "VXN", "options": "QQQ",
+        "safe_haven": "TLT", "safe_haven_label": "TLT", "usd_fx": None,
     },
     "nyse": {
         "market": "NYSE", "index": "^NYA", "index_label": "NYSE Composite",
         "volatility": "^VIX", "volatility_label": "VIX", "options": "SPY",
+        "safe_haven": "TLT", "safe_haven_label": "TLT", "usd_fx": None,
+    },
+    "bist100": {
+        "market": "BIST 100", "index": "XU100.IS", "index_label": "BIST 100",
+        "volatility": None, "volatility_label": "XU100 20 günlük oynaklık", "options": None,
+        "safe_haven": "TRY=X", "safe_haven_label": "USD/TRY", "usd_fx": "TRY=X",
     },
 }
 
@@ -120,20 +142,34 @@ def highs_lows_score(closes: pd.DataFrame, window: int = 252, smooth: int = 5) -
     return score.where(total > 0, 50.0).where(has_data)
 
 
-def compute_components(index_close: pd.Series, vol_close: pd.Series, haven_close: pd.Series,
-                       closes: pd.DataFrame) -> pd.DataFrame:
+def realized_volatility(close: pd.Series, window: int = REALIZED_VOL_WINDOW) -> pd.Series:
+    """Günlük getirilerin `window` günlük standart sapması, yıllıklandırılmış (%)."""
+    return close.pct_change().rolling(window, min_periods=window).std() * np.sqrt(252) * 100
+
+
+def compute_components(index_close: pd.Series, vol_close, haven_close: pd.Series,
+                       closes: pd.DataFrame, usd_fx=None) -> pd.DataFrame:
     """Bileşenlerin günlük serileri (0-100) ve ham değerleri. Satırlar endeksin
     işlem günleri; diğer seriler bu günlere hizalanır (eksik gün en fazla 3 gün
-    ileri taşınır - tatil farkları için)."""
+    ileri taşınır - tatil farkları için).
+
+    vol_close None ise oynaklık endeksin gerçekleşen oynaklığından hesaplanır.
+    usd_fx (yerel para / USD kuru) verilirse momentum ve yeni zirve/dip dolar
+    bazında hesaplanır."""
     idx = index_close.dropna()
     dates = idx.index
-    vol = vol_close.reindex(dates).ffill(limit=3)
+    vol = realized_volatility(idx) if vol_close is None else vol_close.reindex(dates).ffill(limit=3)
     haven = haven_close.reindex(dates).ffill(limit=3)
     closes = closes.reindex(dates).ffill(limit=3)
+    if usd_fx is not None:
+        fx = usd_fx.reindex(dates).ffill(limit=3)
+        trend_idx, trend_closes = idx / fx, closes.div(fx, axis=0)
+    else:
+        trend_idx, trend_closes = idx, closes
 
     out = pd.DataFrame(index=dates)
-    sma125 = idx.rolling(125, min_periods=125).mean()
-    out["momentum_raw"] = (idx / sma125 - 1) * 100
+    sma125 = trend_idx.rolling(125, min_periods=125).mean()
+    out["momentum_raw"] = (trend_idx / sma125 - 1) * 100
     out["momentum"] = rolling_percentile(out["momentum_raw"])
 
     vol_sma50 = vol.rolling(50, min_periods=50).mean()
@@ -143,7 +179,7 @@ def compute_components(index_close: pd.Series, vol_close: pd.Series, haven_close
 
     out["breadth"] = pct_above_sma(closes, 50)
     out["breadth200"] = pct_above_sma(closes, 200)
-    out["highs_lows"] = highs_lows_score(closes)
+    out["highs_lows"] = highs_lows_score(trend_closes)
 
     out["safe_haven_raw"] = (idx.pct_change(20) - haven.pct_change(20)) * 100
     out["safe_haven"] = rolling_percentile(out["safe_haven_raw"])
@@ -185,15 +221,17 @@ def build_snapshot(market_cfg: dict, comp: pd.DataFrame, universe_size: int, put
     week_ago = _round(valid["score"].iloc[-6]) if len(valid) > 5 else None
 
     vol_label = market_cfg["volatility_label"]
+    usd = " (dolar bazında)" if market_cfg.get("usd_fx") else ""
     details = {
-        "momentum": f"{market_cfg['index_label']} 125 günlük ortalamanın %{_round(last['momentum_raw'], 2)} "
+        "momentum": f"{market_cfg['index_label']}{usd} 125 günlük ortalamanın %{abs(_round(last['momentum_raw'], 2) or 0)} "
                     f"{'üstünde' if (last['momentum_raw'] or 0) >= 0 else 'altında'}",
         "volatility": f"{vol_label} {_round(last['volatility_raw'], 2)} "
                       f"(50 günlük ortalamaya göre %{_round(last['volatility_vs_avg'], 1)})",
         "breadth": f"Hisselerin %{_round(last['breadth'])}'i 50 günlük, "
                    f"%{_round(last['breadth200'])}'i 200 günlük ortalamanın üstünde",
-        "highs_lows": "Son 5 günde 52 haftalık zirve yapanların, zirve + dip yapanlara oranı",
-        "safe_haven": f"Endeks 20 günlük getirisi - TLT 20 günlük getirisi: %{_round(last['safe_haven_raw'], 2)}",
+        "highs_lows": f"Son 5 günde 52 haftalık zirve yapanların, zirve + dip yapanlara oranı{usd}",
+        "safe_haven": f"Endeks 20 günlük getirisi - {market_cfg['safe_haven_label']} 20 günlük getirisi: "
+                      f"%{_round(last['safe_haven_raw'], 2)}",
     }
     components = {
         key: {"label": COMPONENTS[key], "score": _round(last[key]), "detail": details[key]}
@@ -217,7 +255,7 @@ def build_snapshot(market_cfg: dict, comp: pd.DataFrame, universe_size: int, put
         "universe_size": universe_size,
         "sources": {
             "index": market_cfg["index"], "volatility": market_cfg["volatility"],
-            "safe_haven": SAFE_HAVEN, "options": market_cfg["options"],
+            "safe_haven": market_cfg["safe_haven"], "options": market_cfg["options"],
         },
         "history": history,
     }
@@ -288,28 +326,54 @@ def fetch_put_call(symbol: str, expirations: int = 3):
         return None
 
 
+def drop_bad_bist_data(closes: pd.DataFrame, lookback: int = QUALITY_LOOKBACK) -> tuple:
+    """Son `lookback` barda Yahoo'nun hatalı mumu (günlük marjı aşan sıçrama ya da
+    donmuş fiyat - bkz. yf_data_quality) görülen BIST hisselerini çıkarır.
+    (temiz kapanışlar, çıkarılanlar) döner; .IS olmayan sütunlara dokunmaz."""
+    import yf_data_quality as q
+
+    dropped = []
+    for col in closes.columns:
+        recent = closes[col].dropna().tail(lookback)
+        if q.has_implausible_daily_move(recent, col) or (
+                col.upper().endswith(".IS") and q.has_flat_prices(recent.tail(20))):
+            dropped.append(col)
+    return closes.drop(columns=dropped), dropped
+
+
 def compute_market(slug: str, downloader=download_closes, put_call_fetcher=fetch_put_call,
                    universe=None) -> dict:
     cfg = MARKETS[slug]
     tickers = universe if universe is not None else market_universe(cfg["market"])
-    specials = [cfg["index"], cfg["volatility"], SAFE_HAVEN]
+    specials = [s for s in (cfg["index"], cfg["volatility"], cfg["safe_haven"], cfg["usd_fx"]) if s]
+    specials = list(dict.fromkeys(specials))
     log(f"{cfg['market']}: {len(tickers)} hisse + {', '.join(specials)} indiriliyor")
     closes = downloader(list(dict.fromkeys(specials + list(tickers))))
     if cfg["index"] not in closes or closes[cfg["index"]].dropna().empty:
         raise RuntimeError(f"{cfg['index']} verisi gelmedi")
+    if cfg["usd_fx"] and (cfg["usd_fx"] not in closes or closes[cfg["usd_fx"]].dropna().empty):
+        raise RuntimeError(f"{cfg['usd_fx']} verisi gelmedi (dolar bazı hesaplanamaz)")
     stock_cols = [t for t in tickers if t in closes.columns and t not in specials]
     missing = len(tickers) - len(stock_cols)
     if missing:
         log(f"{cfg['market']}: {missing} hisse için veri gelmedi")
+    stocks, dropped = drop_bad_bist_data(closes[stock_cols])
+    if dropped:
+        log(f"{cfg['market']}: hatalı Yahoo verisi nedeniyle çıkarılan {len(dropped)} hisse: {', '.join(dropped)}")
     empty = pd.Series(dtype=float)
+
+    def col(symbol):
+        return closes[symbol] if symbol in closes else empty
+
     comp = compute_components(
         closes[cfg["index"]],
-        closes[cfg["volatility"]] if cfg["volatility"] in closes else empty,
-        closes[SAFE_HAVEN] if SAFE_HAVEN in closes else empty,
-        closes[stock_cols],
+        col(cfg["volatility"]) if cfg["volatility"] else None,
+        col(cfg["safe_haven"]),
+        stocks,
+        usd_fx=closes[cfg["usd_fx"]] if cfg["usd_fx"] else None,
     )
-    put_call = put_call_fetcher(cfg["options"]) if put_call_fetcher else None
-    return build_snapshot(cfg, comp, len(stock_cols), put_call)
+    put_call = put_call_fetcher(cfg["options"]) if (put_call_fetcher and cfg["options"]) else None
+    return build_snapshot(cfg, comp, stocks.shape[1], put_call)
 
 
 # ------------------------------------------------------------------------------

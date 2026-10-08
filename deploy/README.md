@@ -114,17 +114,23 @@ onu durdurmaz.
 ## Piyasa Duyarlılığı servisi
 
 `market-sentiment` işi `market_sentiment.py`'yi hafta içi 16:40 ET'de (ABD kapanışından
-sonra) çalıştırır ve NASDAQ 100 ile NYSE için 0-100 arası bir Korku/Açgözlülük skoru
-hesaplar. Veri Yahoo Finance'ten tek istekte çekilir (günlük kapanışlar, ~3 yıl):
+sonra) çalıştırır ve NASDAQ 100, NYSE ve BIST 100 için 0-100 arası bir Korku/Açgözlülük
+skoru hesaplar (BIST o saatte, 23:40 TRT, çoktan kapanmıştır). Veri Yahoo Finance'ten piyasa
+başına tek istekte çekilir (günlük kapanışlar, ~3 yıl):
 
-| Bileşen | NASDAQ 100 | NYSE |
-|---|---|---|
-| Momentum (endeks / 125 günlük ortalama) | `^NDX` | `^NYA` |
-| Oynaklık (endeks / 50 günlük ortalaması, ters) | `^VXN` | `^VIX` |
-| Genişlik (% hisse > 50 günlük ortalama) | NASDAQ 100 listesi | NYSE listesi |
-| Yeni zirve / dip (52 hafta, son 5 gün) | NASDAQ 100 listesi | NYSE listesi |
-| Güvenli liman (endeks − TLT, 20 gün) | `^NDX`, `TLT` | `^NYA`, `TLT` |
-| Put/call oranı (bilgi, skora katılmaz) | `QQQ` | `SPY` |
+| Bileşen | NASDAQ 100 | NYSE | BIST 100 |
+|---|---|---|---|
+| Momentum (endeks / 125 günlük ortalama) | `^NDX` | `^NYA` | `XU100.IS`, dolar bazında |
+| Oynaklık (50 günlük ortalamasına göre, ters) | `^VXN` | `^VIX` | XU100 20 günlük gerçekleşen oynaklık |
+| Genişlik (% hisse > 50 günlük ortalama) | NASDAQ 100 listesi | NYSE listesi | BIST 100 listesi (TL) |
+| Yeni zirve / dip (52 hafta, son 5 gün) | NASDAQ 100 listesi | NYSE listesi | BIST 100 listesi, dolar bazında |
+| Güvenli liman (endeks − güvenli liman, 20 gün) | `TLT` | `TLT` | `TRY=X` (USD/TRY) |
+| Put/call oranı (bilgi, skora katılmaz) | `QQQ` | `SPY` | — (VİOP verisi Yahoo'da yok) |
+
+BIST'te dolar bazı (fiyat / USDTRY), TL enflasyonunun momentum ve zirve ölçülerini yapısal
+olarak açgözlülüğe kaydırmaması için. Son 300 barında hatalı Yahoo mumu (%10,5'i aşan
+günlük sıçrama, donmuş fiyat; bkz. `yf_data_quality.py`) olan BIST hisseleri genişlik
+ölçülerinden çıkarılır ve logda listelenir.
 
 Listeler tüm kullanıcıların ilgili piyasa listelerinin birleşimidir. Sonuç storage'daki
 `market_sentiment_cache` kaydına yazılır, **Giriş Sayfası** buradan gösterir. Kayıt yoksa

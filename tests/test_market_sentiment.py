@@ -68,6 +68,71 @@ class ComponentTests(unittest.TestCase):
         self.assertEqual(ms.label_for(None)[0], "Veri yok")
 
 
+class BistTests(unittest.TestCase):
+    def test_realized_volatility_annualized(self):
+        dates = pd.bdate_range("2024-01-01", periods=30)
+        flat = pd.Series(100.0, index=dates)
+        self.assertEqual(ms.realized_volatility(flat).iloc[-1], 0)
+        alt = pd.Series([100, 101] * 15, index=dates, dtype=float)
+        self.assertGreater(ms.realized_volatility(alt).iloc[-1], 10)
+
+    def test_usd_base_removes_inflation_drift(self):
+        # TL'de her gün %0,2 artan ama dolar bazında yatay bir piyasa: TL bazında
+        # momentum hep yüksek, dolar bazında nötr civarı olmalı.
+        n = 600
+        dates = pd.bdate_range("2023-01-02", periods=n)
+        rng = np.random.default_rng(5)
+        fx = pd.Series(20 * np.exp(np.arange(n) * 0.002), index=dates)
+        usd_index = 100 * np.exp(np.cumsum(rng.normal(0, 0.01, n)))
+        idx = pd.Series(usd_index, index=dates) * fx
+        stocks = pd.DataFrame({f"S{i}.IS": idx * (1 + 0.01 * i) for i in range(5)})
+        tl = ms.compute_components(idx, None, fx, stocks)
+        usd = ms.compute_components(idx, None, fx, stocks, usd_fx=fx)
+        self.assertGreater(tl["momentum_raw"].iloc[-1], usd["momentum_raw"].iloc[-1])
+        self.assertAlmostEqual(usd["momentum_raw"].iloc[-1],
+                               ((usd_index[-1] / pd.Series(usd_index).tail(125).mean()) - 1) * 100, places=6)
+        self.assertTrue(usd["volatility"].notna().any())   # gerçekleşen oynaklıktan
+
+    def test_drop_bad_bist_data(self):
+        dates = pd.bdate_range("2024-01-01", periods=40)
+        good = pd.Series(np.linspace(10, 12, 40), index=dates)
+        jump = good.copy(); jump.iloc[30] = jump.iloc[29] * 1.3      # %30 sıçrama: hatalı mum
+        frozen = pd.Series(np.r_[np.linspace(10, 12, 20), [12.0] * 20], index=dates)
+        us = good.copy(); us.iloc[30] *= 1.3                          # ABD hissesine marj uygulanmaz
+        closes = pd.DataFrame({"GOOD.IS": good, "JUMP.IS": jump, "FROZEN.IS": frozen, "AAPL": us})
+        clean, dropped = ms.drop_bad_bist_data(closes)
+        self.assertEqual(sorted(dropped), ["FROZEN.IS", "JUMP.IS"])
+        self.assertEqual(list(clean.columns), ["GOOD.IS", "AAPL"])
+
+    def test_compute_bist_market(self):
+        base = make_closes(trend=0.003, seed=7)
+        closes = pd.DataFrame({
+            "XU100.IS": base["^NDX"], "TRY=X": 20 * np.exp(np.arange(len(base)) * 0.001),
+            **{f"S{i}.IS": base[f"S{i}"] for i in range(20)},
+        }, index=base.index)
+        requested = []
+        def downloader(tickers):
+            requested.extend(tickers)
+            return closes
+        snap = ms.compute_market("bist100", downloader=downloader,
+                                 universe=[f"S{i}.IS" for i in range(20)],
+                                 put_call_fetcher=lambda s: self.fail("BIST'te put/call çekilmemeli"))
+        self.assertEqual(snap["market"], "BIST 100")
+        self.assertIsNone(snap["put_call"])
+        self.assertIn("XU100.IS", requested)
+        self.assertIn("TRY=X", requested)
+        self.assertNotIn(None, requested)
+        self.assertIn("dolar bazında", snap["components"]["momentum"]["detail"])
+        self.assertIn("USD/TRY", snap["components"]["safe_haven"]["detail"])
+        self.assertIsNotNone(snap["components"]["volatility"]["score"])
+
+    def test_bist_requires_fx(self):
+        base = make_closes()
+        closes = pd.DataFrame({"XU100.IS": base["^NDX"], "S0.IS": base["S0"]})
+        with self.assertRaises(RuntimeError):
+            ms.compute_market("bist100", downloader=lambda t: closes, universe=["S0.IS"], put_call_fetcher=None)
+
+
 class ServiceTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
