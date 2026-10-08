@@ -10,6 +10,8 @@
 #   sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh run        # yalnızca şimdi hesapla
 #   sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh status     # timer + kayıtlı skorlar
 #   sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh disable    # timer'ı kapat
+#   sudo bash /opt/yatirim/app/deploy/enable_sentiment.sh backfill   # arşive 2 yıllık geçmişi doldur
+#                                                                    # (YEARS=3 ile 3 yıl; birkaç dk)
 #
 # Yaptıkları (kur):
 #   1. Arayüz kopyasını hemen main ile eşitler, kodun güncel olduğunu doğrular.
@@ -39,7 +41,7 @@ ACTION=install
 RUN=1
 for arg in "$@"; do
   case "$arg" in
-    status|disable|run) ACTION="$arg" ;;
+    status|disable|run|backfill) ACTION="$arg" ;;
     --no-run) RUN=0 ;;
     -h|--help) sed -n '2,22p' "$0"; exit 0 ;;
     *) die "bilinmeyen seçenek: $arg (bkz. $0 --help)" ;;
@@ -74,6 +76,9 @@ if sec.get("sectors"):
 else:
     print("\nSektör ETF'leri henüz hesaplanmadı")
 PY
+  echo
+  echo "Günlük arşiv (market_archive.py):"
+  as_job python market_archive.py status || echo "(arşiv okunamadı)"
 }
 
 run_now() {
@@ -95,6 +100,13 @@ case "$ACTION" in
   run)
     run_now
     exit $?
+    ;;
+  backfill)
+    log "Arşiv geçmişi dolduruluyor (${YEARS:-2} yıl, Yahoo Finance)"
+    as_job python market_archive.py backfill --years "${YEARS:-2}"
+    echo
+    as_job python market_archive.py status
+    exit 0
     ;;
   disable)
     log "Timer kapatılıyor"
@@ -141,6 +153,7 @@ cat <<EOF
 Piyasa Duyarlılığı servisi açık (hafta içi 16:40 ET; NASDAQ 100, NYSE, BIST 100 + ABD sektör ETF'leri).
   Durum:          sudo bash $SRC/enable_sentiment.sh status
   Şimdi hesapla:  sudo bash $SRC/enable_sentiment.sh run
+  Arşiv geçmişi:  sudo bash $SRC/enable_sentiment.sh backfill   (bir kez; 2 yıl)
   Loglar:         journalctl -u yatirim-job@market-sentiment --since today
   Kapatmak:       sudo bash $SRC/enable_sentiment.sh disable
 EOF

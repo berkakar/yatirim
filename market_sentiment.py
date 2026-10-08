@@ -36,6 +36,10 @@ kapanışı, günlük ve son bir haftalık (5 işlem günü) değişimi ve hafta
 değişimin S&P 500'e (SPY) göre farkı da hesaplanıp `market_sector_etfs`
 kaydına yazılır (duyarlılık skoruna katılmaz).
 
+Her çalıştırma ayrıca günlük arşive (market_archive.py: sentiment_daily ve
+sector_etf_daily tabloları) o günün satırını yazar ve eksik geçmiş günleri
+doldurur; 2 yıllık geçmiş için: python market_archive.py backfill.
+
 Kullanım (Droplet'te yatirim-market-sentiment.timer hafta içi kapanıştan sonra çağırır):
     python market_sentiment.py                 # tüm piyasalar
     python market_sentiment.py --market nyse   # yalnızca NYSE (sektörler hariç)
@@ -50,9 +54,13 @@ from datetime import datetime, timezone
 import numpy as np
 import pandas as pd
 
+import market_archive
 import storage
 
 STORAGE_NAME = "market_sentiment_cache"
+# Skor / bileşen ya da sektör getirisi hesabı değiştiğinde artırın: arşivdeki
+# satırlar formula_version ile etiketlenir (bkz. market_archive.py).
+FORMULA_VERSION = 1
 HISTORY_DAYS = 180         # kaydedilen bileşik skor geçmişi (işlem günü)
 PERCENTILE_WINDOW = 252    # yüzdelik sıranın hesaplandığı pencere (~1 yıl)
 DOWNLOAD_PERIOD = "3y"     # 125 günlük ortalama + 252 günlük pencere + geçmiş için yeterli
@@ -193,6 +201,7 @@ def compute_components(index_close: pd.Series, vol_close, haven_close: pd.Series
         trend_idx, trend_closes = idx, closes
 
     out = pd.DataFrame(index=dates)
+    out["index_close"] = idx
     sma125 = trend_idx.rolling(125, min_periods=125).mean()
     out["momentum_raw"] = (trend_idx / sma125 - 1) * 100
     out["momentum"] = rolling_percentile(out["momentum_raw"])
@@ -407,7 +416,18 @@ def drop_bad_bist_data(closes: pd.DataFrame, lookback: int = QUALITY_LOOKBACK) -
 
 
 def compute_market(slug: str, downloader=download_closes, put_call_fetcher=fetch_put_call,
-                   universe=None) -> dict:
+                   universe=None, with_series=False):
+    """Piyasanın snapshot'ı; with_series=True ise (snapshot, bileşen serileri,
+    put/call) - arşive yazmak için."""
+    comp, universe_size = compute_market_series(slug, downloader, universe)
+    cfg = MARKETS[slug]
+    put_call = put_call_fetcher(cfg["options"]) if (put_call_fetcher and cfg["options"]) else None
+    snapshot = build_snapshot(cfg, comp, universe_size, put_call)
+    return (snapshot, comp, put_call) if with_series else snapshot
+
+
+def compute_market_series(slug: str, downloader=download_closes, universe=None) -> tuple:
+    """(bileşen serileri, evrendeki hisse sayısı) - snapshot'sız; backfill de kullanır."""
     cfg = MARKETS[slug]
     tickers = universe if universe is not None else market_universe(cfg["market"])
     specials = [s for s in (cfg["index"], cfg["volatility"], cfg["safe_haven"], cfg["usd_fx"]) if s]
@@ -437,8 +457,7 @@ def compute_market(slug: str, downloader=download_closes, put_call_fetcher=fetch
         stocks,
         usd_fx=closes[cfg["usd_fx"]] if cfg["usd_fx"] else None,
     )
-    put_call = put_call_fetcher(cfg["options"]) if (put_call_fetcher and cfg["options"]) else None
-    return build_snapshot(cfg, comp, stocks.shape[1], put_call)
+    return comp, stocks.shape[1]
 
 
 # ------------------------------------------------------------------------------
@@ -454,14 +473,16 @@ def save_snapshot(snapshot: dict) -> None:
     storage.update(STORAGE_NAME, storage.SHARED, merge, {})
 
 
-def compute_sectors(downloader=None) -> dict:
+def download_sector_closes(downloader=None, period=SECTOR_DOWNLOAD_PERIOD) -> pd.DataFrame:
     symbols = list(SECTOR_ETFS) + [SECTOR_BENCHMARK]
-    log(f"Sektör ETF'leri: {', '.join(symbols)} indiriliyor")
-    if downloader is None:
-        closes = download_closes(symbols, period=SECTOR_DOWNLOAD_PERIOD)
-    else:
-        closes = downloader(symbols)
-    return build_sector_snapshot(closes)
+    log(f"Sektör ETF'leri: {', '.join(symbols)} indiriliyor ({period})")
+    return download_closes(symbols, period=period) if downloader is None else downloader(symbols)
+
+
+def compute_sectors(downloader=None, with_closes=False):
+    closes = download_sector_closes(downloader)
+    snap = build_sector_snapshot(closes)
+    return (snap, closes) if with_closes else snap
 
 
 def save_sectors(snapshot: dict) -> None:
@@ -477,8 +498,10 @@ def load_sectors() -> dict:
 def run_sectors(downloader=None) -> int:
     """Sektör ETF'lerini hesaplayıp kaydeder; hata olursa eski kayıt kalır, 1 döner."""
     try:
-        snap = compute_sectors(downloader)
+        snap, closes = compute_sectors(downloader, with_closes=True)
         save_sectors(snap)
+        _archive("sektör ETF'leri", lambda: market_archive.record_sectors(
+            market_archive.sector_frame(closes, SECTOR_ETFS, SECTOR_BENCHMARK), FORMULA_VERSION))
         best, worst = snap["sectors"][0], snap["sectors"][-1]
         log(f"Sektörler ({snap['as_of']}): en iyi {best['symbol']} {best['week_pct']}%, "
             f"en zayıf {worst['symbol']} {worst['week_pct']}% (1 hafta)")
@@ -494,6 +517,51 @@ def load_all() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _archive(what: str, fn) -> None:
+    """Arşiv yazımı ekrandaki kaydı engellemez: hata olursa loglanır, arayüz
+    kaydı zaten yazılmıştır; eksik gün bir sonraki çalıştırmada backfill ile dolar."""
+    try:
+        counts = fn()
+        log(f"Arşiv ({what}): {counts['live']} canlı, {counts['backfill']} eksik gün eklendi")
+    except Exception as e:
+        log(f"UYARI arşiv ({what}) yazılamadı: {e}")
+
+
+def backfill(slugs, years: int = 2, sectors: bool = True, rebuild: bool = False,
+             downloader=None, pause_s=MARKET_PAUSE_S, sleep=time.sleep, universe=None) -> int:
+    """Son `years` yılın günlük satırlarını arşive tek indirmeyle yazar
+    (piyasa başına bir Yahoo isteği). Yüzdelik pencere ve 125 günlük ortalama
+    için `years + 2` yıllık fiyat indirilir. Başarısız iş sayısını döner."""
+    since = (pd.Timestamp.today().normalize() - pd.DateOffset(years=years)).strftime("%Y-%m-%d")
+    period = f"{years + 2}y"
+    dl = downloader or (lambda tickers: download_closes(tickers, period=period))
+    failures = 0
+    for i, slug in enumerate(slugs):
+        if i and pause_s:
+            sleep(pause_s)
+        market = MARKETS[slug]["market"]
+        try:
+            comp, size = compute_market_series(slug, dl, universe)
+            n = market_archive.backfill_sentiment(market, comp, size, FORMULA_VERSION, since=since, rebuild=rebuild)
+            log(f"Backfill {market}: {n} gün yazıldı ({since} sonrası)")
+        except Exception as e:
+            failures += 1
+            log(f"HATA backfill {market}: {e}")
+    if sectors:
+        if slugs and pause_s:
+            sleep(pause_s)
+        try:
+            # 21 günlük getiri için birkaç ay fazladan.
+            closes = download_sector_closes(downloader, period=f"{years + 1}y")
+            frame = market_archive.sector_frame(closes, SECTOR_ETFS, SECTOR_BENCHMARK)
+            n = market_archive.backfill_sectors(frame, FORMULA_VERSION, since=since, rebuild=rebuild)
+            log(f"Backfill sektör ETF'leri: {n} satır yazıldı ({since} sonrası)")
+        except Exception as e:
+            failures += 1
+            log(f"HATA backfill sektör ETF'leri: {e}")
+    return failures
+
+
 def run(slugs, pause_s=MARKET_PAUSE_S, sleep=time.sleep, **kwargs) -> int:
     """Seçilen piyasaları sırayla hesaplayıp kaydeder. Başarısız piyasa sayısını
     döner (biri hata verirse diğeri yine çalışır, eski kaydı silinmez)."""
@@ -502,9 +570,11 @@ def run(slugs, pause_s=MARKET_PAUSE_S, sleep=time.sleep, **kwargs) -> int:
         if i and pause_s:
             sleep(pause_s)
         try:
-            snapshot = compute_market(slug, **kwargs)
+            snapshot, comp, put_call = compute_market(slug, with_series=True, **kwargs)
             save_snapshot(snapshot)
             log(f"{snapshot['market']}: {snapshot['score']} ({snapshot['label']}) - {snapshot['as_of']}")
+            _archive(snapshot["market"], lambda: market_archive.record_sentiment(
+                snapshot["market"], comp, snapshot.get("universe_size"), put_call, FORMULA_VERSION))
         except Exception as e:
             failures += 1
             log(f"HATA {MARKETS[slug]['market']}: {e}")
