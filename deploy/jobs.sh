@@ -116,6 +116,14 @@ job_define() {
       JOB_CMDS=("python market_sentiment.py")
       JOB_TIMEOUT=900
       ;;
+    ai-dataset)
+      # Yapay Zeka Analiz Modülü: kayıtlı eğitim veri setlerine (ai_dataset_daily) son
+      # kayıtlı günden sonraki işlem günlerini ekler (ai_dataset.py update --all). Piyasa
+      # duyarlılığı arşivi (16:40 ET) ve NASDAQ 100 değerleme skoru (17:15 ET) yazıldıktan
+      # sonra çalışır; SQLite'a yazar, commit'lenecek dosya yok.
+      JOB_CMDS=("python ai_dataset.py update --all")
+      JOB_TIMEOUT=1800
+      ;;
     *)
       return 1
       ;;
@@ -138,4 +146,5 @@ ALL_JOBS=(
   valuation-nyse
   valuation-russell2000
   market-sentiment
+  ai-dataset
 )

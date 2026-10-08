@@ -240,5 +240,53 @@ class DatasetTests(unittest.TestCase):
         self.assertIsNone(ad.load_valuation("MSFT"))
 
 
+class ScheduledUpdateTests(unittest.TestCase):
+    """deploy/jobs.sh `ai-dataset` işi: ai_dataset.py update --all -> run_updates."""
+
+    setUp = DatasetTests.setUp
+    tearDown = DatasetTests.tearDown
+
+    def _saved(self, ticker, vwap_source):
+        df = pd.DataFrame({"close": [1.0]}, index=pd.to_datetime(["2026-10-07"]))
+        meta = {"ticker": ticker, "start": "2026-10-07", "end": "2026-10-07", "columns": ["close"]}
+        ad.save_dataset(df, meta, {"fetch_years": 3, "keep_years": 2, "vwap_source": vwap_source})
+
+    def test_no_datasets_is_success(self):
+        self.assertEqual(ad.run_updates(sleep=lambda s: None), 0)
+
+    def test_updates_all_with_alpaca_only_where_used_and_reports_failures(self):
+        self._saved("AAPL", "alpaca")
+        self._saved("MSFT", "typical_price")
+        self._saved("NVDA", "alpaca")
+        calls, pauses, factory_calls = [], [], []
+        alpaca = object()
+
+        def updater(ticker, vwap_fetcher=None):
+            calls.append((ticker, vwap_fetcher))
+            if ticker == "MSFT":
+                raise RuntimeError("Yahoo yok")
+            return 1, {"end": "2026-10-08", "warnings": []}
+
+        rc = ad.run_updates(sleep=pauses.append, updater=updater,
+                            vwap_fetcher_factory=lambda: factory_calls.append(1) or alpaca)
+        self.assertEqual(rc, 1)                                   # MSFT hata -> iş başarısız (Telegram)
+        self.assertEqual(calls, [("AAPL", alpaca), ("MSFT", None), ("NVDA", alpaca)])
+        self.assertEqual(factory_calls, [1])                      # Alpaca istemcisi bir kez kurulur
+        self.assertEqual(pauses, [ad.UPDATE_PAUSE_S] * 2)
+
+    def test_cli_update_all_runs_scheduled_update(self):
+        with mock.patch.object(ad, "run_updates", return_value=0) as run:
+            self.assertEqual(ad.main(["update", "--all"]), 0)
+            run.assert_called_once_with(None)
+            ad.main(["update", "--ticker", "aapl"])
+            run.assert_called_with(["aapl"])
+
+    def test_env_vwap_fetcher_needs_keys(self):
+        with mock.patch.dict(os.environ, {"APCA_API_KEY_ID": "", "APCA_API_SECRET_KEY": ""}):
+            self.assertIsNone(ad.env_vwap_fetcher())
+        with mock.patch.dict(os.environ, {"APCA_API_KEY_ID": "k", "APCA_API_SECRET_KEY": "s"}):
+            self.assertTrue(callable(ad.env_vwap_fetcher()))
+
+
 if __name__ == "__main__":
     unittest.main()
