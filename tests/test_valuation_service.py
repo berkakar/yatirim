@@ -354,8 +354,9 @@ class SmallSectorAndMissingDataTest(unittest.TestCase):
         self.assertEqual(rows["S1"]["Alt Sektör İskontosu %"], 1.0)   # gerçek iskonto %81.8 değil
         self.assertEqual(rows["S2"]["Alt Sektör İskontosu %"], 1.0)
         self.assertIsNone(rows["NOPE"]["Alt Sektör İskontosu %"])
-        # Fark: iskonto 1 -> 5p / Y -> 0p, ve F/K yokken PEG de hesaplanmaz (10p).
-        self.assertEqual(rows["S1"]["Nihai Skor"] - rows["NOPE"]["Nihai Skor"], 15)
+        # Fark: iskonto 1 -> 5p / Y -> 0p (PEG 2026-10-08'den beri puanlanmıyor).
+        import valuation_rules
+        self.assertEqual(valuation_rules.raw_points(rows["S1"]) - valuation_rules.raw_points(rows["NOPE"]), 5)
         self.assertIsNone(rows["NOPE"]["PEG"])
         # Eksik F/K medyana katılmadı: Big medyanı 20.
         self.assertEqual(rows["A"]["Alt Sektör Ort. F/K"], 20.0)
@@ -507,3 +508,30 @@ class DailyHistoryTest(ValuationServiceTestCase):
         hist = valuation_db.get_daily_history("NASDAQ 100", "AAPL")
         self.assertEqual([(h["date"], h["score"], h["source"]) for h in hist],
                          [("2026-10-05", 40, valuation_db.SOURCE_SEED)])
+
+
+class ScoreRulesTest(ValuationServiceTestCase):
+    def test_peg_not_scored_and_scaled_to_100(self):
+        import valuation_rules
+        base = {"Alt Sektör İskontosu %": 40, "EPS Büyümesi %": 20}
+        self.assertEqual(valuation_rules.score_row({**base, "PEG": 0.5}), valuation_rules.score_row(base))
+        self.assertEqual(valuation_rules.raw_points(base), 25)
+        self.assertEqual(valuation_rules.score_row(base), round(25 * 100 / 90))
+
+    def test_stored_scores_are_rescored_once(self):
+        import sqlite3
+        import valuation_db
+        import valuation_rules
+        scored = {"Hisse": "AAPL", "Nihai Skor": 99, "PEG": 0.5, "EPS Büyümesi %": 20.0}
+        valuation_db.upsert_rows([{"market": "NASDAQ 100", "ticker": "AAPL", "raw": make_raw("AAPL"),
+                                   "scored": scored, "fetched_at": "2026-10-05T21:00:00Z",
+                                   "scored_at": "2026-10-05T21:00:00Z"}])
+        conn = sqlite3.connect(storage.db_path())
+        conn.execute("UPDATE valuation_meta SET value = '1' WHERE key = 'score_version'")
+        conn.commit()
+        conn.close()
+        valuation_db._initialized_paths.clear()        # eski kurallarla kaydedilmiş veritabanı
+        expected = valuation_rules.score_row(scored)
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["score"], expected)
+        self.assertEqual(valuation_db.get_rows("NASDAQ 100")["AAPL"]["scored"]["Nihai Skor"], expected)
+        self.assertEqual(valuation_db.get_daily_history("NASDAQ 100", "AAPL")[0]["score"], expected)

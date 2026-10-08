@@ -18,8 +18,7 @@ SUB_SECTOR_FILE = "sub_sectors.json"
 
 # Alt sektörde (iş modelinde) bu kadar veya daha az hisse varsa sektör medyanı/iskontosu
 # anlamsız sayılır: hücrede "U" gösterilir, iskonto hesaba SMALL_SECTOR_DISCOUNT olarak girer.
-SMALL_SECTOR_MAX = 3
-SMALL_SECTOR_DISCOUNT = 1.0
+from valuation_rules import SMALL_SECTOR_DISCOUNT, SMALL_SECTOR_MAX, score_row  # noqa: F401 (dışarıya da sunulur)
 MARK_SMALL_SECTOR = "U"
 MARK_NO_DATA = "Y"
 # Değerleme analizine alınmayan Yahoo menkul türleri (quoteType). ETF'lerin bilanço/kârlılık
@@ -203,100 +202,6 @@ def _raw_from_info(ticker, info, sub_sectors_map=None):
     }
 
 
-def score_row(row) -> int:
-    """100 puanlık Ucuzluk Skoru - tek satır (dict ya da pandas satırı). Eksik
-    değer o kriterden puan almaz. Geçmiş günlerin yeniden hesabı da
-    (valuation_history.py) bu kuralları kullanır."""
-    score = 0
-    
-    # 1. Alt Sektör İskontosu (Ağırlık: 15 Puan)
-    disc = row.get('Alt Sektör İskontosu %')
-    if pd.notna(disc):
-        if disc >= 30: score += 15
-        elif 15 <= disc < 30: score += 10
-        elif 0 <= disc < 15: score += 5
-    
-    # 2. PEG Oranı (10 Puan)
-    peg = row.get('PEG')
-    if pd.notna(peg):
-        if peg <= 1.0: score += 10
-        elif 1.0 < peg <= 1.5: score += 5
-
-    # 3. EPS Büyümesi % (10 Puan)
-    eps_g = row.get('EPS Büyümesi %')
-    if pd.notna(eps_g):
-        if eps_g >= 10.0: score += 10
-        elif 5.0 <= eps_g < 10.0: score += 5
-
-    # 4. Gelir Büyümesi % (10 Puan)
-    rev_g = row.get('Gelir Büyümesi %')
-    if pd.notna(rev_g):
-        if rev_g >= 10.0: score += 10
-        elif 5.0 <= rev_g < 10.0: score += 5
-
-    # 5. Öz Sermaye Getirisi (ROE) % (10 Puan)
-    roe = row.get('Öz Sermaye Getirisi (ROE) %')
-    if pd.notna(roe):
-        if roe >= 10.0: score += 10
-        elif 5.0 <= roe < 10.0: score += 5
-
-    # 6. Net Kar Marjı % (8 Puan)
-    nm = row.get('Net Kar Marjı %')
-    if pd.notna(nm):
-        if nm >= 15.0: score += 8
-        elif 8.0 <= nm < 15.0: score += 4
-
-    # 7. Brüt Kar Marjı % (7 Puan)
-    gm = row.get('Brüt Kar Marjı %')
-    if pd.notna(gm):
-        if 30.0 <= gm <= 60.0: score += 7
-        elif gm > 60.0: score += 5
-
-    # 8. Faiz Karşılama Oranı (7 Puan)
-    ic = row.get('Faiz Karşılama Oranı')
-    if pd.notna(ic):
-        if ic >= 3.0: score += 7
-        elif 1.5 <= ic < 3.0: score += 3
-
-    # 9. Varlık Getirisi (ROA) % (6 Puan)
-    roa = row.get('Varlık Getirisi (ROA) %')
-    if pd.notna(roa):
-        if 5.0 <= roa <= 10.0 or roa > 10.0: score += 6
-        elif 2.0 <= roa < 5.0: score += 3
-
-    # 10. Borç / Özsermaye (5 Puan)
-    # Negatif oran, özsermayenin eksiye düştüğü (borcun varlıklardan fazla olduğu)
-    # anlamına gelir - bu ciddi bir risk sinyalidir, "düşük borç" olarak ödüllendirilmemeli.
-    de = row.get('Borç / Özsermaye')
-    if pd.notna(de):
-        if 0 <= de <= 0.5: score += 5
-        elif 0.5 < de <= 1.0: score += 3
-
-    # 11. Borç / Varlık % (4 Puan)
-    da = row.get('Borç / Varlık %')
-    if pd.notna(da):
-        if da <= 50.0: score += 4
-        elif 50.0 < da <= 70.0: score += 2
-
-    # 12. Cari Oran (3 Puan)
-    cr = row.get('Cari Oran')
-    if pd.notna(cr):
-        if 1.0 <= cr <= 2.0: score += 3
-        elif cr > 2.0: score += 2
-
-    # 13. Likidite Oranı (3 Puan)
-    qr = row.get('Likidite Oranı')
-    if pd.notna(qr):
-        if qr >= 1.0: score += 3
-
-    # 14. Varlık Devir Hızı (2 Puan)
-    at = row.get('Varlık Devir Hızı')
-    if pd.notna(at):
-        if 1.0 <= at <= 2.0: score += 2
-        elif at > 2.0: score += 1
-    return score
-
-
 def calculate_sector_relative_scores(raw_data_list):
     """
     İskontoyu GENEL SEKTÖR yerine MİKRO ALT SEKTÖR (İş Modeli) medyanına göre hesaplar.
@@ -347,7 +252,7 @@ def calculate_sector_relative_scores(raw_data_list):
         "Alt Sektör İskontosu %",       # 15 Puan
         "Alt Sektör Ort. F/K",
         "F/K",
-        "PEG",                         # 10 Puan
+        "PEG",                         # Bilgi (puan yok - 2026-10-08)
         "EPS Büyümesi %",              # 10 Puan
         "Gelir Büyümesi %",            # 10 Puan
         "Öz Sermaye Getirisi (ROE) %",  # 10 Puan

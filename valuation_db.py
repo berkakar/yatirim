@@ -102,6 +102,10 @@ CREATE TABLE IF NOT EXISTS valuation_scores_daily (
     PRIMARY KEY (market, ticker, date)
 );
 CREATE INDEX IF NOT EXISTS valuation_scores_daily_ticker ON valuation_scores_daily (ticker, date);
+CREATE TABLE IF NOT EXISTS valuation_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 _initialized_paths = set()
@@ -129,6 +133,7 @@ def _connect():
     if path not in _initialized_paths:
         with storage.connection() as conn:
             conn.executescript(_SCHEMA)
+            _rescore(conn)
             _seed_daily(conn)
         _initialized_paths.add(path)
     return storage.connection()
@@ -165,6 +170,31 @@ _DAILY_INSERT = f"INSERT INTO {DAILY_TABLE} ({', '.join(_DAILY_COLS)}) VALUES ({
 # Aynı gün tekrar skorlanırsa günün satırı son skorla güncellenir.
 _DAILY_UPSERT = (f"{_DAILY_INSERT} ON CONFLICT (market, ticker, date) DO UPDATE SET "
                  + ", ".join(f"{c} = excluded.{c}" for c in _DAILY_COLS[3:]))
+
+
+def _rescore(conn) -> None:
+    """Puanlama kuralları değiştiyse (valuation_rules.SCORE_VERSION) kayıtlı
+    skorları saklanan kriter değerlerinden bir kez yeniden hesaplar - hem anlık
+    tabloda hem günlük geçmişte. Ham veri (raw) değişmez."""
+    import valuation_rules
+
+    row = conn.execute("SELECT value FROM valuation_meta WHERE key = 'score_version'").fetchone()
+    if row and int(row[0]) >= valuation_rules.SCORE_VERSION:
+        return
+    with storage.write_transaction(conn):
+        for table, keys in (("valuation_scores", ("market", "ticker")),
+                            (DAILY_TABLE, ("market", "ticker", "date"))):
+            updates = []
+            for rec in conn.execute(f"SELECT {', '.join(keys)}, scored FROM {table}").fetchall():
+                scored = json.loads(rec[-1])
+                if scored.get("_excluded") or scored.get("Nihai Skor") is None:
+                    continue
+                scored["Nihai Skor"] = valuation_rules.score_row(scored)
+                updates.append((scored["Nihai Skor"], json.dumps(scored, ensure_ascii=False)) + tuple(rec[:-1]))
+            where = " AND ".join(f"{k} = ?" for k in keys)
+            conn.executemany(f"UPDATE {table} SET score = ?, scored = ? WHERE {where}", updates)
+        conn.execute("INSERT OR REPLACE INTO valuation_meta (key, value) VALUES ('score_version', ?)",
+                     (str(valuation_rules.SCORE_VERSION),))
 
 
 def _seed_daily(conn) -> None:

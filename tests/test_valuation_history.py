@@ -90,14 +90,13 @@ class MetricTests(unittest.TestCase):
         mid = de.loc["2026-06-15"]
         self.assertTrue(0.5 < mid < 1.0)
         self.assertAlmostEqual(de.iloc[-1], 1.0)
-        # F/K bugün: info F/K'sı (30); PEG: ima edilen büyüme (30 / 1.5 = 20) sabit.
+        # F/K bugün: info F/K'sı (30); PEG hesaplanmaz.
         self.assertAlmostEqual(m["F/K"].iloc[-1], 30.0)
-        self.assertAlmostEqual(m["PEG"].iloc[-1], 1.5)
-        self.assertTrue(np.allclose(m["PEG"].dropna(), (m["F/K"] / 20).dropna()))
+        self.assertNotIn("PEG", m.columns)
         self.assertFalse(m[list(vh.PROFITABILITY) + ["F/K", "Cari Oran"]].isna().any().any())
 
     def test_score_days_uses_valuation_rules(self):
-        import valuation
+        import valuation_rules
 
         days = pd.bdate_range("2026-09-01", "2026-10-07")
         m = vh.daily_metrics(pd.Series(180.0, index=days), vh.anchor_points(fake_fundamentals()), CURRENT_RAW)
@@ -105,7 +104,8 @@ class MetricTests(unittest.TestCase):
         day, row = rows[-1]
         self.assertEqual(day, "2026-10-07")
         self.assertEqual(row["Alt Sektör İskontosu %"], round((40 - row["F/K"]) / 40 * 100, 1))
-        self.assertEqual(row["Nihai Skor"], valuation.score_row(row))
+        self.assertEqual(row["Nihai Skor"], valuation_rules.score_row(row))
+        self.assertNotIn("PEG", row)
         self.assertTrue(row["_reconstructed"])
 
 
@@ -161,6 +161,55 @@ class ReconstructTests(unittest.TestCase):
         self.assertEqual(df.loc["2026-10-06", "valuation_is_reconstructed"], 0)
         self.assertGreater(df["valuation_roe_pct"].nunique(), 3)          # çeyrekten çeyreğe değişiyor
         self.assertNotIn("valuation_peg", df.columns)                     # PEG veri setinde yok
+
+    def _peer_rows(self, peers):
+        for t, pe in peers.items():
+            self.db.upsert_rows([{"market": vh.MARKET, "ticker": t, "raw": {"F/K": pe},
+                                  "scored": {**CURRENT_SCORED, "Hisse": t, "F/K": pe},
+                                  "fetched_at": "2026-10-06T21:30:00Z", "scored_at": "2026-10-06T21:30:00Z"}])
+
+    def test_sub_sector_median_uses_peer_history(self):
+        self._peer_rows({"P1": 20.0, "P2": 50.0, "P3": 35.0})
+        self.db.upsert_rows([{"market": vh.MARKET, "ticker": "OTHER", "raw": {"F/K": 1.0},
+                              "scored": {**CURRENT_SCORED, "Hisse": "OTHER", "Alt Sektör (İş Modeli)": "Başka"},
+                              "fetched_at": "2026-10-06T21:30:00Z", "scored_at": "2026-10-06T21:30:00Z"}])
+        days = pd.bdate_range("2026-01-02", "2026-10-07")
+        closes = pd.Series(np.linspace(150, 180, len(days)), index=days)
+        peer_closes = pd.DataFrame({"P1": np.linspace(80, 100, len(days)), "P2": 200.0}, index=days)
+
+        def fetcher(t):
+            if t == "P3":
+                raise RuntimeError("Yahoo yok")
+            return fake_fundamentals()
+        asked = []
+        summary = vh.reconstruct("AAPL", closes, fundamentals=fake_fundamentals(), fetcher=fetcher,
+                                 price_fetcher=lambda tickers, start: asked.append(sorted(tickers)) or peer_closes)
+        self.assertEqual(asked, [["P1", "P2", "P3"]])                      # OTHER başka alt sektör
+        self.assertEqual(summary["peers_failed"], ["P3"])
+        self.assertFalse(summary["small_sector"])                           # 4 hisse > 3
+        self.assertIn("P1", summary["written_peers"])
+        self.assertNotIn("P3", summary["written_peers"])
+
+        hist = {h["date"]: h["scored"] for h in self.db.get_daily_history(vh.MARKET, "AAPL")}
+        p1 = {h["date"]: h["scored"] for h in self.db.get_daily_history(vh.MARKET, "P1")}
+        p2 = {h["date"]: h["scored"] for h in self.db.get_daily_history(vh.MARKET, "P2")}
+        for day in ("2026-03-02", "2026-08-03"):
+            pes = [hist[day]["F/K"], p1[day]["F/K"], p2[day]["F/K"], 35.0]   # P3: bugünkü F/K sabit
+            med = float(np.median(pes))
+            self.assertAlmostEqual(hist[day]["Alt Sektör Ort. F/K"], med, places=1)
+            self.assertAlmostEqual(hist[day]["Alt Sektör İskontosu %"], (med - hist[day]["F/K"]) / med * 100, places=0)
+            self.assertEqual(hist[day]["Alt Sektör Ort. F/K"], p1[day]["Alt Sektör Ort. F/K"])
+        self.assertNotEqual(hist["2026-03-02"]["Alt Sektör Ort. F/K"], hist["2026-08-03"]["Alt Sektör Ort. F/K"])
+
+    def test_small_sub_sector_discount_is_one(self):
+        self._peer_rows({"P1": 20.0})
+        days = pd.bdate_range("2026-09-01", "2026-10-07")
+        summary = vh.reconstruct("AAPL", pd.Series(180.0, index=days), fundamentals=fake_fundamentals(),
+                                 fetcher=lambda t: fake_fundamentals(),
+                                 price_fetcher=lambda tickers, start: pd.DataFrame({"P1": 90.0}, index=days))
+        self.assertTrue(summary["small_sector"])
+        day = self.db.get_daily_history(vh.MARKET, "AAPL")[0]["scored"]
+        self.assertEqual(day["Alt Sektör İskontosu %"], 1.0)
 
 
 if __name__ == "__main__":

@@ -545,6 +545,9 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
     if valuation is None and not has_history:
         warnings.append(f"{ticker} için {MARKET} değerleme skoru bulunamadı; değerleme sütunları boş.")
     df = add_valuation(df, valuation, valuation_history)
+    # Hissenin alt sektörü (iş modeli grubu) - sabit kategorik özellik, ilk sütun.
+    sub_sector = (valuation or {}).get("sub_sector")
+    df.insert(0, "sub_sector", sub_sector)
     snapshot_days = int(df["valuation_is_snapshot"].sum())
     if snapshot_days and (valuation is not None or has_history):
         since = valuation_history.index.min().strftime("%Y-%m-%d") if has_history else None
@@ -588,6 +591,8 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
         "valuation_history_days": int(len(valuation_history)) if has_history else 0,
         "valuation_reconstruction": reconstructed,
         "sector_etf": sector_etf,
+        "sub_sector": sub_sector,
+        "sector": (valuation or {}).get("sector"),
         "filled": fill_report,
         "warnings": warnings,
         "built_at": _now(),

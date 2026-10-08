@@ -34,6 +34,7 @@ _DEFAULT_GROUPS = ("Fiyat & Hacim", "EMA", "Hisse Duyarlılığı", "Direnç", "
 _GLOSSARY = """
 | Sütun | Açıklama |
 |---|---|
+| `sub_sector` | Hissenin alt sektörü (iş modeli grubu; Değerleme modülündeki "İş Modeli Grubu") - sabit kategorik özellik |
 | `open, high, low, close, volume` | Yahoo günlük barı (bölünme/temettü düzeltmeli) |
 | `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; 1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
@@ -41,7 +42,7 @@ _GLOSSARY = """
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
-| `valuation_is_reconstructed` | 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K bugünkü değerinde sabit. PEG ayrı sütun olarak verilmez (geçmişi yok), skorda servisle aynı puanlanır |
+| `valuation_is_reconstructed` | 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
 | `valuation_is_snapshot` | 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
 | `<etf>__*`, `sector_etf__*` | Sektör ETF arşivi (sector_etf_daily): kapanış, 1/5/21 gün getiri, SPY'ye göre 5 gün fark; `sector_etf__` hissenin kendi sektörü |
@@ -127,7 +128,10 @@ def _render_create(username, nasdaq_tickers):
     st.subheader("1️⃣ Veri Setini Hazırla")
     options = sorted(dict.fromkeys(ad.normalize_ticker(t) for t in nasdaq_tickers if t))
     c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
-    picked = c1.selectbox("NASDAQ 100 hissesi", options, key="ai_ticker_pick") if options else None
+    sub_sectors = _sub_sectors()
+    picked = c1.selectbox("NASDAQ 100 hissesi", options, key="ai_ticker_pick",
+                          format_func=lambda t: f"{t} · {sub_sectors[t]}" if sub_sectors.get(t) else t) \
+        if options else None
     typed = c2.text_input("veya sembol yazın", key="ai_ticker_typed", placeholder="örn. AAPL").strip()
     fetch_years = c3.number_input("Çekilecek yıl", min_value=3, max_value=10, value=ad.DEFAULT_FETCH_YEARS,
                                   key="ai_fetch_years", help="En az 3 yıl: ilk yıl EMA200 ve göstergelerin ısınması için.")
@@ -170,6 +174,16 @@ def _render_create(username, nasdaq_tickers):
     st.session_state["ai_last_warnings"] = {ticker: meta["warnings"]}
 
 
+def _sub_sectors() -> dict:
+    """{hisse: alt sektör (iş modeli)} - NASDAQ 100 değerleme tablosundan."""
+    try:
+        import valuation_db
+
+        return {t: r["scored"].get("Alt Sektör (İş Modeli)") for t, r in valuation_db.get_rows(ad.MARKET).items()}
+    except Exception:
+        return {}
+
+
 def _select_columns(df):
     present = []
     for name, match in _GROUPS:
@@ -178,12 +192,12 @@ def _select_columns(df):
             present.append((name, cols))
     groups = st.multiselect("Gösterilecek sütun grupları", [n for n, _ in present],
                             default=[n for n, _ in present if n in _DEFAULT_GROUPS], key="ai_col_groups")
-    shown = []
+    shown = ["sub_sector"] if "sub_sector" in df.columns else []
     for name, cols in present:
         if name in groups:
             shown += [c for c in cols if c not in shown]
     known = {c for _, cols in present for c in cols}
-    shown += [c for c in df.columns if c not in known and c not in ("interpolated_cells", "source")]
+    shown += [c for c in df.columns if c not in known and c not in shown and c not in ("interpolated_cells", "source")]
     return shown + ["interpolated_cells", "source"]
 
 
@@ -195,6 +209,10 @@ def _render_dataset(ticker, username):
         return
     meta = info["meta"]
     val = meta.get("valuation") or {}
+    sub = meta.get("sub_sector") or val.get("sub_sector") or _sub_sectors().get(ticker)
+    st.markdown(f"#### {ticker} · {sub or 'alt sektör bilinmiyor'}"
+                + (f" <span style='opacity:0.6'>({meta.get('sector') or val.get('sector')})</span>"
+                   if (meta.get("sector") or val.get("sector")) else ""), unsafe_allow_html=True)
     m = st.columns(5)
     m[0].metric("Gün", f"{len(df)}")
     m[1].metric("Sütun", f"{len(df.columns) - 1}")
@@ -295,8 +313,12 @@ def _render_saved(username):
     if not datasets:
         st.info("Henüz kayıtlı veri seti yok - yukarıdan bir hisse seçip hazırlayın.")
         return
+    subs = _sub_sectors()
     st.dataframe(pd.DataFrame([{
-        "Hisse": d["ticker"], "Gün": d["rows"], "Başlangıç": d["start"], "Bitiş": d["end"],
+        "Hisse": d["ticker"],
+        "Alt Sektör": d["meta"].get("sub_sector") or (d["meta"].get("valuation") or {}).get("sub_sector")
+        or subs.get(d["ticker"]) or "—",
+        "Gün": d["rows"], "Başlangıç": d["start"], "Bitiş": d["end"],
         "Sütun": len(d["meta"].get("columns", [])), "Son Güncelleme": _fmt_time(d["updated_at"]),
     } for d in datasets]), hide_index=True, use_container_width=True)
     tickers = [d["ticker"] for d in datasets]
