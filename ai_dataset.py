@@ -76,7 +76,7 @@ from valuation_history import day_index
 
 MARKET = "NASDAQ 100"
 MARKET_PREFIX = "nasdaq_100"
-DATASET_VERSION = 2  # 2: türetilmiş sütunlar çıkarıldı (REMOVED_FEATURES)
+DATASET_VERSION = 3  # 2: türetilmiş sütunlar çıkarıldı (REMOVED_FEATURES); 3: göreli fiyat / hacim sütunları
 DEFAULT_FETCH_YEARS = 3
 DEFAULT_KEEP_YEARS = 2
 UPDATE_PAUSE_S = 5  # zamanlanmış güncellemede veri setleri arası bekleme (Yahoo)
@@ -220,6 +220,27 @@ def add_vwap(df: pd.DataFrame, vwap: pd.Series | None = None) -> pd.DataFrame:
     real = real.where(real > 0)
     out["vwap"] = real.fillna(typical)
     out["vwap_is_proxy"] = real.isna().astype(int)
+    return out
+
+
+RELATIVE_VOLUME_WINDOW = 20
+RELATIVE_COLS = ("gap_open_pct", "range_pct", "close_vs_vwap_pct", "volume_rel20")
+
+
+def add_relative_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Fiyat / hacim seviyelerinin kapanışa göre ölçeksiz karşılıkları - eğitim
+    verisinde seviyelerin yerini alır (bkz. LEVEL_COLS):
+        gap_open_pct       açılışın önceki kapanışa göre % farkı (gece boşluğu)
+        range_pct          gün içi aralık (yüksek - düşük) / kapanış, %
+        close_vs_vwap_pct  kapanışın VWAP'a göre % farkı
+        volume_rel20       hacim / önceki 20 günün ortalama hacmi (bugün hariç)"""
+    out = df.copy()
+    close = out["close"]
+    out["gap_open_pct"] = (out["open"] / close.shift(1) - 1) * 100
+    out["range_pct"] = (out["high"] - out["low"]) / close * 100
+    out["close_vs_vwap_pct"] = (close / out["vwap"] - 1) * 100
+    avg = out["volume"].shift(1).rolling(RELATIVE_VOLUME_WINDOW, min_periods=RELATIVE_VOLUME_WINDOW).mean()
+    out["volume_rel20"] = out["volume"] / avg.where(avg > 0)
     return out
 
 
@@ -594,6 +615,7 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
 
     step("EMA, hisse duyarlılığı ve direnç seviyeleri hesaplanıyor")
     df = add_vwap(raw, vwap)
+    df = add_relative_features(df)
     df = add_emas(df)
     df = add_stock_sentiment(df)
     df = df.join(resistance_levels(df["high"], df["close"]))
@@ -916,10 +938,35 @@ def run_updates(tickers=None, pause_s: float = UPDATE_PAUSE_S, sleep=None, vwap_
     return 1 if failures else 0
 
 
+# Fiyat / hacim SEVİYELERİ: zamanla kayar (trend), ölçeğe bağlıdır ve kapanışla ~0,99
+# korelasyonludur; eğitim verisine girmez, yerine yüzde / getiri karşılıkları girer:
+#   ema20/50/200            -> dist_ema*_pct          (ema = close / (1 + dist/100))
+#   resistance_* seviyeleri -> resistance_*_dist_pct
+#   open / high / low / vwap -> gap_open_pct, range_pct, close_vs_vwap_pct
+#   volume                  -> volume_rel20
+#   <etf>__close, nasdaq_100__index_close -> <etf>__ret_1d/5d/21d
+# `close` kalır: hedef değişken (getiri) ve tahmini fiyata geri çevirmek için.
+LEVEL_COLS = ("open", "high", "low", "vwap", "volume", "ema20", "ema50", "ema200",
+              "resistance_1m", "resistance_2m", "resistance_3m", "resistance_nearest",
+              f"{MARKET_PREFIX}__index_close")
+
+
+def is_level_column(col: str) -> bool:
+    prefix, _, feat = col.partition("__")
+    return col in LEVEL_COLS or (feat == "close" and prefix.upper() in sector_etf_symbols())
+
+
 def training_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Eğitim verisi: meta sütunlar (kaynak, bayraklar, doldurulan hücre
-    sayısı, alt sektör) ve çıkarılan türetilmiş sütunlar olmadan."""
-    return df.drop(columns=[c for c in df.columns if c in META_COLS or is_removed_feature(c)])
+    sayısı, alt sektör), çıkarılan türetilmiş sütunlar ve fiyat / hacim
+    seviyeleri (LEVEL_COLS; `close` hariç) olmadan."""
+    return df.drop(columns=[c for c in df.columns
+                            if c in META_COLS or is_removed_feature(c) or is_level_column(c)])
+
+
+def missing_relative_cols(df: pd.DataFrame) -> list:
+    """Eski (DATASET_VERSION < 3) kayıtlarda olmayan göreli sütunlar."""
+    return [c for c in RELATIVE_COLS if c not in df.columns]
 
 
 def export(ticker: str, out_dir: str, fmt: str = "csv", all_columns: bool = False) -> str:
