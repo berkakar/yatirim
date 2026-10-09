@@ -323,6 +323,11 @@ def _render_dataset(ticker, username):
                    "İç boşluklarda doğrusal interpolasyon bir sonraki bilinen değeri kullanır; "
                    "`interpolated_cells` > 0 olan satırları gerekirse ayıklayın.")
 
+    st.divider()
+    from ai_model_ui import render_model_section  # torch yalnızca bu bölümde, gerekirse yüklenir
+
+    render_model_section(ticker, df)
+
 
 def _render_valuation_history(ticker):
     history = ad.load_valuation_history(ticker)
