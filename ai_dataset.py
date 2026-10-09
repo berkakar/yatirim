@@ -956,12 +956,31 @@ def is_level_column(col: str) -> bool:
     return col in LEVEL_COLS or (feat == "close" and prefix.upper() in sector_etf_symbols())
 
 
+# Takvim: temporal embedding (Informer tarzı - her özellik için öğrenilen embedding tablosu)
+# tam sayı indekslerle yapılır; eğitim verisinde yalnızca bunlar kalır. sin/cos kodlamaları
+# aynı bilginin ikinci gösterimi, yılın günü / haftası ve çeyrek aydan türer, yıl 2 yıllık
+# veride yalnızca trend taşır (2026-10-09).
+TRAINING_TEMPORAL_COLS = ("time_idx", "month", "day_of_month", "day_of_week", "is_month_start", "is_month_end")
+# Sektör ETF'leri ve SPY: eğitim verisinde yalnızca 1 günlük getiri (5 / 21 günlük getiriler
+# 1 günlüklerin birikimi - model sıradaki günlerden kendisi çıkarır).
+TRAINING_ETF_FEATURES = ("ret_1d",)
+
+
+def is_training_excluded(col: str) -> bool:
+    """Veritabanında / tabloda duran ama eğitim verisine alınmayan sütun mu?"""
+    if col in META_COLS or is_removed_feature(col) or is_level_column(col):
+        return True
+    if col in TEMPORAL_COLS and col not in TRAINING_TEMPORAL_COLS:
+        return True
+    prefix, _, feat = col.partition("__")
+    return bool(feat) and prefix.upper() in sector_etf_symbols() and feat not in TRAINING_ETF_FEATURES
+
+
 def training_frame(df: pd.DataFrame) -> pd.DataFrame:
-    """Eğitim verisi: meta sütunlar (kaynak, bayraklar, doldurulan hücre
-    sayısı, alt sektör), çıkarılan türetilmiş sütunlar ve fiyat / hacim
-    seviyeleri (LEVEL_COLS; `close` hariç) olmadan."""
-    return df.drop(columns=[c for c in df.columns
-                            if c in META_COLS or is_removed_feature(c) or is_level_column(c)])
+    """Eğitim verisi: meta sütunlar, çıkarılan türetilmiş sütunlar, fiyat /
+    hacim seviyeleri (LEVEL_COLS; `close` hariç), fazlalık takvim sütunları ve
+    ETF'lerin 5 / 21 günlük getirileri olmadan."""
+    return df.drop(columns=[c for c in df.columns if is_training_excluded(c)])
 
 
 def missing_relative_cols(df: pd.DataFrame) -> list:
