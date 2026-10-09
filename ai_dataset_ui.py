@@ -41,6 +41,7 @@ _GLOSSARY = """
 | `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; *meta* `vwap_is_proxy`=1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
 | `sent_momentum`, `sent_volatility`, `rsi14` | Hisse duyarlılığı bileşenleri 0-100: 50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası, oynaklığın ters yüzdelik sırası, RSI(14) |
+| `sent_momentum_raw` | Kapanışın 50 günlük basit ortalamaya göre % uzaklığı (`sent_momentum` bunun 126 günlük yüzdelik sırası). Tabloda var, eğitim verisinde yok: `dist_ema50_pct` ile neredeyse aynı |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |

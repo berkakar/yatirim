@@ -971,10 +971,15 @@ TRAINING_VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "
                            "valuation_revenue_growth_pct", "valuation_current_ratio", "valuation_net_margin_pct",
                            "valuation_debt_equity")
 
+# Eğitim verisinden tek tek çıkarılan sütunlar (veritabanında ve tabloda durur):
+#   sent_momentum_raw  (kapanış / SMA50 - 1) - dist_ema50_pct ile neredeyse aynı (~0,98);
+#                      yüzdelik sırası sent_momentum eğitimde kalır (2026-10-09)
+TRAINING_EXCLUDED_COLS = ("sent_momentum_raw",)
+
 
 def is_training_excluded(col: str) -> bool:
     """Veritabanında / tabloda duran ama eğitim verisine alınmayan sütun mu?"""
-    if col in META_COLS or is_removed_feature(col) or is_level_column(col):
+    if col in META_COLS or col in TRAINING_EXCLUDED_COLS or is_removed_feature(col) or is_level_column(col):
         return True
     if col in TEMPORAL_COLS and col not in TRAINING_TEMPORAL_COLS:
         return True

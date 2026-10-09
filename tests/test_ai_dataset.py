@@ -353,6 +353,10 @@ class TrainingSelectionTests(unittest.TestCase):
 
 
 class TrainingValuationTests(unittest.TestCase):
+    def test_sent_momentum_raw_not_in_training(self):
+        train = ad.training_frame(pd.DataFrame(columns=["sent_momentum_raw", "sent_momentum", "dist_ema50_pct"]))
+        self.assertEqual(list(train.columns), ["sent_momentum", "dist_ema50_pct"])
+
     def test_only_selected_valuation_columns_in_training(self):
         train = ad.training_frame(pd.DataFrame(columns=list(ad.VALUATION_FIELDS) + ["close"]))
         self.assertEqual(set(train.columns), set(ad.TRAINING_VALUATION_COLS) | {"close"})
