@@ -353,6 +353,13 @@ class TrainingSelectionTests(unittest.TestCase):
 
 
 class TrainingValuationTests(unittest.TestCase):
+    def test_raw_nasdaq_components_not_in_training(self):
+        cols = [f"nasdaq_100__{c}" for c in ("momentum", "momentum_raw", "volatility", "volatility_raw",
+                                             "volatility_vs_avg", "safe_haven", "safe_haven_raw", "breadth")]
+        self.assertEqual(list(ad.training_frame(pd.DataFrame(columns=cols)).columns),
+                         ["nasdaq_100__momentum", "nasdaq_100__volatility", "nasdaq_100__volatility_raw",
+                          "nasdaq_100__safe_haven", "nasdaq_100__breadth"])
+
     def test_nearest_resistance_not_in_training(self):
         cols = ["resistance_1m_dist_pct", "resistance_2m_dist_pct", "resistance_3m_dist_pct", "resistance_nearest",
                 "resistance_nearest_dist_pct", "resistance_nearest_window"]

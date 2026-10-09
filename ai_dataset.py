@@ -976,8 +976,11 @@ TRAINING_VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "
 #                      yüzdelik sırası sent_momentum eğitimde kalır (2026-10-09)
 #   resistance_nearest_dist_pct / _window  üç pencerenin uzaklığından (resistance_1m/2m/3m_dist_pct,
 #                      eğitimde) birebir seçilir - en yakını ve hangi pencere olduğu (2026-10-09)
+#   nasdaq_100__momentum_raw / safe_haven_raw / volatility_vs_avg  aynı bilginin ham hâli; yüzdelik
+#                      sıraları (momentum, safe_haven, volatility) eğitimde kalır (2026-10-09)
 TRAINING_EXCLUDED_COLS = ("sent_momentum_raw", "resistance_nearest", "resistance_nearest_dist_pct",
-                          "resistance_nearest_window")
+                          "resistance_nearest_window", f"{MARKET_PREFIX}__momentum_raw",
+                          f"{MARKET_PREFIX}__safe_haven_raw", f"{MARKET_PREFIX}__volatility_vs_avg")
 
 
 def is_training_excluded(col: str) -> bool:
