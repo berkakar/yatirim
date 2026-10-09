@@ -170,7 +170,7 @@ def compute_two_day_trend(day1_prices, day2_prices):
         return None, "Bilinmiyor"
 
     change_pct = round((end_price - start_price) / start_price * 100, 2)
-    trend = "📈 Yükseliş" if change_pct >= 0 else "📉 Düşüş"
+    trend = "Yükseliş" if change_pct >= 0 else "Düşüş"
     return change_pct, trend
 
 

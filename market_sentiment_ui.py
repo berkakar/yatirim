@@ -43,7 +43,7 @@ def _render_market(market, snap):
     if snap.get("previous") is not None and snap.get("score") is not None:
         delta = round(snap["score"] - snap["previous"], 1)
     st.metric(
-        f"{snap.get('icon', '')} {snap.get('label', '')}", f"{snap['score']:.0f} / 100",
+        snap.get('label', ''), f"{snap['score']:.0f} / 100",
         delta=f"{delta:+.1f} (önceki gün)" if delta is not None else None,
         help="0 = aşırı korku, 100 = aşırı açgözlülük. 25 / 45 / 55 / 75 sınırları: "
              "Aşırı Korku · Korku · Nötr · Açgözlülük · Aşırı Açgözlülük.",
@@ -90,13 +90,13 @@ def _pct_style(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def render_sector_etfs():
-    st.subheader("🏭 ABD Sektör ETF'leri")
+    st.subheader("ABD Sektör ETF'leri")
     st.caption("S&P 500'ün 11 sektörünü izleyen SPDR Select Sector ETF'leri - son bir haftalık (5 işlem günü) "
                "değişime göre güçlüden zayıfa sıralı.")
     snap = ms.load_sectors()
     if not snap.get("sectors"):
         st.info("Henüz hesaplanmadı - servis hafta içi ABD kapanışından sonra çalışır.")
-        if st.button("🔄 Şimdi hesapla", key="sectors_compute_now",
+        if st.button("Şimdi hesapla", key="sectors_compute_now",
                      help="Servisi beklemeden Yahoo Finance'ten hesaplar (birkaç saniye)."):
             with st.spinner("Sektör ETF'leri hesaplanıyor..."):
                 failed = ms.run_sectors()
@@ -132,7 +132,7 @@ def render_sector_etfs():
 
 
 def render_market_sentiment():
-    st.subheader("🧭 Piyasa Duyarlılığı (Korku / Açgözlülük)")
+    st.subheader("Piyasa Duyarlılığı (Korku / Açgözlülük)")
     st.caption("Momentum, oynaklık endeksi, genişlik, yeni zirve/dip ve güvenli liman talebinden "
                "hesaplanan 0-100 skor. Her hafta içi ABD kapanışından sonra güncellenir.")
     data = ms.load_all()
@@ -143,7 +143,7 @@ def render_market_sentiment():
             _render_market(market, data.get(market))
 
     if not all(data.get(m) for m in markets):
-        if st.button("🔄 Şimdi hesapla", key="sentiment_compute_now",
+        if st.button("Şimdi hesapla", key="sentiment_compute_now",
                      help="Servisi beklemeden Yahoo Finance'ten hesaplar (~1 dakika)."):
             with st.spinner("Piyasa duyarlılığı hesaplanıyor..."):
                 missing = [slug for slug, cfg in ms.MARKETS.items() if not data.get(cfg["market"])]

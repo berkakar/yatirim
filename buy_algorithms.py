@@ -257,7 +257,7 @@ def heikin_ashi_stoch_signal(bars: list[Bar], daily_closes: list[float] | None =
 
 # NOT: orb_signal KASITLI olarak ALGORITHMS'te DEĞİL - Premium Buy Point'in
 # (hisse bazlı, sürekli izlenen) modelinden çıkarılıp kendi bağımsız
-# modülüne (orb_core.py + 📈 Açılış Aralığı Kırılımı (ORB) sayfası, günde
+# modülüne (orb_core.py + Açılış Aralığı Kırılımı (ORB) sayfası, günde
 # 1 kez piyasa açılışında evreni tarayıp en yüksek puanlı adayları otomatik
 # alan) taşındı - bkz. orb_core.py'nin modül üstü notu. Fonksiyon burada
 # (buy_algorithms.py'de) kalmaya devam ediyor çünkü hem orb_core.py hem de

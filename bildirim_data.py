@@ -62,7 +62,7 @@ def save_notification_settings(settings: dict, username: str) -> None:
         try:
             write_json_to_github(GITHUB_REPO, token, settings_file, settings, f"Update bildirim ayarları ({username})")
         except Exception as e:
-            st.warning(f"⚠️ Bildirim ayarları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"Bildirim ayarları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(settings_file, "w", encoding="utf-8") as f:
         json.dump(settings, f, ensure_ascii=False, indent=2)

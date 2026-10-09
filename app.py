@@ -96,35 +96,35 @@ from account_ui import (
 
 TR_TZ = ZoneInfo("Europe/Istanbul")
 
-NAV_HOME = "🏠 Giriş Sayfası"
+NAV_HOME = "Giriş Sayfası"
 MODULE_GROUPS = {
-    "🔍 Alım Bölgesi Tarama": ["Alım Bölgesi Tarama"],
-    "📊 Analiz": [
+    "Alım Bölgesi Tarama": ["Alım Bölgesi Tarama"],
+    "Analiz": [
         "Stop Loss Hesaplayıcı",
-        "💎 Değerleme & Ucuzluk Skoru",
-        "🔄 DTW Zaman Serisi & Benzerlik Analizi",
-        "📐 Hisse Patern Analizi",
-        "📊 Bağımsız Hisse Grafiği",
-        "🔪 Bıçak Kanalı Testi",
-        "🤖 Yapay Zeka Analiz Modülü",
+        "Değerleme & Ucuzluk Skoru",
+        "DTW Zaman Serisi & Benzerlik Analizi",
+        "Hisse Patern Analizi",
+        "Bağımsız Hisse Grafiği",
+        "Bıçak Kanalı Testi",
+        "Yapay Zeka Analiz Modülü",
     ],
-    "🇹🇷 Türk Fonları": ["Türk Fonları", "Fonlarım"],
-    "🤖 Algoritmik Ticaret": [
-        "🦙 Alpaca Canlı Pozisyonlar", "🎯 Premium Buy Point Portföyü", "BackTest", "🤖 Otomatik Alım/Satım",
-        "📈 Relative Strength Rotasyonu", "📈 Açılış Aralığı Kırılımı (ORB)", "🕯️ Heikin Ashi Gün İçi",
-        "🛡️ Stop Loss Ayarları", "🧠 Algo Analiz",
+    "Türk Fonları": ["Türk Fonları", "Fonlarım"],
+    "Algoritmik Ticaret": [
+        "Alpaca Canlı Pozisyonlar", "Premium Buy Point Portföyü", "BackTest", "Otomatik Alım/Satım",
+        "Relative Strength Rotasyonu", "Açılış Aralığı Kırılımı (ORB)", "Heikin Ashi Gün İçi",
+        "Stop Loss Ayarları", "Algo Analiz",
     ],
-    "⚙️ Hisse Liste Düzenleme": ["⚙️ Hisse Listelerini Yönet", "🗂️ Hisse Gruplarını Yönet"],
-    "👤 Hesap": ["👤 Hesabım"],  # yöneticilere girişten sonra "🛡️ Kullanıcı Yönetimi" eklenir
+    "Hisse Liste Düzenleme": ["Hisse Listelerini Yönet", "Hisse Gruplarını Yönet"],
+    "Hesap": ["Hesabım"],  # yöneticilere girişten sonra "Kullanıcı Yönetimi" eklenir
 }
-# Modül düğmelerinde gösterilecek ikonlu etiketler (yönlendirme için kullanılan
+# Modül düğmelerinde gösterilecek etiketler (yönlendirme için kullanılan
 # değerler MODULE_GROUPS'takiyle aynı kalır, sadece görünen metin değişir)
 MODULE_DISPLAY = {
-    "Alım Bölgesi Tarama": "🔍 Alım Bölgesi Tarama",
-    "Stop Loss Hesaplayıcı": "🛡️ Stop Loss Hesaplayıcı",
-    "Türk Fonları": "🇹🇷 Türk Fonları",
-    "Fonlarım": "💼 Fonlarım",
-    "BackTest": "🧪 BackTest",
+    "Alım Bölgesi Tarama": "Alım Bölgesi Tarama",
+    "Stop Loss Hesaplayıcı": "Stop Loss Hesaplayıcı",
+    "Türk Fonları": "Türk Fonları",
+    "Fonlarım": "Fonlarım",
+    "BackTest": "BackTest",
 }
 
 def _save_file(username):
@@ -143,7 +143,7 @@ def save_selections(tickers, username):
         try:
             write_json_to_github(GITHUB_REPO, token, save_file, list(tickers), f"Update selected tickers ({username})")
         except Exception as e:
-            st.warning(f"⚠️ Seçili hisseler GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"Seçili hisseler GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(save_file, 'w') as f:
         json.dump(list(tickers), f)
@@ -220,10 +220,10 @@ username = st.session_state["username"]
 current_user = enforce_active_session(authenticator, username)
 render_forced_password_change(current_user)
 
-st.title("📈 Yatırım Terminali")
-authenticator.logout("🚪 Çıkış Yap", "sidebar")
+st.title("Yatırım Terminali")
+authenticator.logout("Çıkış Yap", "sidebar")
 if current_user["role"] == user_registry.ADMIN:
-    MODULE_GROUPS["👤 Hesap"].append("🛡️ Kullanıcı Yönetimi")
+    MODULE_GROUPS["Hesap"].append("Kullanıcı Yönetimi")
 
 # ------------------------------------------------------------------------------
 # DİNAMİK LİSTE YÜKLEME VE SESSION STATE
@@ -274,20 +274,20 @@ groups_for_market = [
 selected_groups = []
 if groups_for_market:
     selected_groups = st.sidebar.multiselect(
-        f"🗂️ Hisse Grubu — {market} (seçilirse piyasa yerine kullanılır)",
+        f"Hisse Grubu — {market} (seçilirse piyasa yerine kullanılır)",
         groups_for_market,
         key="selected_stock_groups",
     )
 elif st.session_state.stock_groups:
-    st.sidebar.caption(f"🗂️ **{market}** piyasasıyla ilişkilendirilmiş bir hisse grubunuz yok.")
+    st.sidebar.caption(f"**{market}** piyasasıyla ilişkilendirilmiş bir hisse grubunuz yok.")
 else:
-    st.sidebar.caption("🗂️ Henüz hisse grubunuz yok — Hisse Liste Düzenleme'den oluşturabilirsiniz.")
+    st.sidebar.caption("Henüz hisse grubunuz yok — Hisse Liste Düzenleme'den oluşturabilirsiniz.")
 
 _unassigned_groups = [g for g in st.session_state.stock_groups.keys() if g not in st.session_state.group_markets]
 if _unassigned_groups:
     st.sidebar.caption(
-        f"⚠️ {len(_unassigned_groups)} grubun piyasası atanmamış — "
-        "'🗂️ Hisse Gruplarını Yönet' bölümünden atayabilirsiniz."
+        f"{len(_unassigned_groups)} grubun piyasası atanmamış — "
+        "'Hisse Gruplarını Yönet' bölümünden atayabilirsiniz."
     )
 
 st.sidebar.divider()
@@ -378,11 +378,11 @@ if selected_groups:
     ))
     market_tickers = st.session_state.ticker_lists[market]
 
-    SCOPE_MARKET_ONLY = f"🌐 Sadece {market} (Piyasanın Tamamı)"
-    SCOPE_MARKET_PLUS_GROUPS = f"🌐+🗂️ {market} + Seçili Gruplar"
-    SCOPE_GROUPS_ONLY = "🗂️ Sadece Seçili Gruplar"
+    SCOPE_MARKET_ONLY = f"Sadece {market} (Piyasanın Tamamı)"
+    SCOPE_MARKET_PLUS_GROUPS = f"+{market} + Seçili Gruplar"
+    SCOPE_GROUPS_ONLY = "Sadece Seçili Gruplar"
     group_scope = st.sidebar.radio(
-        "📌 Analiz Kapsamı:",
+        "Analiz Kapsamı:",
         [SCOPE_MARKET_ONLY, SCOPE_MARKET_PLUS_GROUPS, SCOPE_GROUPS_ONLY],
         index=2,
         key="stock_group_scope",
@@ -400,9 +400,9 @@ if selected_groups:
         scope_label = " + ".join(selected_groups)
         market = scope_label
 
-    with st.expander(f"📌 Aktif Analiz Kapsamı: **{scope_label}** — Toplam {len(target_list)} hisse", expanded=False):
+    with st.expander(f"Aktif Analiz Kapsamı: **{scope_label}** — Toplam {len(target_list)} hisse", expanded=False):
         if group_scope == SCOPE_MARKET_ONLY:
-            st.caption("ℹ️ Seçili gruplar bu kapsamda kullanılmıyor; sadece piyasanın tam listesi analiz girdisi.")
+            st.caption("Seçili gruplar bu kapsamda kullanılmıyor; sadece piyasanın tam listesi analiz girdisi.")
         else:
             max_len = max((len(st.session_state.stock_groups.get(g, [])) for g in selected_groups), default=0)
             table_data = {
@@ -432,17 +432,17 @@ def render_chart_for(ticker):
 # kategorisindeki her sayfanın en üstünde. Hesap türü kullanıcı bazlı ayardır
 # (bkz. alpaca_account.py); Gerçek Para'da Algoritmik Ticaret sayfalarının
 # zemini açık turuncu olur.
-if category == "🤖 Algoritmik Ticaret" and is_live(username):
+if category == "Algoritmik Ticaret" and is_live(username):
     set_live_accent(True)
     inject_css()
-if (module == NAV_HOME or category == "🤖 Algoritmik Ticaret") and has_alpaca_account(username):
+if (module == NAV_HOME or category == "Algoritmik Ticaret") and has_alpaca_account(username):
     render_account_mode_badge(username)
 
 # ==============================================================================
 # 0. MODÜL: GİRİŞ SAYFASI (ANA SAYFA)
 # ==============================================================================
 if module == NAV_HOME:
-    st.header("🏠 Genel Bakış")
+    st.header("Genel Bakış")
     st.caption("Hesap özeti, piyasa duyarlılığı, liste durumu ve bu oturumdaki son tarama sonuçları.")
 
     if has_alpaca_account(username):
@@ -457,11 +457,11 @@ if module == NAV_HOME:
             render_account_summary(alpaca_client, username, alpaca_positions, show_initial_capital_setting=False)
             render_live_positions(username, alpaca_positions)
         except Exception as e:
-            st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
+            st.warning(f"Alpaca hesap özeti alınamadı: {e}")
     elif has_alpaca_account(username):
         missing_keys_warning(username)
     else:
-        st.info("Alpaca hesabınız bağlı değil - **👤 Hesap → 👤 Hesabım** sayfasından Sanal Para ve "
+        st.info("Alpaca hesabınız bağlı değil - **Hesap → Hesabım** sayfasından Sanal Para ve "
                 "Gerçek Para anahtarlarınızı girebilirsiniz.")
 
     st.divider()
@@ -470,18 +470,18 @@ if module == NAV_HOME:
     render_sector_etfs()
 
     st.divider()
-    st.subheader("🔌 Bağlantılar")
+    st.subheader("Bağlantılar")
     bot_token = st.secrets.get("TELEGRAM_BOT_TOKEN")
     connections = check_all_connections(key_id, secret_key, bot_token, trading_url)
     conn_cols = st.columns(len(connections))
     for col, (name, (is_connected, detail)) in zip(conn_cols, connections.items()):
-        icon = "🟢" if is_connected else "🔴"
-        col.markdown(f"{icon} **{name}**")
+        status = "bağlı" if is_connected else "bağlantı yok"
+        col.markdown(f"**{name}**: {status}")
         if not is_connected:
             col.caption(detail)
 
     st.divider()
-    st.subheader("📋 Hisse Listeleri")
+    st.subheader("Hisse Listeleri")
     lc1, lc2, lc3, lc4, lc5 = st.columns(5)
     lc1.metric("NASDAQ 100 Listesi", len(st.session_state.ticker_lists["NASDAQ 100"]))
     lc2.metric("NYSE Listesi", len(st.session_state.ticker_lists["NYSE"]))
@@ -490,7 +490,7 @@ if module == NAV_HOME:
     lc5.metric("Hisse Grupları", len(st.session_state.stock_groups))
 
     st.divider()
-    st.subheader("🎯 Bu Oturumdaki Son Tarama Sonuçları")
+    st.subheader("Bu Oturumdaki Son Tarama Sonuçları")
     if 'scan_signals' in st.session_state:
         st.metric("Alım Bölgesi Sinyali", len(st.session_state.scan_signals))
     else:
@@ -500,7 +500,7 @@ if module == NAV_HOME:
 # 1. MODÜL: ALIM BÖLGESİ TARAMA (Fincan-Kulp + OBO/TOBO birleşik)
 # ==============================================================================
 elif module == "Alım Bölgesi Tarama":
-    st.header("🔍 Alım Bölgesi Tarama")
+    st.header("Alım Bölgesi Tarama")
     st.caption("Taramak istediğiniz formasyon(lar)ı ve mum periyodu/periyotlarını seçip aşağıdaki butona basın.")
 
     scan_cb1, scan_cb2 = st.columns(2)
@@ -536,7 +536,7 @@ elif module == "Alım Bölgesi Tarama":
     )
 
     if st.button(
-        "🚀 Seçili Tarayıcılarla Tara", type="primary",
+        "Seçili Tarayıcılarla Tara", type="primary",
         disabled=not (use_cup or use_obo or selected_algo_ids) or not selected_timeframes,
     ):
         with st.spinner(f'{market} listesi taranıyor...'):
@@ -599,7 +599,7 @@ elif module == "Alım Bölgesi Tarama":
             st.session_state.scan_signals_fetched_at = datetime.now(TR_TZ)
 
     if 'scan_signals' in st.session_state and st.session_state.scan_signals:
-        st.subheader("🎯 Bulunan Formasyonlar")
+        st.subheader("Bulunan Formasyonlar")
         scan_fetched_at = st.session_state.get("scan_signals_fetched_at")
         if scan_fetched_at:
             freshness_caption(f"Veri güncelliği: {scan_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
@@ -641,7 +641,7 @@ elif module == "Alım Bölgesi Tarama":
                     })
             else:
                 c5.caption("— (grafik formasyonu, backtest yok)")
-            if c6.button("📊", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
+            if c6.button("Grafik", key=f"scan_chart_{idx}", help=f"{row['Hisse']} ({row['Mum Periyodu']}) grafiğini göster"):
                 st.session_state.selected_ticker = row["Hisse"]
                 st.session_state.selected_ticker_timeframe = row["_tf_code"]
                 st.session_state.selected_ticker_signal = {
@@ -652,28 +652,28 @@ elif module == "Alım Bölgesi Tarama":
         st.divider()
         xfer_col1, xfer_col2 = st.columns([3, 2])
         xfer_col1.caption(
-            f"✅ {len(selected_scan_tickers)} hisse seçili."
+            f"{len(selected_scan_tickers)} hisse seçili."
             if selected_scan_tickers else "Aktarmak istediğiniz hisseleri yukarıdaki kutulardan seçin."
         )
         if xfer_col2.button(
-            "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
+            "Premium Buy Point Portföyüne Aktar", use_container_width=True,
             disabled=not selected_scan_tickers, key="scan_xfer_signals_btn",
         ):
             st.session_state["premium_buy_pending_transfer"] = list(dict.fromkeys(selected_scan_tickers))
-            st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
-            st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
-            st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
+            st.session_state["nav_category"] = "Algoritmik Ticaret"
+            st.session_state["open_category"] = "Algoritmik Ticaret"
+            st.session_state["active_module_Algoritmik Ticaret"] = "Premium Buy Point Portföyü"
             st.rerun()
 
         st.divider()
         bt_col1, bt_col2 = st.columns([3, 2])
         bt_col1.caption(
-            f"🧪 {len(selected_backtest_rows)} algoritma sinyali seçili."
+            f"{len(selected_backtest_rows)} algoritma sinyali seçili."
             if selected_backtest_rows
             else "Backtest çalıştırmak için algoritma sinyali veren satırlardan seçim yapın (grafik formasyonları - Fincan-Kulp/OBO/TOBO - için backtest yok)."
         )
         if bt_col2.button(
-            "🧪 Seçilenler İçin Backtest Çalıştır", use_container_width=True,
+            "Seçilenler İçin Backtest Çalıştır", use_container_width=True,
             disabled=not selected_backtest_rows, key="scan_run_backtest_btn",
         ):
             progress = st.progress(0.0)
@@ -727,7 +727,7 @@ elif module == "Alım Bölgesi Tarama":
         st.warning("Tarama sonucunda uygun formasyon bulunamadı.")
 
     if 'scan_backtest_runs' in st.session_state and st.session_state.scan_backtest_runs:
-        st.subheader("🧪 Backtest Sonuçları")
+        st.subheader("Backtest Sonuçları")
         if st.session_state.get("scan_backtest_runs_run_at"):
             freshness_caption(f"Bu backtest çalıştırması: {st.session_state['scan_backtest_runs_run_at']} UTC.")
         st.caption(
@@ -763,24 +763,24 @@ elif module == "Alım Bölgesi Tarama":
 
         bt_xfer_col1, bt_xfer_col2 = st.columns([3, 2])
         bt_xfer_col1.caption(
-            f"✅ {len(selected_bt_tickers)} hisse seçili."
+            f"{len(selected_bt_tickers)} hisse seçili."
             if selected_bt_tickers else "Aktarmak istediğiniz hisseleri yukarıdaki kutulardan seçin."
         )
         if bt_xfer_col2.button(
-            "➡️ Premium Buy Point Portföyüne Aktar", use_container_width=True,
+            "Premium Buy Point Portföyüne Aktar", use_container_width=True,
             disabled=not selected_bt_tickers, key="scan_bt_xfer_btn",
         ):
             st.session_state["premium_buy_pending_transfer"] = list(dict.fromkeys(selected_bt_tickers))
-            st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
-            st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
-            st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
+            st.session_state["nav_category"] = "Algoritmik Ticaret"
+            st.session_state["open_category"] = "Algoritmik Ticaret"
+            st.session_state["active_module_Algoritmik Ticaret"] = "Premium Buy Point Portföyü"
             st.rerun()
 
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         active_tf = st.session_state.get("selected_ticker_timeframe") or "1Day"
         st.write("---")
-        st.markdown(f"### 📊 Formasyon Analiz Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
+        st.markdown(f"### Formasyon Analiz Grafiği: **{active_t}** ({SCAN_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
         active_days = daily_days if active_tf == "1Day" else intraday_days
         df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t, timeframe=active_tf, period_days=active_days)
         if df is not None and not df.empty:
@@ -837,12 +837,12 @@ elif module == "Alım Bölgesi Tarama":
 # 2. MODÜL: STOP LOSS HESAPLAYICI
 # ==============================================================================
 elif module == "Stop Loss Hesaplayıcı":
-    st.header("🛡️ Risk Yönetimi: Stop Loss & EMA Analizi")
+    st.header("Risk Yönetimi: Stop Loss & EMA Analizi")
     
     if 'selected_tickers' not in st.session_state:
         st.session_state.selected_tickers = load_selections(username)
 
-    search_term = st.text_input("🔍 Hisseleri filtrelemek için yazın (örn: THY):", "").upper()
+    search_term = st.text_input("Hisseleri filtrelemek için yazın (örn: THY):", "").upper()
 
     df_selection = pd.DataFrame({'Hisse': target_list})
     df_selection['Seçili'] = df_selection['Hisse'].apply(lambda x: x in st.session_state.selected_tickers)
@@ -873,7 +873,7 @@ elif module == "Stop Loss Hesaplayıcı":
 
     st.write(f"Şu an **{len(st.session_state.selected_tickers)}** hisse seçili ve kaydedildi.")
 
-    if st.button("🚀 Seçilen Hisseleri Analiz Et"):
+    if st.button("Seçilen Hisseleri Analiz Et"):
         results = []
         with st.spinner('Stop loss ve hareketli ortalama analizleri yapılıyor...'):
             for t in st.session_state.selected_tickers:
@@ -902,15 +902,15 @@ elif module == "Stop Loss Hesaplayıcı":
 
         if results:
             df_res = pd.DataFrame(results)
-            st.subheader("📊 Detaylı Stop Loss & EMA Analizi")
+            st.subheader("Detaylı Stop Loss & EMA Analizi")
             freshness_caption(f"Veri güncelliği: {datetime.now(TR_TZ):%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten analiz anında çekildi, en fazla 30 dk önbellekli olabilir).")
             st.dataframe(zebra_style(df_res), use_container_width=True, hide_index=True)
 
 # ==============================================================================
 # 3. MODÜL: DEĞERLEME & UCUZLUK SKORU (MİKRO İŞ MODELİ GRUPLAMALI)
 # ==============================================================================
-elif module == "💎 Değerleme & Ucuzluk Skoru":
-    st.header("💎 Temel Analiz: Mikro İş Modeline Göre Değerleme")
+elif module == "Değerleme & Ucuzluk Skoru":
+    st.header("Temel Analiz: Mikro İş Modeline Göre Değerleme")
     st.caption("Şirketler genel sektör yerine kendi özel iş modellerine (örn: GPU vs RAM vs Telekom) göre gruplanır ve iskontoları kıyaslanır.")
 
     if 'selected_tickers' not in st.session_state:
@@ -936,9 +936,9 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
     _last_run = valuation_db.get_run(base_market)
     _info_parts = []
     if _service:
-        _info_parts.append(f"⏱️ **{base_market}** servisi: **{_service['frequency']}**.")
+        _info_parts.append(f"**{base_market}** servisi: **{_service['frequency']}**.")
     if _last_run and _last_run.get("finished_at"):
-        _run_note = " ⚠️ Son çalıştırmada Yahoo çekimi yarıda kaldı." if _last_run.get("aborted") else ""
+        _run_note = " Son çalıştırmada Yahoo çekimi yarıda kaldı." if _last_run.get("aborted") else ""
         _info_parts.append(
             f"Son tamamlanan çalışma {_fmt_trt(_last_run['finished_at'])} TRT "
             f"({_last_run.get('universe_size') or 0} hisse).{_run_note}"
@@ -948,7 +948,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
     _progress = cycle_progress(base_market) if _service and _service["mode"] == MODE_WEEKLY_HOURLY else None
     if _progress:
         _info_parts.append(
-            f"🔄 Haftalık döngü sürüyor ({_fmt_trt(_progress['started_at'])} TRT'de başladı): "
+            f"Haftalık döngü sürüyor ({_fmt_trt(_progress['started_at'])} TRT'de başladı): "
             f"{_progress['done']}/{_progress['total']} hisse çekildi; skorlar döngü bitince güncellenecek."
         )
     elif _service:
@@ -957,7 +957,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             _info_parts.append(f"Sonraki çalışma: {_fmt_trt(valuation_db.to_iso(_next))} TRT.")
     st.caption(" ".join(_info_parts))
 
-    with st.expander("🗓️ Servis çalışma takvimi (tüm piyasalar)"):
+    with st.expander("Servis çalışma takvimi (tüm piyasalar)"):
         _sched_rows = []
         for _svc in SERVICES.values():
             _lr = valuation_db.get_run(_svc["market"])
@@ -976,9 +976,9 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
             "Veritabanında olmayan bir hisse seçtiğinizde anlık çekilir ve sonraki çalışmalarda güncellenir."
         )
 
-    if st.button("🚀 Değerleme Sonuçlarını Getir", type="primary"):
+    if st.button("Değerleme Sonuçlarını Getir", type="primary"):
         if not scan_list:
-            st.warning("⚠️ Lütfen analiz etmek için en az bir hisse seçin.")
+            st.warning("Lütfen analiz etmek için en az bir hisse seçin.")
         else:
             progress_bar = st.progress(0)
             status_text = st.empty()
@@ -991,18 +991,18 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
 
             status_text.empty()
             progress_bar.empty()
-            msg = f"🗄️ {val_summary['from_db']} hisse veritabanından getirildi"
+            msg = f"{val_summary['from_db']} hisse veritabanından getirildi"
             if val_summary["fetched"]:
                 msg += f", {val_summary['fetched']} hisse Yahoo Finance'ten anlık çekildi"
             if val_summary["reused"]:
                 msg += f", {val_summary['reused']} hisse başka piyasa servisinin güncel verisinden alındı"
             st.caption(msg + ".")
             if val_summary["failed"]:
-                st.warning(f"⚠️ Veri alınamayan hisseler: {', '.join(val_summary['failed'])}")
+                st.warning(f"Veri alınamayan hisseler: {', '.join(val_summary['failed'])}")
             if val_summary["excluded"]:
-                st.info(f"ℹ️ ETF olduğu için değerlemeye dahil edilmeyenler: {', '.join(val_summary['excluded'])}")
+                st.info(f"ETF olduğu için değerlemeye dahil edilmeyenler: {', '.join(val_summary['excluded'])}")
             if val_summary["aborted"]:
-                st.warning("⚠️ Yahoo Finance çok fazla istek uyarısı verdi; bazı hisseler çekilemedi. Bir süre sonra tekrar deneyin.")
+                st.warning("Yahoo Finance çok fazla istek uyarısı verdi; bazı hisseler çekilemedi. Bir süre sonra tekrar deneyin.")
 
             for row in rows:
                 row["Veri Zamanı"] = _fmt_trt(row.pop("_fetched_at", None))
@@ -1014,12 +1014,12 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         df_val = df_val.sort_values(by=["Alt Sektör (İş Modeli)", "Nihai Skor"], ascending=[True, False])
 
         all_sub_sectors = ["Tüm Alt Sektörler / İş Modelleri"] + list(df_val["Alt Sektör (İş Modeli)"].unique())
-        selected_sub_sector = st.selectbox("🎯 İş Modeli / Alt Sektör Filtresi:", all_sub_sectors)
+        selected_sub_sector = st.selectbox("İş Modeli / Alt Sektör Filtresi:", all_sub_sectors)
 
         if selected_sub_sector != "Tüm Alt Sektörler / İş Modelleri":
             df_val = df_val[df_val["Alt Sektör (İş Modeli)"] == selected_sub_sector]
 
-        st.subheader(f"📊 Değerleme Sonuçları ({len(df_val)} Hisse)")
+        st.subheader(f"Değerleme Sonuçları ({len(df_val)} Hisse)")
         freshness_caption(
             "Veri güncelliği: her hissenin Yahoo Finance'ten çekildiği zaman 'Veri Zamanı' sütununda (TRT). "
             "Skorlar, piyasa servisinin evreni (piyasa listesi + bu piyasaya bağlı kullanıcı grupları) üzerinden hesaplanır; "
@@ -1029,27 +1029,27 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         # Kolon İpuçları (Hint / Tooltip Yapılandırması)
         column_config = {
             "Hisse": st.column_config.TextColumn("Hisse", help="Hisse Sembolü"),
-            "Alt Sektör (İş Modeli)": st.column_config.TextColumn("İş Modeli Grubu", help="💡 sub_sectors.json dosyasından gelen mikro grup (örn: RAM vs GPU)"),
+            "Alt Sektör (İş Modeli)": st.column_config.TextColumn("İş Modeli Grubu", help="sub_sectors.json dosyasından gelen mikro grup (örn: RAM vs GPU)"),
             "Ana Sektör": st.column_config.TextColumn("Ana Sektör", help="yfinance Makro Sektörü"),
-            "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="💡 70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n💡 40 Altı Kırmızı: Zayıf/Pahalı"),
-            "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="💡 Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı. Eksi değer, hissenin akranlarına göre PRİMLİ (daha pahalı) işlem gördüğü anlamına gelir."),
-            "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="💡 Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
-            "PEG": st.column_config.NumberColumn("PEG [bilgi]", help="💡 F/K ÷ beklenen EPS büyümesi (Yahoo, analist beklentisi). Skora katılmaz - geçmişi olmadığı için 2026-10-08'de skordan çıkarıldı. Yalnızca F/K > 0 olan hisselerde gösterilir."),
-            "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="💡 Optimum: > %10."),
-            "Gelir Büyümesi %": st.column_config.NumberColumn("Gelir Büyümesi % [10p]", help="💡 Optimum: > %10."),
-            "Öz Sermaye Getirisi (ROE) %": st.column_config.NumberColumn("Öz Sermaye Getirisi % [10p]", help="💡 Optimum: > %10."),
-            "Net Kar Marjı %": st.column_config.NumberColumn("Net Kar Marjı % [8p]", help="💡 Optimum: > %15."),
-            "Brüt Kar Marjı %": st.column_config.NumberColumn("Brüt Kar Marjı % [7p]", help="💡 Optimum: %30 - %60."),
-            "Faiz Karşılama Oranı": st.column_config.NumberColumn("Faiz Karşılama [7p]", help="💡 Optimum: > 3.0."),
-            "Varlık Getirisi (ROA) %": st.column_config.NumberColumn("Varlık Getirisi (ROA) % [6p]", help="💡 Optimum: %5 - %10."),
-            "Borç / Özsermaye": st.column_config.NumberColumn("Borç / Özsermaye [5p]", help="💡 Optimum: 0 - 0.5. Eksi değer, şirketin özsermayesinin negatife düştüğü anlamına gelir; bu bir risk sinyalidir ve puan almaz."),
-            "Borç / Varlık %": st.column_config.NumberColumn("Borç / Varlık % [4p]", help="💡 Optimum: < %50."),
-            "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="💡 Optimum: 1.0 - 2.0."),
-            "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="💡 Optimum: > 1.0."),
-            "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="💡 Optimum: 1.0 - 2.0."),
-            "Bilanço Tarihi": st.column_config.TextColumn("Bilanço Tarihi", help="💡 Son açıklanan bilançonun dönem sonu (Yahoo Finance 'mostRecentQuarter'). Boşsa Yahoo'da bu bilgi yok."),
-            "Sonraki Bilanço": st.column_config.TextColumn("Sonraki Bilanço", help="💡 Yahoo Finance'e göre bir sonraki bilanço açıklama tarihi (tahmini olabilir)."),
-            "Veri Zamanı": st.column_config.TextColumn("Veri Zamanı (TRT)", help="💡 Hissenin verisinin Yahoo Finance'ten çekildiği tarih ve saat."),
+            "Nihai Skor": st.column_config.NumberColumn("Nihai Skor (0-100)", help="70+ Yeşil: Yüksek Kalite & Ucuz Hisse\n40 Altı Kırmızı: Zayıf/Pahalı"),
+            "Alt Sektör İskontosu %": st.column_config.NumberColumn("İş Modeli İskontosu % [15p]", help="Özel İş Modeli F/K medyanına göre ucuzluk/pahalılık oranı. Eksi değer, hissenin akranlarına göre PRİMLİ (daha pahalı) işlem gördüğü anlamına gelir."),
+            "Alt Sektör Ort. F/K": st.column_config.NumberColumn("Alt Sektör Ort. F/K", help="Sadece o mikro gruptaki şirketlerin medyan F/K değeri."),
+            "PEG": st.column_config.NumberColumn("PEG [bilgi]", help="F/K ÷ beklenen EPS büyümesi (Yahoo, analist beklentisi). Skora katılmaz - geçmişi olmadığı için 2026-10-08'de skordan çıkarıldı. Yalnızca F/K > 0 olan hisselerde gösterilir."),
+            "EPS Büyümesi %": st.column_config.NumberColumn("EPS Büyümesi % [10p]", help="Optimum: > %10."),
+            "Gelir Büyümesi %": st.column_config.NumberColumn("Gelir Büyümesi % [10p]", help="Optimum: > %10."),
+            "Öz Sermaye Getirisi (ROE) %": st.column_config.NumberColumn("Öz Sermaye Getirisi % [10p]", help="Optimum: > %10."),
+            "Net Kar Marjı %": st.column_config.NumberColumn("Net Kar Marjı % [8p]", help="Optimum: > %15."),
+            "Brüt Kar Marjı %": st.column_config.NumberColumn("Brüt Kar Marjı % [7p]", help="Optimum: %30 - %60."),
+            "Faiz Karşılama Oranı": st.column_config.NumberColumn("Faiz Karşılama [7p]", help="Optimum: > 3.0."),
+            "Varlık Getirisi (ROA) %": st.column_config.NumberColumn("Varlık Getirisi (ROA) % [6p]", help="Optimum: %5 - %10."),
+            "Borç / Özsermaye": st.column_config.NumberColumn("Borç / Özsermaye [5p]", help="Optimum: 0 - 0.5. Eksi değer, şirketin özsermayesinin negatife düştüğü anlamına gelir; bu bir risk sinyalidir ve puan almaz."),
+            "Borç / Varlık %": st.column_config.NumberColumn("Borç / Varlık % [4p]", help="Optimum: < %50."),
+            "Cari Oran": st.column_config.NumberColumn("Cari Oran [3p]", help="Optimum: 1.0 - 2.0."),
+            "Likidite Oranı": st.column_config.NumberColumn("Likidite (Asit-Test) [3p]", help="Optimum: > 1.0."),
+            "Varlık Devir Hızı": st.column_config.NumberColumn("Varlık Devir Hızı [2p]", help="Optimum: 1.0 - 2.0."),
+            "Bilanço Tarihi": st.column_config.TextColumn("Bilanço Tarihi", help="Son açıklanan bilançonun dönem sonu (Yahoo Finance 'mostRecentQuarter'). Boşsa Yahoo'da bu bilgi yok."),
+            "Sonraki Bilanço": st.column_config.TextColumn("Sonraki Bilanço", help="Yahoo Finance'e göre bir sonraki bilanço açıklama tarihi (tahmini olabilir)."),
+            "Veri Zamanı": st.column_config.TextColumn("Veri Zamanı (TRT)", help="Hissenin verisinin Yahoo Finance'ten çekildiği tarih ve saat."),
         }
 
         styled_df = style_valuation_df(prepare_display_df(df_val))
@@ -1066,7 +1066,7 @@ elif module == "💎 Değerleme & Ucuzluk Skoru":
         )
 
         st.divider()
-        with st.expander("ℹ️ Nihai Skor nasıl hesaplanıyor? Parametrelerin anlamı", expanded=True):
+        with st.expander("Nihai Skor nasıl hesaplanıyor? Parametrelerin anlamı", expanded=True):
             st.markdown("""
 **Nihai Skor**, aşağıdaki 13 kritere göre 0'dan başlayıp puan **eklenerek** hesaplanır (hiçbir kriterde puan düşülmez).
 Kriterlerin toplamı en fazla **90 puan**dır; Nihai Skor bu toplamın **100 üzerinden** karşılığıdır (puan × 100 / 90).
@@ -1098,8 +1098,8 @@ Tek istisna **Borç/Özsermaye**'ydi: negatif özsermayeyi yanlışlıkla "düş
 # ==============================================================================
 # 4. MODÜL: BAĞIMSIZ HİSSE GRAFİĞİ
 # ==============================================================================
-elif module == "📊 Bağımsız Hisse Grafiği":
-    st.header("📊 Bağımsız Hisse Senedi Grafiği İnceleme")
+elif module == "Bağımsız Hisse Grafiği":
+    st.header("Bağımsız Hisse Senedi Grafiği İnceleme")
     
     col_select, col_btn = st.columns([3, 1])
     with col_select:
@@ -1107,19 +1107,19 @@ elif module == "📊 Bağımsız Hisse Grafiği":
         
     with col_btn:
         st.write("<br>", unsafe_allow_html=True)
-        if st.button("📈 Grafiği Göster", use_container_width=True, type="primary"):
+        if st.button("Grafiği Göster", use_container_width=True, type="primary"):
             render_chart_for(chosen_ticker)
 
     if st.session_state.show_chart and st.session_state.selected_ticker:
         active_t = st.session_state.selected_ticker
         st.write("---")
-        st.markdown(f"### 📈 Fiyat Grafiği: **{active_t}**")
+        st.markdown(f"### Fiyat Grafiği: **{active_t}**")
         
         with st.spinner(f"{active_t} verileri getiriliyor..."):
             df, cup_pat, obo_pat, tobo_pat = get_scanner_data(active_t)
             
             if df is None or df.empty or 'Close' not in df.columns:
-                st.error(f"❌ {active_t} için geçerli piyasa verisi alınamadı.")
+                st.error(f"{active_t} için geçerli piyasa verisi alınamadı.")
             else:
                 df_viz = df.iloc[-126:]
                 fig = go.Figure(data=[go.Candlestick(
@@ -1134,8 +1134,8 @@ elif module == "📊 Bağımsız Hisse Grafiği":
 # ==============================================================================
 # 5. MODÜL: HİSSE LİSTELERİNİ YÖNET
 # ==============================================================================
-elif module == "⚙️ Hisse Listelerini Yönet":
-    st.header("⚙️ Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
+elif module == "Hisse Listelerini Yönet":
+    st.header("Hisse Listelerini Düzenleme ve Kalıcı Kaydetme")
 
     selected_m = st.selectbox("Düzenlenecek Piyasayı Seçin:", MARKETS)
     current_market_list = st.session_state.ticker_lists[selected_m]
@@ -1143,7 +1143,7 @@ elif module == "⚙️ Hisse Listelerini Yönet":
     col_add, col_del = st.columns(2)
 
     with col_add:
-        st.subheader("➕ Yeni Hisse Ekle")
+        st.subheader("Yeni Hisse Ekle")
         search_query = st.text_input(
             "Şirket adı veya sembol yazıp Enter'a basın:", key="ticker_search_query"
         )
@@ -1156,11 +1156,11 @@ elif module == "⚙️ Hisse Listelerini Yönet":
             if market == "BIST 100" and not symbol.endswith(".IS"):
                 symbol += ".IS"
             if symbol in st.session_state.ticker_lists[market]:
-                st.session_state.ticker_add_message = ("warning", f"⚠️ **{symbol}** zaten {market} listesinde mevcut.")
+                st.session_state.ticker_add_message = ("warning", f"**{symbol}** zaten {market} listesinde mevcut.")
                 return
             st.session_state.ticker_lists[market].append(symbol)
             save_ticker_lists(st.session_state.ticker_lists, username)
-            st.session_state.ticker_add_message = ("success", f"✅ **{symbol}**, {market} listesine eklendi ve kaydedildi!")
+            st.session_state.ticker_add_message = ("success", f"**{symbol}**, {market} listesine eklendi ve kaydedildi!")
             st.session_state.ticker_search_query = ""
             st.session_state.pop("ticker_search_results", None)
             st.session_state.pop("ticker_search_last_query", None)
@@ -1182,22 +1182,22 @@ elif module == "⚙️ Hisse Listelerini Yönet":
                     )
 
     with col_del:
-        st.subheader("🗑️ Hisse Çıkar")
+        st.subheader("Hisse Çıkar")
         symbol_to_remove = st.selectbox("Listeden çıkarmak istediğiniz hisse:", current_market_list)
         
         if st.button("Listeden Çıkar", type="secondary"):
             if symbol_to_remove in current_market_list:
                 st.session_state.ticker_lists[selected_m].remove(symbol_to_remove)
                 save_ticker_lists(st.session_state.ticker_lists, username)
-                st.success(f"🗑️ **{symbol_to_remove}**, {selected_m} listesinden çıkarıldı!")
+                st.success(f"**{symbol_to_remove}**, {selected_m} listesinden çıkarıldı!")
                 st.rerun()
 
     st.write("---")
-    st.subheader(f"📋 Güncel {selected_m} Listesi ({len(current_market_list)} Hisse)")
+    st.subheader(f"Güncel {selected_m} Listesi ({len(current_market_list)} Hisse)")
     st.write(", ".join(current_market_list))
 
     st.write("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Orijinal Varsayılan Listelere Dön (Sıfırla)"):
+    if st.button("Orijinal Varsayılan Listelere Dön (Sıfırla)"):
         st.session_state.ticker_lists = {
             "NASDAQ 100": list(dict.fromkeys(DEFAULT_NASDAQ_100)),
             "NYSE": list(dict.fromkeys(DEFAULT_NYSE)),
@@ -1211,16 +1211,16 @@ elif module == "⚙️ Hisse Listelerini Yönet":
 # ==============================================================================
 # 6. MODÜL: HİSSE GRUPLARINI YÖNET
 # ==============================================================================
-elif module == "🗂️ Hisse Gruplarını Yönet":
-    st.header("🗂️ Hisse Gruplarını Yönetme ve Kalıcı Kaydetme")
+elif module == "Hisse Gruplarını Yönet":
+    st.header("Hisse Gruplarını Yönetme ve Kalıcı Kaydetme")
     st.caption(
         "Kendi hisse gruplarınızı oluşturun; her grup bir piyasayla (NASDAQ 100 / NYSE / "
         "BIST 100) ilişkilendirilir ve o piyasadaki hisseler arasından seçilir. Bu sayede "
         "gruplar kendi aralarında anlamlı biçimde analiz edilebilir. Sol menüde piyasa "
-        "seçtiğinizde, '🗂️ Hisse Grubu' alanında sadece o piyasayla ilişkili gruplar listelenir."
+        "seçtiğinizde, 'Hisse Grubu' alanında sadece o piyasayla ilişkili gruplar listelenir."
     )
 
-    st.subheader("➕ Yeni Hisse Grubu Oluştur")
+    st.subheader("Yeni Hisse Grubu Oluştur")
     with st.form("new_group_form", clear_on_submit=True):
         new_group_name = st.text_input("Grup Adı:", placeholder="örn: Favorilerim, Temettü Hisseleri")
         new_group_market = st.selectbox("İlişkili Piyasa:", MARKETS)
@@ -1228,15 +1228,15 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
         if submitted:
             name = new_group_name.strip()
             if not name:
-                st.warning("⚠️ Lütfen bir grup adı girin.")
+                st.warning("Lütfen bir grup adı girin.")
             elif name in st.session_state.stock_groups:
-                st.warning(f"⚠️ **{name}** adında bir grup zaten mevcut.")
+                st.warning(f"**{name}** adında bir grup zaten mevcut.")
             else:
                 st.session_state.stock_groups[name] = []
                 st.session_state.group_markets[name] = new_group_market
                 save_stock_groups(st.session_state.stock_groups, username)
                 save_group_markets(st.session_state.group_markets, username)
-                st.success(f"✅ **{name}** grubu **{new_group_market}** piyasasıyla ilişkilendirilerek oluşturuldu! Şimdi hisse ekleyebilirsiniz.")
+                st.success(f"**{name}** grubu **{new_group_market}** piyasasıyla ilişkilendirilerek oluşturuldu! Şimdi hisse ekleyebilirsiniz.")
                 st.rerun()
 
     st.divider()
@@ -1244,7 +1244,7 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
     if not st.session_state.stock_groups:
         st.info("Henüz hiç hisse grubunuz yok. Yukarıdan yeni bir grup oluşturarak başlayın.")
     else:
-        st.subheader("📂 Mevcut Gruplar")
+        st.subheader("Mevcut Gruplar")
         group_names = list(st.session_state.stock_groups.keys())
         selected_group = st.selectbox("Düzenlenecek grubu seçin:", group_names, key="group_editor_select")
         current_group_tickers = st.session_state.stock_groups[selected_group]
@@ -1254,23 +1254,23 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
         market_options = [MARKET_PLACEHOLDER] + MARKETS
         market_default_index = MARKETS.index(current_group_market) + 1 if current_group_market in MARKETS else 0
         chosen_market = st.selectbox(
-            "🔗 İlişkili Piyasa:", market_options, index=market_default_index, key=f"market_select_{selected_group}"
+            "İlişkili Piyasa:", market_options, index=market_default_index, key=f"market_select_{selected_group}"
         )
         if chosen_market != MARKET_PLACEHOLDER and chosen_market != current_group_market:
             st.session_state.group_markets[selected_group] = chosen_market
             save_group_markets(st.session_state.group_markets, username)
-            st.success(f"🔗 **{selected_group}** grubu **{chosen_market}** piyasasıyla ilişkilendirildi.")
+            st.success(f"**{selected_group}** grubu **{chosen_market}** piyasasıyla ilişkilendirildi.")
             st.rerun()
         if current_group_market is None:
             st.warning(
-                "⚠️ Bu grubun piyasası henüz atanmadı. Yukarıdan bir piyasa seçmeden bu grup "
+                "Bu grubun piyasası henüz atanmadı. Yukarıdan bir piyasa seçmeden bu grup "
                 "sol menüdeki piyasa filtresinde görünmeyecek."
             )
 
         col_add, col_del = st.columns(2)
 
         with col_add:
-            st.markdown("**➕ Bu Gruba Hisse Ekle**")
+            st.markdown("**Bu Gruba Hisse Ekle**")
             add_mode = st.radio(
                 "Ekleme yöntemi:", ["Borsadan Seç", "Kendi Ticker'ımı Gireyim"],
                 key=f"add_mode_{selected_group}", horizontal=True,
@@ -1278,7 +1278,7 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
 
             if add_mode == "Borsadan Seç":
                 if not current_group_market:
-                    st.info("ℹ️ Borsadan seçim yapabilmek için önce yukarıdan bu grubun piyasasını seçin.")
+                    st.info("Borsadan seçim yapabilmek için önce yukarıdan bu grubun piyasasını seçin.")
                 else:
                     st.caption(f"Bu grup **{current_group_market}** piyasasıyla ilişkili; sadece bu piyasadaki hisseler listelenir.")
                     available = [t for t in st.session_state.ticker_lists[current_group_market] if t not in current_group_tickers]
@@ -1289,28 +1289,28 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
                                 dict.fromkeys(current_group_tickers + picks)
                             )
                             save_stock_groups(st.session_state.stock_groups, username)
-                            st.success(f"✅ {len(picks)} hisse **{selected_group}** grubuna eklendi!")
+                            st.success(f"{len(picks)} hisse **{selected_group}** grubuna eklendi!")
                             st.rerun()
                         else:
-                            st.warning("⚠️ Lütfen en az bir hisse seçin.")
+                            st.warning("Lütfen en az bir hisse seçin.")
             else:
-                st.caption("💡 BIST hisseleri için `.IS` uzantısını eklemeyi unutmayın (örn: THYAO.IS).")
+                st.caption("BIST hisseleri için `.IS` uzantısını eklemeyi unutmayın (örn: THYAO.IS).")
                 custom_ticker = st.text_input(
                     "Ticker (örn: AAPL, THYAO.IS):", key=f"custom_ticker_{selected_group}"
                 ).strip().upper()
                 if st.button("Ticker'ı Gruba Ekle", key=f"add_custom_{selected_group}"):
                     if not custom_ticker:
-                        st.warning("⚠️ Lütfen bir ticker girin.")
+                        st.warning("Lütfen bir ticker girin.")
                     elif custom_ticker in current_group_tickers:
-                        st.warning(f"⚠️ **{custom_ticker}** zaten bu grupta mevcut.")
+                        st.warning(f"**{custom_ticker}** zaten bu grupta mevcut.")
                     else:
                         st.session_state.stock_groups[selected_group].append(custom_ticker)
                         save_stock_groups(st.session_state.stock_groups, username)
-                        st.success(f"✅ **{custom_ticker}**, **{selected_group}** grubuna eklendi!")
+                        st.success(f"**{custom_ticker}**, **{selected_group}** grubuna eklendi!")
                         st.rerun()
 
         with col_del:
-            st.markdown("**🗑️ Gruptan Hisse Çıkar**")
+            st.markdown("**Gruptan Hisse Çıkar**")
             if current_group_tickers:
                 ticker_to_remove = st.selectbox(
                     "Çıkarılacak hisse:", current_group_tickers, key=f"remove_sel_{selected_group}"
@@ -1318,55 +1318,55 @@ elif module == "🗂️ Hisse Gruplarını Yönet":
                 if st.button("Hisseyi Gruptan Çıkar", key=f"remove_btn_{selected_group}"):
                     st.session_state.stock_groups[selected_group].remove(ticker_to_remove)
                     save_stock_groups(st.session_state.stock_groups, username)
-                    st.success(f"🗑️ **{ticker_to_remove}** çıkarıldı.")
+                    st.success(f"**{ticker_to_remove}** çıkarıldı.")
                     st.rerun()
             else:
                 st.caption("Bu grupta henüz hisse yok.")
 
         st.write("---")
-        st.subheader(f"📋 {selected_group} İçeriği ({len(current_group_tickers)} Hisse)")
+        st.subheader(f"{selected_group} İçeriği ({len(current_group_tickers)} Hisse)")
         st.write(", ".join(current_group_tickers) if current_group_tickers else "_Bu grup henüz boş._")
 
         st.write("<br>", unsafe_allow_html=True)
-        st.markdown("**⚠️ Grubu Sil**")
+        st.markdown("**Grubu Sil**")
         confirm_key = f"confirm_delete_group_{selected_group}"
-        if st.button(f"🗑️ '{selected_group}' Grubunu Sil", key=f"del_group_btn_{selected_group}"):
+        if st.button(f"'{selected_group}' Grubunu Sil", key=f"del_group_btn_{selected_group}"):
             st.session_state[confirm_key] = True
 
         if st.session_state.get(confirm_key):
-            st.warning(f"❓ **{selected_group}** grubunu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
+            st.warning(f"**{selected_group}** grubunu silmek istediğinize emin misiniz? Bu işlem geri alınamaz.")
             cc1, cc2 = st.columns(2)
-            if cc1.button("✅ Evet, Sil", type="primary", key=f"confirm_yes_{selected_group}"):
+            if cc1.button("Evet, Sil", type="primary", key=f"confirm_yes_{selected_group}"):
                 del st.session_state.stock_groups[selected_group]
                 st.session_state.group_markets.pop(selected_group, None)
                 save_stock_groups(st.session_state.stock_groups, username)
                 save_group_markets(st.session_state.group_markets, username)
                 st.session_state.pop(confirm_key, None)
                 st.session_state["_pending_group_removal"] = selected_group
-                st.success(f"🗑️ **{selected_group}** grubu silindi.")
+                st.success(f"**{selected_group}** grubu silindi.")
                 st.rerun()
-            if cc2.button("❌ Vazgeç", key=f"confirm_no_{selected_group}"):
+            if cc2.button("Vazgeç", key=f"confirm_no_{selected_group}"):
                 st.session_state.pop(confirm_key, None)
                 st.rerun()
 
 # ==============================================================================
 # MODÜL: DTW ZAMAN SERİSİ & BENZERLİK ANALİZİ (GÖRÜNTÜLEME & TİP GÜVENCELİ)
 # ==============================================================================
-elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
-    st.header("🔄 DTW (Dynamic Time Warping) Zaman Serisi & Benzerlik Analizi")
+elif module == "DTW Zaman Serisi & Benzerlik Analizi":
+    st.header("DTW (Dynamic Time Warping) Zaman Serisi & Benzerlik Analizi")
     st.caption(f"Seçili **{market}** kaynağındaki hisselerin son 2 gününün 5 dakikalık seans içi fiyat hareketlerini kıyaslar.")
 
     col_btn, col_thresh, col_window = st.columns([2, 1.5, 1.5])
     
     with col_btn:
         st.write("<br>", unsafe_allow_html=True)
-        run_dtw_fetch = st.button("🚀 Verileri Güncelle & Analizi Çalıştır", type="primary")
+        run_dtw_fetch = st.button("Verileri Güncelle & Analizi Çalıştır", type="primary")
         
     with col_thresh:
-        min_similarity = st.slider("🎯 Min. Benzerlik Skoru (%):", min_value=50, max_value=95, value=75, step=5)
+        min_similarity = st.slider("Min. Benzerlik Skoru (%):", min_value=50, max_value=95, value=75, step=5)
 
     with col_window:
-        max_warp_minutes = st.slider("⏱️ Max Zamansal Kayma (Dakika):", min_value=15, max_value=120, value=45, step=15)
+        max_warp_minutes = st.slider("Max Zamansal Kayma (Dakika):", min_value=15, max_value=120, value=45, step=15)
         max_warping_window = max_warp_minutes // 5  # 5 dakikalık adımlara çevir
 
     time_penalty = 0.10
@@ -1407,9 +1407,9 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 
                     # Sonuçları diske kaydet
                     save_cached_dtw_results(max_warping_window, time_penalty, self_sim_results)
-                    st.success(f"✅ {len(dtw_data)} hissenin analizi tamamlandı!")
+                    st.success(f"{len(dtw_data)} hissenin analizi tamamlandı!")
             else:
-                st.error("⚠️ Veri çekilemedi.")
+                st.error("Veri çekilemedi.")
 
     # 3. Diskteki cache sonuçlarını her durumda (parametreler uyuşuyorsa) oturuma otomatik yükle
     cached_self = load_cached_dtw_results(max_warping_window, time_penalty)
@@ -1442,11 +1442,11 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
         stocks_dict = st.session_state.dtw_data
         stock_keys = list(stocks_dict.keys())
 
-        tab1, tab2 = st.tabs(["📌 1. Kendi İçinde Benzerlik", "📈 2. İnteraktif Karşılaştırmalı Grafik"])
+        tab1, tab2 = st.tabs(["1. Kendi İçinde Benzerlik", "2. İnteraktif Karşılaştırmalı Grafik"])
 
         # TAB 1: KENDİ İÇİNDE BENZERLİK (Tip Güvenceli Filtreleme)
         with tab1:
-            st.subheader("🔁 Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
+            st.subheader("Hisselerin 1. Gün ve 2. Gün Fiyat Hareketi Benzerliği")
             if 'self_sim_results' in st.session_state and st.session_state.self_sim_results:
                 dtw_last_update = load_cached_dtw_meta().get("last_update_date")
                 if dtw_last_update:
@@ -1464,18 +1464,18 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                     up_count = int((df_filtered_self["2 Günlük Değişim %"] >= 0).sum())
                     down_count = int((df_filtered_self["2 Günlük Değişim %"] < 0).sum())
                     tc1, tc2 = st.columns(2)
-                    tc1.metric("📈 2 Günlük Yükseliş Trendinde", up_count)
-                    tc2.metric("📉 2 Günlük Düşüş Trendinde", down_count)
+                    tc1.metric("2 Günlük Yükseliş Trendinde", up_count)
+                    tc2.metric("2 Günlük Düşüş Trendinde", down_count)
                     st.dataframe(zebra_style(df_filtered_self), use_container_width=True, hide_index=True)
                 else:
                     max_score = df_self["DTW Benzerlik Skoru %"].max() if not df_self.empty else 0
-                    st.warning(f"⚠️ Seçtiğiniz **%{min_similarity}** eşik değerinin üzerinde öz-benzerlik gösteren hisse bulunamadı. (Bu veri setindeki en yüksek öz-benzerlik: **%{max_score}**).")
+                    st.warning(f"Seçtiğiniz **%{min_similarity}** eşik değerinin üzerinde öz-benzerlik gösteren hisse bulunamadı. (Bu veri setindeki en yüksek öz-benzerlik: **%{max_score}**).")
             else:
                 st.warning("Veri bulunamadı. Lütfen yukarıdaki butona tıklayın.")
 
         # TAB 2: İNTERAKTİF KARŞILAŞTIRMALI GRAFİK (Sadece Görselde Türkiye Saati Dönüşümü)
         with tab2:
-            st.subheader("📈 Karşılaştırmalı Zaman Serisi Grafiği (Türkiye Saati)")
+            st.subheader("Karşılaştırmalı Zaman Serisi Grafiği (Türkiye Saati)")
             comp_mode = st.radio("Karşılaştırma Tipi:", ["Aynı Hissenin 2 Günü (Gün 1 vs Gün 2)", "İki Farklı Hisse (Son Gün)"], horizontal=True)
             
             # New York zamanındaki saat listelerini Türkiye saatine çeviren yardımcı fonksiyon
@@ -1506,7 +1506,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                 prices1, prices2 = t_data["day1"]["prices"], t_data["day2"]["prices"]
                 
                 sim, _ = compute_dtw_similarity(prices1, prices2, max_warping_window, time_penalty)
-                st.info(f"💡 **{selected_t}** için Gün 1 ve Gün 2 DTW Benzerlik Skoru: **%{sim}**")
+                st.info(f"**{selected_t}** için Gün 1 ve Gün 2 DTW Benzerlik Skoru: **%{sim}**")
 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=times1_short, y=prices1, mode='lines', name=f"{t_data['day1']['date']} (Gün 1)", line=dict(color='#00d2ff', width=2)))
@@ -1541,7 +1541,7 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
                 t2_short, _ = convert_ny_to_tr(data2["times"])
 
                 sim, _ = compute_dtw_similarity(data1["prices"], data2["prices"], max_warping_window, time_penalty)
-                st.info(f"💡 **{t1_sel}** ile **{t2_sel}** Arasındaki DTW Benzerlik Skoru: **%{sim}**")
+                st.info(f"**{t1_sel}** ile **{t2_sel}** Arasındaki DTW Benzerlik Skoru: **%{sim}**")
 
                 fig = go.Figure()
                 fig.add_trace(go.Scatter(x=t1_short, y=data1["prices"], mode='lines', name=f"{t1_sel} ({data1['date']})", line=dict(color='#2ec4b6', width=2)))
@@ -1565,8 +1565,8 @@ elif module == "🔄 DTW Zaman Serisi & Benzerlik Analizi":
 # ==============================================================================
 # 7. MODÜL: ALPACA CANLI POZİSYONLAR
 # ==============================================================================
-elif module == "🦙 Alpaca Canlı Pozisyonlar":
-    st.header("🦙 Alpaca Canlı Pozisyonlar")
+elif module == "Alpaca Canlı Pozisyonlar":
+    st.header("Alpaca Canlı Pozisyonlar")
     st.caption("Açık pozisyonlar, güncel stop seviyeleri ve stoptan uzaklık. Stoplar, sunucudaki stop botu tarafından "
                "seans içinde 5 dakikada bir güncellenir.")
     render_alpaca_dashboard(username)
@@ -1574,16 +1574,16 @@ elif module == "🦙 Alpaca Canlı Pozisyonlar":
 # ==============================================================================
 # 8. MODÜL: PREMIUM BUY POINT PORTFÖYÜ
 # ==============================================================================
-elif module == "🎯 Premium Buy Point Portföyü":
-    st.header("🎯 Premium Buy Point Portföyü")
+elif module == "Premium Buy Point Portföyü":
+    st.header("Premium Buy Point Portföyü")
     st.caption("Seçtiğiniz hisseler için demand zone (premium buy point) taranır; fiyat zone'a girdiğinde otomatik alım yapılır.")
     render_premium_buy_portfolio(target_list, username)
 
 # ==============================================================================
 # 8b. MODÜL: OTOMATİK ALIM/SATIM
 # ==============================================================================
-elif module == "🤖 Otomatik Alım/Satım":
-    st.header("🤖 Otomatik Alım/Satım")
+elif module == "Otomatik Alım/Satım":
+    st.header("Otomatik Alım/Satım")
     st.caption(
         "Bu mod tamamen Alpaca'daki verilerle çalışır: NASDAQ 100, NYSE, Russell 2000 (aşağıda "
         "seçiliyse) ve bu piyasalara bağlı kullanıcı tanımlı hisse gruplarını tarar, RSI14/RSI21 + EMA50/EMA200 momentum teyidiyle en "
@@ -1595,8 +1595,8 @@ elif module == "🤖 Otomatik Alım/Satım":
 # ==============================================================================
 # 8c. MODÜL: RELATIVE STRENGTH ROTASYONU
 # ==============================================================================
-elif module == "📈 Relative Strength Rotasyonu":
-    st.header("📈 Relative Strength Rotasyonu")
+elif module == "Relative Strength Rotasyonu":
+    st.header("Relative Strength Rotasyonu")
     st.caption(
         "Evrendeki (NASDAQ 100/NYSE/Russell 2000) hisseleri göreceli güce göre sıralar, en güçlü "
         "N tanesini eşit ağırlıkla tutar; haftalık yeniden dengelemede sıralamadan düşenler satılır, "
@@ -1608,8 +1608,8 @@ elif module == "📈 Relative Strength Rotasyonu":
 # ==============================================================================
 # 8d. MODÜL: AÇILIŞ ARALIĞI KIRILIMI (ORB)
 # ==============================================================================
-elif module == "📈 Açılış Aralığı Kırılımı (ORB)":
-    st.header("📈 Açılış Aralığı Kırılımı (ORB)")
+elif module == "Açılış Aralığı Kırılımı (ORB)":
+    st.header("Açılış Aralığı Kırılımı (ORB)")
     st.caption(
         "Piyasa açılışından sonra evreni (varsayılan Russell 2000) otomatik tarar, her adaya hacim "
         "ivmesi + kırılım yüzdesinden bir alım puanı verir; en yüksek puanlı N tanesi market emriyle "
@@ -1622,8 +1622,8 @@ elif module == "📈 Açılış Aralığı Kırılımı (ORB)":
 # ==============================================================================
 # 8e. MODÜL: HEIKIN ASHI GÜN İÇİ
 # ==============================================================================
-elif module == "🕯️ Heikin Ashi Gün İçi":
-    st.header("🕯️ Heikin Ashi Gün İçi")
+elif module == "Heikin Ashi Gün İçi":
+    st.header("Heikin Ashi Gün İçi")
     st.caption(
         "Seans boyunca yarım saatte bir evreni (varsayılan NASDAQ 100) 30 dakikalık barlarda tarar; "
         "Heikin Ashi + SMA50 + Stokastik alım şartlarını sağlayan en yüksek puanlı hisseler market emriyle "
@@ -1637,7 +1637,7 @@ elif module == "🕯️ Heikin Ashi Gün İçi":
 # 9. MODÜL: TÜRK FONLARI
 # ==============================================================================
 elif module == "Türk Fonları":
-    st.header("🇹🇷 Türk Fonları")
+    st.header("Türk Fonları")
     st.caption("TEFAS'tan günlük çekilen Hisse Senedi Yoğun, Değişken, Mutlak Getiri ve İstatistiksel Arbitraj fonlarının fiyat/hacim değişim tablosu.")
     render_turk_fonlari()
 
@@ -1645,15 +1645,15 @@ elif module == "Türk Fonları":
 # 10b. MODÜL: FONLARIM (TAKİP EDİLEN FONLAR)
 # ==============================================================================
 elif module == "Fonlarım":
-    st.header("💼 Fonlarım")
+    st.header("Fonlarım")
     st.caption("Elinizde bulunan fonları kaydedin; her fon için KAP'tan çekilen en büyük 10 yatırım aracının yüzdesini takip edin.")
     render_turk_fonlari_takip(username)
 
 # ==============================================================================
 # 10. MODÜL: HİSSE PATERN ANALİZİ
 # ==============================================================================
-elif module == "📐 Hisse Patern Analizi":
-    st.header("📐 Hisse Patern Analizi")
+elif module == "Hisse Patern Analizi":
+    st.header("Hisse Patern Analizi")
     st.caption("Seçilen hisselerin yıllık (3 yıllık), 3 aylık (son 2 yıl) ve aylık (son 12 ay) periyotlar arasındaki tekrarlayan fiyat paterni benzerliğini DTW ile ölçer.")
     render_hisse_patern(target_list)
 
@@ -1661,23 +1661,23 @@ elif module == "📐 Hisse Patern Analizi":
 # 11. MODÜL: BACKTEST
 # ==============================================================================
 elif module == "BackTest":
-    st.header("🧪 BackTest")
+    st.header("BackTest")
     st.caption("Seçtiğiniz hisse üzerinde, seçtiğiniz buy-point algoritması × mum periyodu × stop-loss algoritması kombinasyonlarının her birini canlı sistemle birebir aynı karar mantığıyla geçmiş veri üzerinde yeniden oynatır - sonuçlar, o kombinasyonun canlıda gerçekte ne yapacağını yansıtır. Her çalıştırma algoritma bazlı sekmelerde kalıcı olarak biriktirilir; özet tablonun yanında işlem detayları ve grafiği de incelenebilir.")
     render_backtest(target_list, username)
 
 # ==============================================================================
 # 11b. MODÜL: STOP LOSS AYARLARI
 # ==============================================================================
-elif module == "🛡️ Stop Loss Ayarları":
-    st.header("🛡️ Stop Loss Ayarları")
+elif module == "Stop Loss Ayarları":
+    st.header("Stop Loss Ayarları")
     st.caption("Stop-loss algoritmalarının (Trailing Stop, Premium Buy Point bracket girişleri, BackTest) parametrelerini buradan ayarlayıp kaydedebilirsiniz.")
     render_stop_loss_settings(username)
 
 # ==============================================================================
 # 11c. MODÜL: ALGO ANALİZ (eski adıyla İşlem Günlüğü; 2026-09-28 emir analizi · Öneri 6)
 # ==============================================================================
-elif module == "🧠 Algo Analiz":
-    st.header("🧠 Algo Analiz")
+elif module == "Algo Analiz":
+    st.header("Algo Analiz")
     st.caption(
         "Portföyün son durumu, açık pozisyonların şimdi satılırsa ve stop loss'lar devreye girerse oluşacak "
         "kârlılığı, kapanan pozisyonlardan gerçekleşen kâr, algoritma ve birlikte kullanılan stop loss bazında "
@@ -1689,14 +1689,14 @@ elif module == "🧠 Algo Analiz":
 # ==============================================================================
 # 12. MODÜL: BIÇAK KANALI TESTİ
 # ==============================================================================
-elif module == "🔪 Bıçak Kanalı Testi":
+elif module == "Bıçak Kanalı Testi":
     render_bicak_kanali_test(target_list)
 
 # ==============================================================================
 # 12b. MODÜL: YAPAY ZEKA ANALİZ MODÜLÜ (transformer eğitim veri seti)
 # ==============================================================================
-elif module == "🤖 Yapay Zeka Analiz Modülü":
-    st.header("🤖 Yapay Zeka Analiz Modülü")
+elif module == "Yapay Zeka Analiz Modülü":
+    st.header("Yapay Zeka Analiz Modülü")
     st.caption(
         "NASDAQ 100'den seçilen hisse için transformer eğitiminde kullanılacak günlük veri setini hazırlar: "
         "3 yıllık açılış / VWAP / kapanış / hacim ve duyarlılık çekilir, EMA20 / EMA50 / EMA200 ile 1-2-3 aylık "
@@ -1706,10 +1706,10 @@ elif module == "🤖 Yapay Zeka Analiz Modülü":
     )
     render_ai_dataset(username, st.session_state.ticker_lists.get("NASDAQ 100", []))
 
-elif module == "👤 Hesabım":
+elif module == "Hesabım":
     render_my_account(current_user)
 
-elif module == "🛡️ Kullanıcı Yönetimi":
+elif module == "Kullanıcı Yönetimi":
     render_user_admin(username)
 
 # ==============================================================================

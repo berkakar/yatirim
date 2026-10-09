@@ -50,12 +50,12 @@ def _order_price(order: dict) -> float | None:
     return None
 
 
-REBUY_NOTE = "🔁 Alım-Stop-Alım: stop sonrası otomatik yeniden alım"
+REBUY_NOTE = "Alım-Stop-Alım: stop sonrası otomatik yeniden alım"
 
 
-RELATIVE_STRENGTH_LABEL = "📈 Relative Strength Rotasyonu"
-ORB_SCAN_LABEL = "📈 Açılış Aralığı Kırılımı (ORB)"
-HA_INTRADAY_LABEL = "🕯️ Heikin Ashi Gün İçi"
+RELATIVE_STRENGTH_LABEL = "Relative Strength Rotasyonu"
+ORB_SCAN_LABEL = "Açılış Aralığı Kırılımı (ORB)"
+HA_INTRADAY_LABEL = "Heikin Ashi Gün İçi"
 
 
 def _parse_order_tag(order: dict) -> tuple[str, str, bool]:
@@ -151,7 +151,7 @@ def render_account_summary(client: AlpacaClient, username: str, positions: list[
 
     if show_initial_capital_setting:
         with st.expander(
-            "💵 İlk Sermaye Ayarı",
+            "İlk Sermaye Ayarı",
             expanded=st.session_state.initial_capital is None,
         ):
             st.caption(
@@ -230,7 +230,7 @@ def render_alpaca_dashboard(username):
         positions = client.get_all_positions()
         render_account_summary(client, username, positions)
     except Exception as e:
-        st.warning(f"⚠️ Alpaca hesap özeti alınamadı: {e}")
+        st.warning(f"Alpaca hesap özeti alınamadı: {e}")
         return
     st.divider()
 
@@ -239,11 +239,11 @@ def render_alpaca_dashboard(username):
     render_live_positions(username, positions)
 
     if positions:
-        with st.expander("🛡️ Stop-Loss Mantığı Nasıl Çalışır?"):
+        with st.expander("Stop-Loss Mantığı Nasıl Çalışır?"):
             st.markdown(
                 "Yukarıdaki 'Güncel Stop $' sütunu, elle değil, aşağıdaki kurallarla otomatik "
                 "yönetilen structure-based bir trailing-stop sistemini yansıtır:\n\n"
-                "**[2026-09-28 güncellemesi - ayrıntılar: 🧠 Algo Analiz > Değişiklik Günlüğü]**\n\n"
+                "**[2026-09-28 güncellemesi - ayrıntılar: Algo Analiz > Değişiklik Günlüğü]**\n\n"
                 "- İlk stop, hisse için seçili stop-loss algoritmasına göre kurulur (varsayılan: girişin "
                 "%1.5 altı). Seçenek olarak eklenen **Oynaklık (ATR) Stop** seçilirse stop, giriş sinyalinin "
                 "mum periyodundaki ATR'nin 2 katı aşağıya kurulur.\n"
@@ -273,10 +273,10 @@ def render_alpaca_dashboard(username):
 
     orders = client.get_recent_orders(days=HISTORY_DAYS)
 
-    st.subheader("💰 Kapanmış İşlemler - Gerçekleşen Kâr/Zarar")
+    st.subheader("Kapanmış İşlemler - Gerçekleşen Kâr/Zarar")
     render_realized_pnl_table(client, orders, HISTORY_DAYS)
 
-    st.subheader(f"📜 Son {HISTORY_DAYS} Gün İşlem Geçmişi")
+    st.subheader(f"Son {HISTORY_DAYS} Gün İşlem Geçmişi")
 
     history_rows = [format_order_row(o) for o in orders]
 

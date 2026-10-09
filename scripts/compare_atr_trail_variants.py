@@ -78,7 +78,7 @@ def evaluate(name: str, data, args) -> list[str]:
             mr, lor, hir = paired_bootstrap(subset, outcomes[c[0]], outcomes[base], data, key="r")
             changed = sum(1 for a, b in zip(outcomes[c[0]], outcomes[base])
                           if a and b and abs(a["equity_pct"] - b["equity_pct"]) > 1e-9)
-            verdict = "anlamlı ✅" if lo > 0 else ("anlamlı ❌" if hi < 0 else "anlamlı değil")
+            verdict = "anlamlı" if lo > 0 else ("anlamlı" if hi < 0 else "anlamlı değil")
             lines.append(f"- {c[0]} − mevcut: işlem başına özs. **{m:+.4f}%** (%95 GA {lo:+.4f} … {hi:+.4f}, "
                          f"{verdict}); R farkı {mr:+.3f} ({lor:+.3f} … {hir:+.3f}); sonucu değişen işlem {changed}")
         lines.append("")

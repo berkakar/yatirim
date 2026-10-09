@@ -1,4 +1,4 @@
-"""Analiz > "🤖 Yapay Zeka Analiz Modülü" - NASDAQ 100 hissesi için transformer
+"""Analiz > "Yapay Zeka Analiz Modülü" - NASDAQ 100 hissesi için transformer
 eğitim veri setini hazırlar, tabloda gösterir ve veritabanına kaydeder
 (hesaplama ve kayıt: ai_dataset.py)."""
 
@@ -109,14 +109,14 @@ def _render_archive_status(keep_years):
     sent, sec = _archive_coverage()
     need = (pd.Timestamp.now().normalize() - pd.DateOffset(years=keep_years)).strftime("%Y-%m-%d")
     c1, c2 = st.columns(2)
-    c1.caption(f"📚 NASDAQ 100 duyarlılık arşivi: **{sent['first']} → {sent['last']}** ({sent['rows']} gün)"
-               if sent else "📚 NASDAQ 100 duyarlılık arşivi: **boş**")
-    c2.caption(f"🏭 Sektör ETF arşivi: **{sec['first']} → {sec['last']}**" if sec else "🏭 Sektör ETF arşivi: **boş**")
+    c1.caption(f"NASDAQ 100 duyarlılık arşivi: **{sent['first']} → {sent['last']}** ({sent['rows']} gün)"
+               if sent else "NASDAQ 100 duyarlılık arşivi: **boş**")
+    c2.caption(f"Sektör ETF arşivi: **{sec['first']} → {sec['last']}**" if sec else "Sektör ETF arşivi: **boş**")
     short = (not sent or sent["first"] > need) or (not sec or sec["first"] > need)
     if short:
         st.warning(f"Günlük arşiv {keep_years} yıllık veri setini kapsamıyor ({need} öncesi eksik). Eksik "
                    "günler interpolasyon/taşımayla doldurulur; doğru veri için önce arşivi doldurun.")
-        if st.button(f"📥 Arşivi {keep_years} yıllık doldur (NASDAQ 100 + sektör ETF'leri)", key="ai_archive_backfill",
+        if st.button(f"Arşivi {keep_years} yıllık doldur (NASDAQ 100 + sektör ETF'leri)", key="ai_archive_backfill",
                      help="Yahoo'dan NASDAQ 100 hisseleri ve sektör ETF'leri indirilir - birkaç dakika sürebilir."):
             import market_sentiment as ms
 
@@ -130,7 +130,7 @@ def _render_archive_status(keep_years):
 
 
 def _render_create(username, nasdaq_tickers):
-    st.subheader("1️⃣ Veri Setini Hazırla")
+    st.subheader("1. Veri Setini Hazırla")
     options = sorted(dict.fromkeys(ad.normalize_ticker(t) for t in nasdaq_tickers if t))
     c1, c2, c3, c4 = st.columns([2, 2, 1, 1])
     sub_sectors = _sub_sectors()
@@ -161,13 +161,13 @@ def _render_create(username, nasdaq_tickers):
         st.info(f"{ticker} için kayıtlı veri seti var ({existing['start']} → {existing['end']}). Yeniden hazırlamak "
                 "kayıtlı günlerin üzerine yazar; elle eklenen alanlar korunur. Yalnızca yeni günler için "
                 "aşağıdaki **Yeni günleri ekle** düğmesini kullanın.")
-    if not st.button("🚀 Veriyi Hazırla ve Kaydet", type="primary", disabled=not ticker, key="ai_build"):
+    if not st.button("Veriyi Hazırla ve Kaydet", type="primary", disabled=not ticker, key="ai_build"):
         return
     with st.status(f"{ticker} veri seti hazırlanıyor...", expanded=True) as status:
         try:
             fetcher = _alpaca_vwap_fetcher(username) if use_alpaca else None
             if use_alpaca and fetcher is None:
-                st.write("ℹ️ Alpaca anahtarı bulunamadı - VWAP için tipik fiyat kullanılacak.")
+                st.write("Alpaca anahtarı bulunamadı - VWAP için tipik fiyat kullanılacak.")
             df, meta = ad.create(ticker, int(fetch_years), int(keep_years), vwap_fetcher=fetcher,
                                  fetch_valuation=fetch_val, reconstruct_history=reconstruct, progress=lambda m: st.write(f"• {m}"))
         except Exception as e:
@@ -237,7 +237,7 @@ def _render_dataset(ticker, username):
                    f"({len(present_etfs)}/{len(present_etfs) + len(missing_etfs)} var). Günlük arşivi doldurup "
                    "veri setini yeniden hazırlayın.")
     else:
-        st.caption(f"🏭 Sektör ETF'leri veride: {', '.join(present_etfs)} - her biri için kapanış, 1 / 5 / 21 "
+        st.caption(f"Sektör ETF'leri veride: {', '.join(present_etfs)} - her biri için kapanış, 1 / 5 / 21 "
                    "günlük getiri (`ret_*`).")
 
     missing_rel = ad.missing_relative_cols(df)
@@ -252,7 +252,7 @@ def _render_dataset(ticker, username):
                          "olmadan (yerlerine yüzde / getiri karşılıkları).")
     if mode == "Eğitim verisi":
         dropped = [c for c in df.columns if c not in train.columns and c not in ad.META_COLS]
-        st.caption(f"🎯 Eğitim verisi: **{len(train)} gün × {len(train.columns)} sütun**. Eğitime alınmayanlar "
+        st.caption(f"Eğitim verisi: **{len(train)} gün × {len(train.columns)} sütun**. Eğitime alınmayanlar "
                    f"({len(dropped)}): " + ", ".join(f"`{c}`" for c in dropped)
                    + f" · meta ({len([c for c in df.columns if c in ad.META_COLS])}): "
                    + ", ".join(f"`{c}`" for c in df.columns if c in ad.META_COLS))
@@ -268,7 +268,7 @@ def _render_dataset(ticker, username):
                  column_config={"date": st.column_config.TextColumn("Tarih")})
 
     b1, b2, b3 = st.columns(3)
-    if b1.button("🔄 Yeni günleri ekle", key=f"ai_update_{ticker}",
+    if b1.button("Yeni günleri ekle", key=f"ai_update_{ticker}",
                  help="Son kayıtlı günden sonraki işlem günlerini hesaplayıp ekler; var olan günler değişmez."):
         with st.spinner("Yeni günler hesaplanıyor..."):
             try:
@@ -280,11 +280,11 @@ def _render_dataset(ticker, username):
                 st.success(f"{added} yeni gün eklendi." if added else "Eklenecek yeni gün yok.")
                 if added:
                     st.rerun()
-    b2.download_button("⬇️ Eğitim verisi (CSV)", ad.training_frame(df).to_csv(date_format="%Y-%m-%d").encode("utf-8"),
+    b2.download_button("Eğitim verisi (CSV)", ad.training_frame(df).to_csv(date_format="%Y-%m-%d").encode("utf-8"),
                        file_name=f"ai_dataset_{ticker}.csv", mime="text/csv", key=f"ai_csv_{ticker}",
                        help="Görünümdeki 'Eğitim verisi' tablosu: meta sütunlar ve fiyat / hacim seviyeleri olmadan.")
     confirm = b3.checkbox("Silmeyi onayla", key=f"ai_del_ok_{ticker}")
-    if b3.button("🗑️ Veri setini sil", disabled=not confirm, key=f"ai_del_{ticker}"):
+    if b3.button("Veri setini sil", disabled=not confirm, key=f"ai_del_{ticker}"):
         ad.delete_dataset(ticker)
         st.rerun()
 
@@ -292,7 +292,7 @@ def _render_dataset(ticker, username):
 
     _render_redundancy(train)
 
-    with st.expander("➕ Bir güne veri ekle"):
+    with st.expander("Bir güne veri ekle"):
         st.caption("Seçilen güne yeni bir alan (ör. haber duyarlılığı) ekler veya günceller. Bu alanlar veri seti "
                    "yeniden hazırlansa da korunur; boş bırakılan değer alanı siler.")
         e1, e2, e3, e4 = st.columns([1.2, 1.5, 1, 0.8])
@@ -313,7 +313,7 @@ def _render_dataset(ticker, username):
                 ad.set_extra(ticker, day, {field: parsed})
                 st.rerun()
 
-    with st.expander("📖 Sütun açıklamaları ve eğitimde dikkat edilecekler"):
+    with st.expander("Sütun açıklamaları ve eğitimde dikkat edilecekler"):
         st.markdown(_GLOSSARY)
         st.caption("Değerler gün kapanışıyla hesaplanır - ertesi günü tahmin ederken hedef değişkeni bir gün ileri "
                    "kaydırın. Direnç seviyeleri yalnızca o güne kadar oluşmuş tepeleri kullanır (sızıntı yok). "
@@ -323,9 +323,9 @@ def _render_dataset(ticker, username):
 
 def _render_valuation_history(ticker):
     history = ad.load_valuation_history(ticker)
-    label = (f"📈 Ucuzluk skoru günlük geçmişi - {len(history)} gün "
+    label = (f"Ucuzluk skoru günlük geçmişi - {len(history)} gün "
              f"({history.index.min():%d.%m.%Y} → {history.index.max():%d.%m.%Y})" if len(history)
-             else "📈 Ucuzluk skoru günlük geçmişi - henüz kayıt yok")
+             else "Ucuzluk skoru günlük geçmişi - henüz kayıt yok")
     with st.expander(label):
         st.caption(f"{ad.MARKET} değerleme servisi her çalıştığında hissenin skoru o günün satırı olarak "
                    "`valuation_scores_daily` tablosuna yazılır (aynı gün tekrar skorlanırsa son skor kalır). "
@@ -345,7 +345,7 @@ def _render_valuation_history(ticker):
 
 
 def _render_redundancy(df):
-    with st.expander("🔍 Birbirinin yerine geçebilecek sütunlar (eğitim verisinde)"):
+    with st.expander("Birbirinin yerine geçebilecek sütunlar (eğitim verisinde)"):
         st.caption("Eğitim verisindeki sabit sütunlar, birebir aynı sütunlar ve mutlak korelasyonu eşiğin üstünde "
                    "olan çiftler. Fiyat / hacim seviyeleri eğitim verisinde olmadığı için burada görünmez.")
         threshold = st.slider("Korelasyon eşiği", 0.80, 0.99, 0.95, 0.01, key="ai_corr_threshold")
@@ -364,7 +364,7 @@ def _render_redundancy(df):
 
 
 def _render_saved(username):
-    st.subheader("2️⃣ Kayıtlı Veri Setleri")
+    st.subheader("2. Kayıtlı Veri Setleri")
     datasets = ad.list_datasets()
     if not datasets:
         st.info("Henüz kayıtlı veri seti yok - yukarıdan bir hisse seçip hazırlayın.")

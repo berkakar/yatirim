@@ -2,7 +2,7 @@
 
 Eskiden secrets.toml [alpaca.<kullanıcı>] bölümündeydi; artık her kullanıcı
 kendi Sanal Para (paper) ve Gerçek Para (live) anahtarını arayüzde
-"👤 Hesabım" sayfasından girer. Gizli anahtar (secret) Fernet ile şifrelenir;
+"Hesabım" sayfasından girer. Gizli anahtar (secret) Fernet ile şifrelenir;
 şifreleme anahtarı YATIRIM_SECRET_KEY ortam değişkenindedir (/etc/yatirim/env -
 hem arayüz hem zamanlanmış işler okur; `users.sh tasi` / `users.sh anahtar`
 yoksa üretir). Bu değişken kaybolursa kayıtlı anahtarlar çözülemez, kullanıcılar

@@ -1,6 +1,6 @@
 """Arayüz giriş kullanıcılarını sunucudan yönetir (veritabanı - bkz. user_registry.py).
 
-Kullanıcıların asıl yönetimi arayüzde (👤 Hesap → 🛡️ Kullanıcı Yönetimi); bu
+Kullanıcıların asıl yönetimi arayüzde (Hesap → Kullanıcı Yönetimi); bu
 script ilk yöneticiyi oluşturmak, acil durumda şifre atamak ve eski
 secrets.toml kullanıcılarını veritabanına taşımak (`tasi`) içindir.
 

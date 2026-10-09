@@ -12,7 +12,7 @@ tüm semboller) kapanmış işlemleri (round-trip) kurar ve her biri için:
 çıkarır; özet istatistikler (isabet, ortalama R, beklenen değer) verir.
 
 API çağrısı yapmaz; girdi alpaca_client.get_recent_orders() çıktısıdır
-(tests/test_trade_journal.py). Streamlit sayfası: trade_journal_page.py (🧠 Algo Analiz).
+(tests/test_trade_journal.py). Streamlit sayfası: trade_journal_page.py (Algo Analiz).
 """
 
 from dataclasses import dataclass, field

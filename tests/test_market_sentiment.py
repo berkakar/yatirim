@@ -62,10 +62,10 @@ class ComponentTests(unittest.TestCase):
         self.assertIsNone(ms.put_call_score(None))
 
     def test_labels(self):
-        self.assertEqual(ms.label_for(10)[0], "Aşırı Korku")
-        self.assertEqual(ms.label_for(50)[0], "Nötr")
-        self.assertEqual(ms.label_for(75)[0], "Aşırı Açgözlülük")
-        self.assertEqual(ms.label_for(None)[0], "Veri yok")
+        self.assertEqual(ms.label_for(10), "Aşırı Korku")
+        self.assertEqual(ms.label_for(50), "Nötr")
+        self.assertEqual(ms.label_for(75), "Aşırı Açgözlülük")
+        self.assertEqual(ms.label_for(None), "Veri yok")
 
 
 class BistTests(unittest.TestCase):

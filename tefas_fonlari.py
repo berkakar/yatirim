@@ -114,7 +114,7 @@ def render_turk_fonlari():
 
     search_col, category_col = st.columns([2, 1])
     with search_col:
-        search_term = st.text_input("🔍 Fon ara (kod veya isim):", "", placeholder="ör. AAK, Hisse Senedi...")
+        search_term = st.text_input("Fon ara (kod veya isim):", "", placeholder="ör. AAK, Hisse Senedi...")
     with category_col:
         category_labels = ["Tümü"] + [label for label, _ in FUND_CATEGORIES.values()]
         selected_category = st.selectbox("Kategori filtresi", category_labels)

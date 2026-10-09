@@ -14,7 +14,7 @@ from alpaca_client import AlpacaClient
 from theme import get_palette
 
 _MODE_STATE_KEY = "alpaca_account_mode_{}"
-KEYS_HINT = "**👤 Hesabım → 🔑 Alpaca Anahtarları** bölümünden"
+KEYS_HINT = "**Hesabım → Alpaca Anahtarları** bölümünden"
 
 
 def has_alpaca_account(username: str) -> bool:
@@ -65,15 +65,15 @@ def render_account_mode_badge(username: str):
     Ticaret sayfalarının en üstünde. Gerçek Para kırmızı gösterilir."""
     p = get_palette()
     if get_account_mode(username) == LIVE:
-        icon, detail, color = "💰", "Alpaca canlı hesap - emirler gerçek parayla gerçekleşir", p["negative"]
+        detail, color = "Alpaca canlı hesap - emirler gerçek parayla gerçekleşir", p["negative"]
         label = MODE_LABELS[LIVE]
     else:
-        icon, detail, color = "🧪", "Alpaca Paper Trading hesabı", p["info"]
+        detail, color = "Alpaca Paper Trading hesabı", p["info"]
         label = MODE_LABELS[PAPER]
     st.markdown(
         f'<div style="display:inline-block; padding:0.3rem 0.8rem; margin-bottom:0.6rem; '
         f'border:2px solid {color}; border-radius:999px; color:{color}; font-weight:700;">'
-        f'{icon} {label} <span style="font-weight:400; opacity:0.85;">· {detail}</span></div>',
+        f'{label} <span style="font-weight:400; opacity:0.85;">· {detail}</span></div>',
         unsafe_allow_html=True,
     )
 
@@ -100,7 +100,7 @@ def render_account_mode_setting(username: str):
         st.success(f"Alpaca hesap türü **{MODE_LABELS[switched]}** olarak kaydedildi.")
 
     mode = get_account_mode(username)
-    with st.expander(f"⚙️ Alpaca Hesap Türü: {MODE_LABELS[mode]}", expanded=False):
+    with st.expander(f"Alpaca Hesap Türü: {MODE_LABELS[mode]}", expanded=False):
         if not storage.enabled() and not st.secrets.get("GITHUB_TOKEN"):
             st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - hesap türü kaydedilemez.")
             return
@@ -110,12 +110,12 @@ def render_account_mode_setting(username: str):
             if username == JOB_USERNAME else ""
         )
         if mode == LIVE:
-            st.markdown("Şu an **💰 Gerçek Para** hesabı kullanılıyor - emirler gerçek parayla gerçekleşir." + bots_note)
-            if st.button("🧪 Sanal Paraya Dön", key="account_mode_to_paper"):
+            st.markdown("Şu an **Gerçek Para** hesabı kullanılıyor - emirler gerçek parayla gerçekleşir." + bots_note)
+            if st.button("Sanal Paraya Dön", key="account_mode_to_paper"):
                 _switch(username, PAPER)
             return
 
-        st.markdown("Şu an **🧪 Sanal Para** (Alpaca Paper Trading) hesabı kullanılıyor." + bots_note)
+        st.markdown("Şu an **Sanal Para** (Alpaca Paper Trading) hesabı kullanılıyor." + bots_note)
         if not has_live_keys(username):
             st.info(f"Gerçek Para'ya geçmek için önce gerçek hesap anahtarlarınızı {KEYS_HINT} girin.")
             return
@@ -131,7 +131,7 @@ def render_account_mode_setting(username: str):
         )
         typed = st.text_input(f"Onaylamak için **{CONFIRM_TEXT}** yazın", key="account_mode_live_text")
         confirmed = understood and typed.strip().upper() == CONFIRM_TEXT
-        if st.button("💰 Gerçek Paraya Geç", type="primary", disabled=not confirmed, key="account_mode_to_live"):
+        if st.button("Gerçek Paraya Geç", type="primary", disabled=not confirmed, key="account_mode_to_live"):
             _switch(username, LIVE)
 
 
@@ -163,7 +163,7 @@ def _render_keys_form(username: str, mode: str) -> None:
                 "Bunun gerçek parayla işlem yapan canlı hesabımın anahtarı olduğunu anlıyorum.",
                 key="alpaca_live_keys_ack",
             )
-        submitted = st.form_submit_button("🔌 Bağlantıyı test et ve kaydet", type="primary")
+        submitted = st.form_submit_button("Bağlantıyı test et ve kaydet", type="primary")
     if submitted:
         if not ack:
             st.error("Kaydetmek için onay kutusunu işaretleyin.")
@@ -183,7 +183,7 @@ def _render_keys_form(username: str, mode: str) -> None:
         st.cache_data.clear()
         st.success(f"{label} anahtarları doğrulandı ve şifreli olarak kaydedildi ({detail}).")
 
-    if info and st.button(f"🗑️ {label} anahtarlarını sil", key=f"alpaca_keys_delete_{mode}"):
+    if info and st.button(f"{label} anahtarlarını sil", key=f"alpaca_keys_delete_{mode}"):
         if mode == LIVE and get_account_mode(username) == LIVE:
             # Gerçek Para seçiliyken anahtar kalmazsa her şey hata verir; önce Sanal Para'ya dön.
             save_account_mode(username, PAPER, st.secrets.get("GITHUB_TOKEN"))
@@ -195,7 +195,7 @@ def _render_keys_form(username: str, mode: str) -> None:
 
 def render_alpaca_keys_setting(username: str) -> None:
     """Hesabım sayfası: kullanıcının kendi Sanal Para ve Gerçek Para anahtarları."""
-    st.subheader("🔑 Alpaca Anahtarları")
+    st.subheader("Alpaca Anahtarları")
     if not alpaca_keys.encryption_available():
         st.error(
             "Sunucuda şifreleme anahtarı (YATIRIM_SECRET_KEY) tanımlı değil; Alpaca anahtarları kaydedilemez. "
@@ -207,7 +207,7 @@ def render_alpaca_keys_setting(username: str) -> None:
         "denenir; gizli anahtar veritabanında şifreli saklanır ve bir daha gösterilmez."
         + (" Sunucudaki zamanlanmış botlar da bu anahtarlarla işlem yapar." if username == JOB_USERNAME else "")
     )
-    paper_tab, live_tab = st.tabs(["🧪 Sanal Para (Paper)", "💰 Gerçek Para (Live)"])
+    paper_tab, live_tab = st.tabs(["Sanal Para (Paper)", "Gerçek Para (Live)"])
     with paper_tab:
         _render_keys_form(username, PAPER)
     with live_tab:

@@ -127,7 +127,7 @@ unprotected. Top-up during extended hours isn't supported yet - its market
 order can't execute outside regular hours either, and would need the same
 kind of redesign.
 
-2026-09-28 emir analizi değişiklikleri (ayrıntı: 🧠 Algo Analiz > 📝 Değişiklik
+2026-09-28 emir analizi değişiklikleri (ayrıntı: Algo Analiz > Değişiklik
 Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
   - Öneri 4: Seans dışında bekleyen pullback limit alışlar iptal edilir,
     pre-market'te giriş yapılmaz, seansın ilk 15 dakikasında hiç alım yapılmaz
@@ -219,7 +219,7 @@ def resolve_default_algorithm(config: dict) -> str:
     configured = config.get("algorithm") or DEFAULT_ALGORITHM
     if configured in ALGORITHMS:
         return configured
-    log(f"⚠️ Portföy varsayılan alış algoritması '{configured}' artık Premium Buy Point'te geçerli değil "
+    log(f"Portföy varsayılan alış algoritması '{configured}' artık Premium Buy Point'te geçerli değil "
         f"(kaldırılmış ya da kendi modülüne taşınmış) - '{DEFAULT_ALGORITHM}' kullanılıyor. Premium Buy "
         f"Point sayfasında varsayılan algoritmayı seçip portföyü kaydedin.")
     return DEFAULT_ALGORITHM
@@ -227,7 +227,7 @@ def resolve_default_algorithm(config: dict) -> str:
 
 def warn_if_incompatible_stop_algorithm(symbol: str, algorithm: str, stop_algorithm: str) -> None:
     if stop_algorithm in PBP_INCOMPATIBLE_STOP_ALGORITHMS:
-        log(f"⚠️ {symbol}: stop algoritması '{stop_algorithm}' alış algoritması '{algorithm}' ile uyumlu "
+        log(f"{symbol}: stop algoritması '{stop_algorithm}' alış algoritması '{algorithm}' ile uyumlu "
             f"değil (sadece ORB kırılımıyla anlamlı) - Premium Buy Point sayfasında başka bir stop "
             f"algoritması seçin.")
 
@@ -874,13 +874,13 @@ def run_extended_hours_entry_scan(client: AlpacaClient) -> None:
                     )
                     stop_price = float(stop_order.get("stop_price") or stop_price)
                     msg = (
-                        f"✅ {symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
+                        f"{symbol}: extended hours girişi {entry_price:.2f}'den doldu (adet {qty:g}), "
                         f"koruma stopu {stop_price:.2f} seviyesinden (GTC stop - seans dışında "
                         f"extended-hours guard izliyor) kuruldu."
                     )
                 except Exception as e:
                     msg = (
-                        f"🚨 {symbol}: extended hours girişi {entry_price:.2f}'den doldu ama koruma stopu "
+                        f"{symbol}: extended hours girişi {entry_price:.2f}'den doldu ama koruma stopu "
                         f"kurulamadı, pozisyon şu an KORUMASIZ: {e}"
                     )
                 log(msg)

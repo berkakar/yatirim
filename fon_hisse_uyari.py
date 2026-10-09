@@ -215,7 +215,7 @@ def run_once() -> None:
             new_state[username] = currently_breaching
             continue
 
-        lines = [f"⚠️ Fonlarım Uyarısı - Günlük Kayıp Eşiği (%{threshold}) Aşıldı\n"]
+        lines = [f"Fonlarım Uyarısı - Günlük Kayıp Eşiği (%{threshold}) Aşıldı\n"]
         for ticker, change in sorted(currently_breaching.items(), key=lambda c: c[1]):
             fund_desc = ", ".join(f"{code} (%{weight})" for code, weight in ticker_funds[ticker])
             lines.append(f"• {ticker}: %{change} - {fund_desc}")

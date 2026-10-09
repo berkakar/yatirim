@@ -2,7 +2,7 @@
 kapanış fiyatlarını kullanarak yıllık, 3 aylık, aylık ve haftalık periyotlar
 arasındaki tekrarlayan patern benzerliğini DTW (Dynamic Time Warping) ile
 ölçer ve tablo halinde gösterir. Bkz. hisse_patern_analysis.py (hesaplama
-katmanı) ve dtw_analysis.py (DTW algoritması - "🔄 DTW Zaman Serisi &
+katmanı) ve dtw_analysis.py (DTW algoritması - "DTW Zaman Serisi &
 Benzerlik Analizi" modülüyle ortak).
 
 Patern Benzerlik Tablosu'ndaki bir benzerlik % hücresine tıklamak (Streamlit
@@ -53,12 +53,12 @@ def render_hisse_patern(target_list):
         "tekrarlayan/mevsimsel bir fiyat pareni izlediğini gösterir."
     )
 
-    selected = st.multiselect("🎯 Analiz edilecek hisseleri seçin:", target_list, key="hisse_patern_selection")
+    selected = st.multiselect("Analiz edilecek hisseleri seçin:", target_list, key="hisse_patern_selection")
 
     col_btn, col_window = st.columns([2, 2])
     with col_window:
         max_warping_window = st.slider(
-            "⏱️ Max. Zamansal Kayma (Gün):", min_value=1, max_value=10, value=5, step=1,
+            "Max. Zamansal Kayma (Gün):", min_value=1, max_value=10, value=5, step=1,
             help=(
                 "DTW'nin eşleştirme yaparken kabul ettiği maksimum gün kayması. Resmi "
                 "tatil/piyasa kapanışı gibi nedenlerle dönemler arası hizalama küçük "
@@ -67,7 +67,7 @@ def render_hisse_patern(target_list):
         )
     with col_btn:
         st.write("<br>", unsafe_allow_html=True)
-        run = st.button("🚀 Patern Analizini Başlat", type="primary", disabled=not selected)
+        run = st.button("Patern Analizini Başlat", type="primary", disabled=not selected)
 
     if run:
         with st.spinner(f"{len(selected)} hissenin günlük verisi çekiliyor ve DTW patern benzerliği hesaplanıyor..."):
@@ -76,10 +76,10 @@ def render_hisse_patern(target_list):
         st.session_state.hisse_patern_segments = segments
         st.session_state.hisse_patern_fetched_at = datetime.now(TR_TZ)
         if not rows:
-            st.error("⚠️ Seçilen hisseler için yeterli veri bulunamadı.")
+            st.error("Seçilen hisseler için yeterli veri bulunamadı.")
 
     if not st.session_state.get("hisse_patern_rows"):
-        st.info("Analizi başlatmak için yukarıdan hisse seçip **🚀 Patern Analizini Başlat** butonuna tıklayın.")
+        st.info("Analizi başlatmak için yukarıdan hisse seçip **Patern Analizini Başlat** butonuna tıklayın.")
         return
 
     df = pd.DataFrame(st.session_state.hisse_patern_rows)
@@ -88,16 +88,16 @@ def render_hisse_patern(target_list):
             df[col] = pd.to_numeric(df[col], errors="coerce")
 
     st.divider()
-    st.subheader("📊 Patern Benzerlik Tablosu")
+    st.subheader("Patern Benzerlik Tablosu")
     fetched_at = st.session_state.get("hisse_patern_fetched_at")
     if fetched_at:
         freshness_caption(f"Veri güncelliği: {fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten analiz anında çekildi).")
 
     filt_col, thresh_col = st.columns([2, 2])
     with filt_col:
-        filter_label = st.selectbox("🔎 Filtrelenecek Periyot:", [cfg["label"] for cfg in PERIOD_CONFIGS.values()])
+        filter_label = st.selectbox("Filtrelenecek Periyot:", [cfg["label"] for cfg in PERIOD_CONFIGS.values()])
     with thresh_col:
-        min_sim = st.slider("🎯 Min. Benzerlik Skoru (%):", min_value=0, max_value=100, value=0, step=5)
+        min_sim = st.slider("Min. Benzerlik Skoru (%):", min_value=0, max_value=100, value=0, step=5)
 
     filter_col_name = f"{filter_label} Benzerlik %"
     df_filtered = df[df[filter_col_name].fillna(-1) >= min_sim].sort_values(by=filter_col_name, ascending=False)
@@ -110,9 +110,9 @@ def render_hisse_patern(target_list):
     display_cols = ["Hisse", "Son Fiyat"] + _SIM_COLUMNS
     clicked_ticker, clicked_period_key = None, None
     if df_filtered.empty:
-        st.warning("⚠️ Seçtiğiniz eşik değerinin üzerinde benzerlik gösteren hisse bulunamadı.")
+        st.warning("Seçtiğiniz eşik değerinin üzerinde benzerlik gösteren hisse bulunamadı.")
     else:
-        st.caption("💡 Bir benzerlik % hücresine tıklayarak aşağıdaki Patern Detayı'nı doğrudan o hisse/periyoda açabilirsiniz.")
+        st.caption("Bir benzerlik % hücresine tıklayarak aşağıdaki Patern Detayı'nı doğrudan o hisse/periyoda açabilirsiniz.")
         table_event = st.dataframe(
             zebra_style(df_filtered[display_cols]),
             column_config=_build_column_config(),
@@ -135,7 +135,7 @@ def render_hisse_patern(target_list):
                 )
 
     st.divider()
-    st.subheader("🔍 Patern Detayı")
+    st.subheader("Patern Detayı")
     st.caption(
         "Bir hisse ve periyot tipi seçin (ya da yukarıdaki tablodan bir benzerlik hücresine "
         "tıklayın), o periyoda ait geçmiş dönemlerin fiyatları farklı renklerde üst üste "
@@ -165,7 +165,7 @@ def render_hisse_patern(target_list):
     segments = st.session_state.hisse_patern_segments.get(detail_ticker, {}).get(period_key, [])
 
     if len(segments) < 2:
-        st.warning(f"⚠️ **{detail_ticker}** için {cfg['label']} periyodunda karşılaştırmaya yeterli tamamlanmış dönem yok.")
+        st.warning(f"**{detail_ticker}** için {cfg['label']} periyodunda karşılaştırmaya yeterli tamamlanmış dönem yok.")
         return
 
     row = df[df["Hisse"] == detail_ticker].iloc[0]
@@ -173,7 +173,7 @@ def render_hisse_patern(target_list):
     pair_count = len(segments) * (len(segments) - 1) // 2
     if pd.notna(sim_score):
         st.info(
-            f"💡 **{detail_ticker}** - {cfg['label']} ortalama DTW benzerlik skoru: "
+            f"**{detail_ticker}** - {cfg['label']} ortalama DTW benzerlik skoru: "
             f"**%{sim_score:.2f}** ({len(segments)} dönem, {pair_count} ikili karşılaştırma)"
         )
 

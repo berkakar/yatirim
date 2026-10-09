@@ -1,5 +1,5 @@
 """Hesap ekranları: giriş / kayıt / şifre sıfırlama talebi, zorunlu şifre
-değiştirme, 👤 Hesabım ve (yöneticiler için) 🛡️ Kullanıcı Yönetimi.
+değiştirme, Hesabım ve (yöneticiler için) Kullanıcı Yönetimi.
 
 Kullanıcılar veritabanında (bkz. user_registry.py); bu modül yalnızca arayüz.
 Yönetici bildirimleri secrets.toml'daki TELEGRAM_BOT_TOKEN ile
@@ -76,7 +76,7 @@ def _render_registration() -> None:
             "Uygulamadaki analizlerin yatırım tavsiyesi olmadığını, alım/satım kararlarının ve olası "
             "zararların sorumluluğunun bana ait olduğunu kabul ediyorum."
         )
-        submitted = st.form_submit_button("📝 Hesap Oluştur", type="primary")
+        submitted = st.form_submit_button("Hesap Oluştur", type="primary")
     if not submitted:
         return
     if not risk_ack:
@@ -93,12 +93,12 @@ def _render_registration() -> None:
     uname = reg.normalize_username(username)
     if status == reg.ACTIVE:
         st.success(f"Hesabınız açıldı. **{uname}** kullanıcı adıyla 'Giriş Yap' sekmesinden giriş yapabilirsiniz.")
-        notify_admins(f"👤 Yeni kullanıcı (davet koduyla): {uname} - {name.strip()} <{email.strip()}>")
+        notify_admins(f"Yeni kullanıcı (davet koduyla): {uname} - {name.strip()} <{email.strip()}>")
     else:
         st.success("Başvurunuz alındı. Yönetici onayladığında aynı kullanıcı adı ve şifreyle giriş yapabilirsiniz.")
         notify_admins(
-            f"📝 Yeni üyelik başvurusu: {uname} - {name.strip()} <{email.strip()}>\n"
-            "Onaylamak için: Yatırım Terminali → 👤 Hesap → 🛡️ Kullanıcı Yönetimi"
+            f"Yeni üyelik başvurusu: {uname} - {name.strip()} <{email.strip()}>\n"
+            "Onaylamak için: Yatırım Terminali → Hesap → Kullanıcı Yönetimi"
         )
 
 
@@ -109,7 +109,7 @@ def _render_reset_request() -> None:
     )
     with st.form("reset_request_form", clear_on_submit=True):
         username = st.text_input("Kullanıcı adı")
-        submitted = st.form_submit_button("📨 Şifre sıfırlama talebi gönder")
+        submitted = st.form_submit_button("Şifre sıfırlama talebi gönder")
     if not submitted:
         return
     if _rate_limited("_reset_attempts", _MAX_RESET_REQUESTS):
@@ -119,7 +119,7 @@ def _render_reset_request() -> None:
     user = reg.get_user(uname) if uname else None
     if user and user["status"] == reg.ACTIVE:
         reg.log_event(uname, "reset_request", uname)
-        notify_admins(f"🔑 Şifre sıfırlama talebi: {uname} - {user['name']}")
+        notify_admins(f"Şifre sıfırlama talebi: {uname} - {user['name']}")
     # Kullanıcı adının var olup olmadığı belli edilmesin.
     st.success("Talebiniz alındı. Hesap mevcutsa yönetici sizinle iletişime geçecek.")
 
@@ -134,7 +134,7 @@ def render_auth_screen(authenticator, render_switcher) -> None:
     notice = st.session_state.pop("_auth_notice", None)
     if notice:
         st.warning(notice)
-    login_tab, register_tab, reset_tab = st.tabs(["🔐 Giriş Yap", "📝 Hesap Oluştur", "❓ Şifremi Unuttum"])
+    login_tab, register_tab, reset_tab = st.tabs(["Giriş Yap", "Hesap Oluştur", "Şifremi Unuttum"])
     with login_tab:
         try:
             authenticator.login(
@@ -151,7 +151,7 @@ def render_auth_screen(authenticator, render_switcher) -> None:
         if status is True:
             st.rerun()
         if status is False:
-            st.error("❌ Kullanıcı adı veya şifre hatalı ya da hesabınız henüz onaylanmadı.")
+            st.error("Kullanıcı adı veya şifre hatalı ya da hesabınız henüz onaylanmadı.")
     with register_tab:
         _render_registration()
     with reset_tab:
@@ -176,7 +176,7 @@ def render_forced_password_change(user: dict) -> None:
     """Yönetici şifreyi sıfırladıysa uygulamaya geçmeden önce yeni şifre istenir."""
     if not user["must_change_pw"]:
         return
-    st.subheader("🔑 Yeni şifre belirleyin")
+    st.subheader("Yeni şifre belirleyin")
     st.info("Şifreniz yönetici tarafından sıfırlandı. Devam etmek için kendi şifrenizi belirleyin.")
     _render_password_form(user["username"], key="forced_pw")
     st.stop()
@@ -203,14 +203,14 @@ def _render_password_form(username: str, key: str) -> None:
 
 def render_my_account(user: dict) -> None:
     username = user["username"]
-    st.header("👤 Hesabım")
+    st.header("Hesabım")
     role = "Yönetici" if user["role"] == reg.ADMIN else "Kullanıcı"
     st.caption(f"Kullanıcı adı: **{username}** · Rol: {role} · Üyelik: {user['created_at'][:10]}")
 
     render_alpaca_keys_setting(username)
 
     st.divider()
-    st.subheader("🪪 Profil")
+    st.subheader("Profil")
     with st.form("profile_form"):
         name = st.text_input("Ad Soyad", value=user["name"])
         email = st.text_input("E-posta", value=user["email"])
@@ -223,7 +223,7 @@ def render_my_account(user: dict) -> None:
                 st.success("Profil güncellendi.")
 
     st.divider()
-    st.subheader("🔑 Şifre Değiştir")
+    st.subheader("Şifre Değiştir")
     _render_password_form(username, key="my_pw")
 
 
@@ -243,7 +243,7 @@ def _render_pending(admin: str) -> None:
             st.markdown(f"**{u['username']}** · {u['name']} · {u['email']}")
             st.caption(f"Başvuru: {_fmt_time(u['created_at'])} UTC")
             c1, c2, c3 = st.columns([1, 2, 1])
-            if c1.button("✅ Onayla", key=f"approve_{u['username']}", type="primary"):
+            if c1.button("Onayla", key=f"approve_{u['username']}", type="primary"):
                 reg.approve(u["username"], admin)
                 st.session_state["_admin_msg"] = (
                     f"'{u['username']}' onaylandı. Kullanıcıya giriş yapabileceğini bildirin."
@@ -251,7 +251,7 @@ def _render_pending(admin: str) -> None:
                 st.rerun()
             note = c2.text_input("Ret nedeni (isteğe bağlı)", key=f"reject_note_{u['username']}",
                                  label_visibility="collapsed", placeholder="Ret nedeni (isteğe bağlı)")
-            if c3.button("❌ Reddet", key=f"reject_{u['username']}"):
+            if c3.button("Reddet", key=f"reject_{u['username']}"):
                 reg.reject(u["username"], admin, note)
                 st.session_state["_admin_msg"] = f"'{u['username']}' başvurusu reddedildi."
                 st.rerun()
@@ -287,17 +287,17 @@ def _render_users(admin: str) -> None:
     with c2:
         st.markdown("**Durum**")
         if user["status"] == reg.ACTIVE:
-            if st.button("⛔ Devre dışı bırak", key=f"disable_{selected}", disabled=is_self):
+            if st.button("Devre dışı bırak", key=f"disable_{selected}", disabled=is_self):
                 _admin_action(lambda: reg.disable(selected, admin), f"'{selected}' devre dışı bırakıldı.")
         elif user["status"] == reg.DISABLED:
-            if st.button("✅ Etkinleştir", key=f"enable_{selected}"):
+            if st.button("Etkinleştir", key=f"enable_{selected}"):
                 _admin_action(lambda: reg.enable(selected, admin), f"'{selected}' etkinleştirildi.")
         elif user["status"] in (reg.PENDING, reg.REJECTED):
-            if st.button("✅ Onayla", key=f"approve2_{selected}"):
+            if st.button("Onayla", key=f"approve2_{selected}"):
                 _admin_action(lambda: reg.approve(selected, admin), f"'{selected}' onaylandı.")
     with c3:
         st.markdown("**Şifre**")
-        if st.button("🔑 Geçici şifre üret", key=f"reset_{selected}", disabled=is_self,
+        if st.button("Geçici şifre üret", key=f"reset_{selected}", disabled=is_self,
                      help="Kendi şifrenizi Hesabım sayfasından değiştirin."):
             temp = reg.reset_password(selected, admin)
             st.session_state["_admin_temp_pw"] = (selected, temp)
@@ -308,7 +308,7 @@ def _render_users(admin: str) -> None:
                    "Bu şifre bir daha gösterilmez; kullanıcıya güvenli bir kanaldan iletin. "
                    "İlk girişte yeni şifre belirlemesi istenecek.")
 
-    with st.expander(f"🗑️ '{selected}' kullanıcısını sil", expanded=False):
+    with st.expander(f"'{selected}' kullanıcısını sil", expanded=False):
         st.caption("Kullanıcı, Alpaca anahtarları ve (seçilirse) tüm ayar/strateji kayıtları silinir. "
                    "Geri alınamaz; sadece girişi engellemek için 'Devre dışı bırak' kullanın.")
         purge = st.checkbox("Kullanıcının uygulama verilerini de sil", value=True, key=f"purge_{selected}")
@@ -320,7 +320,7 @@ def _render_users(admin: str) -> None:
                 alpaca_keys.delete_all(selected)
             _admin_action(_delete, f"'{selected}' silindi.")
 
-    with st.expander("📜 Bu kullanıcının işlem geçmişi"):
+    with st.expander("Bu kullanıcının işlem geçmişi"):
         log = reg.audit_log(selected, limit=50)
         if log:
             st.dataframe(pd.DataFrame(log), use_container_width=True, hide_index=True)
@@ -351,7 +351,7 @@ def _render_invites(admin: str) -> None:
         c1, c2 = st.columns(2)
         max_uses = c1.number_input("Kullanım hakkı", min_value=1, max_value=100, value=1, step=1)
         days = c2.number_input("Geçerlilik (gün, 0 = süresiz)", min_value=0, max_value=365, value=7, step=1)
-        if st.form_submit_button("🎟️ Davet kodu üret", type="primary"):
+        if st.form_submit_button("Davet kodu üret", type="primary"):
             code = reg.create_invite(admin, int(max_uses), int(days) or None)
             st.success(f"Davet kodu: `{code}`")
     invites = reg.list_invites()
@@ -371,7 +371,7 @@ def _render_invites(admin: str) -> None:
 
 
 def render_user_admin(admin: str) -> None:
-    st.header("🛡️ Kullanıcı Yönetimi")
+    st.header("Kullanıcı Yönetimi")
     if not reg.is_admin(admin):
         st.error("Bu sayfa yalnızca yöneticiler içindir.")
         return
@@ -381,7 +381,7 @@ def render_user_admin(admin: str) -> None:
     if not _secret("TELEGRAM_CHAT_ID") or not _secret("TELEGRAM_BOT_TOKEN"):
         st.info("Yeni başvuru bildirimleri için secrets.toml'a TELEGRAM_BOT_TOKEN ve TELEGRAM_CHAT_ID ekleyin.")
     pending_count = len(reg.list_users(reg.PENDING))
-    tabs = st.tabs([f"⏳ Bekleyenler ({pending_count})", "👥 Kullanıcılar", "🎟️ Davet Kodları", "📜 İşlem Kaydı"])
+    tabs = st.tabs([f"Bekleyenler ({pending_count})", "Kullanıcılar", "Davet Kodları", "İşlem Kaydı"])
     with tabs[0]:
         _render_pending(admin)
     with tabs[1]:

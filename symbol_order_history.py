@@ -97,7 +97,7 @@ def report(client: AlpacaClient, symbol: str, days: int) -> None:
     open_orders = [o for o in orders if o.get("status") in ("new", "accepted", "held", "pending_new",
                                                              "partially_filled", "accepted_for_bidding")]
     if position is None and open_orders:
-        print(f"\n⚠️ Pozisyon yok ama {len(open_orders)} açık emir var (sahipsiz): "
+        print(f"\nPozisyon yok ama {len(open_orders)} açık emir var (sahipsiz): "
               + ", ".join(f"{o['side']} {o['type']} {o.get('stop_price') or o.get('limit_price')} ({o['id']})"
                           for o in open_orders))
 

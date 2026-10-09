@@ -237,7 +237,7 @@ def _render_bicak_kanali_chart(bars: list[Bar], symbol: str, timeframe: str, pen
     """Bıçak Kanalı algoritmasının kurduğu yapıyı - kılavuz/bıçak/sıfır/yeşil
     çizgi, dip kesişim mumu ve (varsa) yeşil çizginin fiyatla en son kesiştiği
     "en yakın alım noktası" - tek bir grafikte gösterir. Grafik çizimi
-    bicak_kanali_test.py'deki (🔪 Bıçak Kanalı Testi modülü) ile aynı
+    bicak_kanali_test.py'deki (Bıçak Kanalı Testi modülü) ile aynı
     fonksiyonu (render_bicak_kanali_chart) kullanır, böylece iki modülde de
     birebir aynı yapı görselleştirilir. pencere, o backtest çalıştırmasının
     BackTest arayüzünde seçtiği aynı değerdir (bkz. buy_algorithms.
@@ -313,9 +313,9 @@ def _daily_pairs(client: AlpacaClient, symbol: str, days_of_data: int) -> list[t
 
 
 def _render_symbol_picker(client: AlpacaClient, key_id: str, secret_key: str, target_list: list[str]) -> str | None:
-    st.subheader("📋 Hisse Seçimi")
+    st.subheader("Hisse Seçimi")
     st.caption("Backtest için listeden tek bir hisse seç (ilk sütun). '1G Volatilite %', son kapanan günün "
-               "(Yüksek-Düşük)/Kapanış oranıdır. Uzun listede aramak için tablonun sağ üstündeki 🔍 simgesini kullan.")
+               "(Yüksek-Düşük)/Kapanış oranıdır. Uzun listede aramak için tablonun sağ üstündeki simgesini kullan.")
 
     state_key = "backtest_selected_symbol"
     if state_key not in st.session_state:
@@ -370,7 +370,7 @@ def _render_symbol_picker(client: AlpacaClient, key_id: str, secret_key: str, ta
 
 
 def _render_settings():
-    st.subheader("🧠 Buy-Point Algoritmaları")
+    st.subheader("Buy-Point Algoritmaları")
     algo_cols = st.columns(len(ALGORITHMS))
     selected_algorithms = [
         algo_id for col, (algo_id, (label, _fn)) in zip(algo_cols, ALGORITHMS.items())
@@ -382,10 +382,10 @@ def _render_settings():
         bicak_pencere = st.number_input(
             "Bıçak Kanalı - Pencere (bar)", min_value=1, value=30, step=5, key="bt_bicak_pencere",
             help="Düşüş bacağı taraması sadece en güncel bu kadar bar içindeki pivotlarla sınırlanır - "
-                 "Bıçak Kanalı Test modülündeki (🔪) aynı ayar.",
+                 "Bıçak Kanalı Test modülündeki aynı ayar.",
         )
 
-    st.subheader("🛡️ Stop-Loss Algoritmaları")
+    st.subheader("Stop-Loss Algoritmaları")
     st.caption("Her seçili buy-point algoritması × mum periyodu kombinasyonu, aşağıda seçtiğiniz her stop-loss algoritmasıyla ayrı ayrı koşulur.")
     stop_algo_cols = st.columns(len(STOP_ALGORITHMS))
     selected_stop_algorithms = [
@@ -393,7 +393,7 @@ def _render_settings():
         if col.checkbox(stop_algo.label, key=f"bt_stop_algo_{algo_id}")
     ]
 
-    st.subheader("🕯️ Mum Periyodu")
+    st.subheader("Mum Periyodu")
     tf_cols = st.columns(len(TIMEFRAMES))
     selected_timeframes = [
         tf for col, tf in zip(tf_cols, TIMEFRAMES)
@@ -411,7 +411,7 @@ def _render_settings():
              "'1 Gün' ile üretip stop'u '30 Dakika' ile daha sık kontrol edebilirsin.",
     )
 
-    with st.expander("📅 Mum verisi hangi saatleri kapsıyor?"):
+    with st.expander("Mum verisi hangi saatleri kapsıyor?"):
         st.markdown(
             "- **15 Dakika / 30 Dakika / 1 Saat:** Sadece normal seans (09:30-16:00 ET) "
             "mumları kullanılır - canlı trailing-stop'un (`alpaca_trailing_stop.py`) "
@@ -438,7 +438,7 @@ def _render_settings():
     )
     budget = c3.number_input("Portföy büyüklüğü ($)", min_value=0, value=10000, step=100, format="%d")
 
-    st.subheader("🛑 Risk Yönetimi")
+    st.subheader("Risk Yönetimi")
     sl1, sl2 = st.columns([1, 2])
     stop_loss_enabled = sl1.checkbox(
         "Zarar Kes", key="bt_stop_loss_enabled",
@@ -541,7 +541,7 @@ def _run_backtests(client, symbol, algorithms, stop_algorithms, timeframes, stop
 
 RESULTS_BATCH_KEY = "bt_results_batch"
 METRIC_NOTES = """
-**📝 Tablo notları**
+**Tablo notları**
 - **Al-Tut %:** İşlem başlangıcındaki ilk mumun açılışında hisseyi alıp test sonuna kadar hiç satmadan tutmanın getirisi. Stratejinin, sadece hisseyi tutmaktan daha iyi olup olmadığını gösteren kıyas noktasıdır.
 - **Al-Tut Farkı:** K/Z % − Al-Tut % (yüzde puan). Pozitifse strateji al-tut'u geçmiş, negatifse hisseyi alıp beklemek daha kârlı olurdu.
 - **Kazanma Oranı %:** Kapanmış işlemlerin (alış → satış) kaçta kaçının kârla kapandığı. Tek başına yeterli değildir: düşük oranla da, kazançlar kayıplardan büyükse sistem kârlı olabilir.
@@ -560,12 +560,12 @@ def _run_key(r: dict) -> str:
 
 
 def _render_results(all_results: list[dict], key_id: str, secret_key: str):
-    st.subheader("📊 Sonuçlar")
+    st.subheader("Sonuçlar")
     if not all_results:
         st.info("Henüz kaydedilmiş bir backtest çalıştırması yok.")
         return
 
-    # Bir "🚀 Backtest Çalıştır" tıklamasının ürettiği tüm kombinasyonlar aynı
+    # Bir "Backtest Çalıştır" tıklamasının ürettiği tüm kombinasyonlar aynı
     # run_at'i paylaşır - sonuçlar bu çalıştırmalara göre ayrılır, varsayılan
     # görünüm yalnızca en son çalıştırmadır (eskiden tüm geçmiş aynı tabloda).
     batches: dict[str, list[dict]] = {}
@@ -602,7 +602,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
             st.info("Bu filtreye uyan sonuç yok.")
             return
     else:
-        f2.caption(f"🕒 Çalıştırma zamanı: {_fmt_run_at(picked_batch)} · {len(view)} kombinasyon")
+        f2.caption(f"Çalıştırma zamanı: {_fmt_run_at(picked_batch)} · {len(view)} kombinasyon")
 
     grouped = group_by_algorithm(view)
     tab_ids = list(grouped.keys())
@@ -670,7 +670,7 @@ def _render_results(all_results: list[dict], key_id: str, secret_key: str):
                 bicak_chart_key = f"bt_show_bicak_chart_{algo_id}"
                 if bicak_chart_key not in st.session_state:
                     st.session_state[bicak_chart_key] = False
-                if st.button("🔪 Bıçak Kanalı Analiz Grafiği", key=f"bt_bicak_chart_btn_{algo_id}"):
+                if st.button("Bıçak Kanalı Analiz Grafiği", key=f"bt_bicak_chart_btn_{algo_id}"):
                     st.session_state[bicak_chart_key] = not st.session_state[bicak_chart_key]
 
                 if st.session_state[bicak_chart_key]:
@@ -745,23 +745,23 @@ def _render_data_pack_status() -> bool:
     state = status.get("state")
     started = _fmt_run_at(status.get("started_at"))
     if state == "running":
-        st.info(f"⏳ Veri paketi hazırlanıyor ({started} başladı): {status.get('message', '')}. Sayfayı kapatsanız "
-                "da sunucuda devam eder - durumu görmek için 🔄 düğmesine basın.")
+        st.info(f"Veri paketi hazırlanıyor ({started} başladı): {status.get('message', '')}. Sayfayı kapatsanız "
+                "da sunucuda devam eder - durumu görmek için düğmesine basın.")
     elif state == "done":
-        st.success(f"✅ Son paket ({started}): {status.get('message', '')} (commit `{(status.get('sha') or '')[:7]}`). "
+        st.success(f"Son paket ({started}): {status.get('message', '')} (commit `{(status.get('sha') or '')[:7]}`). "
                    "Claude Code oturumuna 'veri paketi hazır' yazabilirsiniz.")
         if status.get("missing"):
             st.caption("Veri bulunamayan hisseler: " + ", ".join(status["missing"]))
     else:
-        st.error(f"❌ Son paket ({started}) başarısız: {status.get('message', '')}")
+        st.error(f"Son paket ({started}) başarısız: {status.get('message', '')}")
     return state == "running"
 
 
 def _render_data_pack(key_id: str, secret_key: str):
-    """📦 Backtest Veri Paketi - bkz. backtest_data_pack.py. İş ayrı bir sunucu
+    """Backtest Veri Paketi - bkz. backtest_data_pack.py. İş ayrı bir sunucu
     sürecinde çalışır: tarayıcı bağlantısı koparsa (telefonda uygulama
     değiştirmek gibi) yarıda kalmaz."""
-    with st.expander("📦 Backtest Veri Paketi (algoritma doğrulaması için uzun geçmiş)",
+    with st.expander("Backtest Veri Paketi (algoritma doğrulaması için uzun geçmiş)",
                      expanded=backtest_data_pack.read_status() is not None):
         st.caption(
             "Seçilen hisselerin geçmiş barlarını Alpaca'dan (bölünme/temettü düzeltmeli) çeker ve repoda "
@@ -769,7 +769,7 @@ def _render_data_pack(key_id: str, secret_key: str):
             "`main` dalına dokunmaz. İş sunucuda arka planda çalışır; birkaç dakika sürebilir."
         )
         running = _render_data_pack_status()
-        st.button("🔄 Durumu yenile", key="bt_pack_refresh")
+        st.button("Durumu yenile", key="bt_pack_refresh")
         symbols_text = st.text_area(
             "Hisseler (virgülle)", value=", ".join(backtest_data_pack.DEFAULT_SYMBOLS), key="bt_pack_symbols",
         )
@@ -787,7 +787,7 @@ def _render_data_pack(key_id: str, secret_key: str):
         token = st.secrets.get("GITHUB_TOKEN")
         if not token:
             st.warning("`.streamlit/secrets.toml` içinde GITHUB_TOKEN tanımlı değil - paket repoya yazılamaz.")
-        if st.button("📦 Veri paketini oluştur ve repoya gönder", key="bt_pack_btn",
+        if st.button("Veri paketini oluştur ve repoya gönder", key="bt_pack_btn",
                      disabled=running or not (token and symbols and specs)):
             try:
                 backtest_data_pack.start_background(key_id, secret_key, token, symbols, specs)
@@ -812,12 +812,12 @@ def render_backtest(target_list: list[str], username: str):
 
     st.divider()
     missing = [label for label, ok in (
-        ("bir hisse (📋 Hisse Seçimi)", selected_symbol),
+        ("bir hisse (Hisse Seçimi)", selected_symbol),
         ("en az bir buy-point algoritması", selected_algorithms),
         ("en az bir stop-loss algoritması", selected_stop_algorithms),
         ("en az bir mum periyodu", selected_timeframes),
     ) if not ok]
-    if st.button("🚀 Backtest Çalıştır", type="primary", disabled=bool(missing)):
+    if st.button("Backtest Çalıştır", type="primary", disabled=bool(missing)):
         with st.spinner(
             f"{selected_symbol} için {len(selected_algorithms)} algoritma × {len(selected_stop_algorithms)} "
             f"stop-loss algoritması × {len(selected_timeframes)} mum periyodu çalıştırılıyor..."

@@ -60,7 +60,7 @@ def save_tracked_funds(funds: list[dict], username: str) -> None:
         try:
             write_json_to_github(GITHUB_REPO, token, tracked_file, funds, f"Update takip fonları ({username})")
         except Exception as e:
-            st.warning(f"⚠️ Takip listesi GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"Takip listesi GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(tracked_file, "w", encoding="utf-8") as f:
         json.dump(funds, f, ensure_ascii=False, indent=2)
@@ -99,7 +99,7 @@ def save_portfolio_cache(cache: dict) -> None:
         try:
             write_json_to_github(GITHUB_REPO, token, PORTFOLIO_CACHE_FILE, cache, "Update KAP portföy dağılım önbelleği")
         except Exception as e:
-            st.warning(f"⚠️ KAP önbelleği GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"KAP önbelleği GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(PORTFOLIO_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)

@@ -68,10 +68,10 @@ def render_orb_scan(username: str):
     if live_cash is not None:
         st.metric("Alpaca'daki kullanılabilir nakit (toplam)", f"${live_cash:,.2f}")
     else:
-        st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
+        st.warning("Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
+        "**Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
@@ -86,7 +86,7 @@ def render_orb_scan(username: str):
         if caption:
             st.caption(caption)
 
-    st.subheader("🌐 Tarama Evreni")
+    st.subheader("Tarama Evreni")
     st.caption(
         "Premium Buy Point'in watchlist'indeki VE Relative Strength Rotasyonu'nun elindeki semboller "
         "bu evrenden HER ZAMAN hariç tutulur - üç bağımsız sistemin çakışmaması için. **Russell 2000, "
@@ -115,7 +115,7 @@ def render_orb_scan(username: str):
              "market emriyle giren bu sistemde kayma (slippage) riskini sınırlamak için.",
     )
 
-    st.subheader("📊 Kırılım Parametreleri")
+    st.subheader("Kırılım Parametreleri")
     p1, p2, p3 = st.columns(3)
     # "1Day" kasıtlı olarak yok - o periyotta "seansın açılış barı" tüm gün
     # demek olur, orb_signal bu durumda anlamlı bir sinyal üretemez (session_bars
@@ -162,7 +162,7 @@ def render_orb_scan(username: str):
              "kurulur.",
     )
 
-    st.subheader("🕐 Günlük Otomatik Çalıştırma")
+    st.subheader("Günlük Otomatik Çalıştırma")
     st.caption(
         "Etkinleştirilirse, yukarıdaki ayarlarla her işlem günü 10:30 ve 10:45 ET'de sunucudaki "
         "zamanlanmış iş tarafından evren taranır, en yüksek puanlı top N market emriyle alınır ve "
@@ -185,15 +185,15 @@ def render_orb_scan(username: str):
             )
             # [2026-09-28 · Öneri 5] Risk bazlı adet tavanının bu koşuda kıstığı girişler.
             if summary.get("risk_notes"):
-                st.caption("📐 Risk tavanı: " + " · ".join(summary["risk_notes"]))
+                st.caption("Risk tavanı: " + " · ".join(summary["risk_notes"]))
 
     st.caption(
-        "📐 [2026-09-28] Bu modülün girişlerine, 🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
+        "[2026-09-28] Bu modülün girişlerine, Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
         "ayarları TAVAN olarak uygulanır: adet, nakit payından hesaplanan adetle (özsermaye × işlem başına "
         "risk %) / (giriş − stop) arasındaki küçük olan; toplam açık risk tavanı da tüm modüllerle ortak."
     )
 
-    if st.button("💾 Ayarları Kaydet", type="primary"):
+    if st.button("Ayarları Kaydet", type="primary"):
         new_config = dict(config)
         new_config.update({
             "enabled": automated,
@@ -214,8 +214,8 @@ def render_orb_scan(username: str):
         st.rerun()
 
     st.divider()
-    st.subheader("🔎 Önizleme (salt-okunur - gerçek emir vermez)")
-    if st.button("🔎 Şimdi Tara ve Önizle"):
+    st.subheader("Önizleme (salt-okunur - gerçek emir vermez)")
+    if st.button("Şimdi Tara ve Önizle"):
         with st.spinner("Evren taranıyor ve kırılım adayları puanlanıyor..."):
             universe = build_universe(username, include_nasdaq, include_nyse, custom_groups, include_russell)
             try:
@@ -262,7 +262,7 @@ def render_orb_scan(username: str):
                     "ya da son barı bayat olan hisseler taranmaz.")
 
     st.divider()
-    st.subheader("📦 Şu Anki Pozisyonlar")
+    st.subheader("Şu Anki Pozisyonlar")
     holdings = _load_holdings(GITHUB_REPO, github_token, username)
     if not holdings:
         st.info("Bu modülün şu an elinde hiçbir pozisyon yok.")

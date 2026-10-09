@@ -47,7 +47,7 @@ ALGORITHM_DESCRIPTIONS = {
                           "ANINDA market emriyle girilir. Çıkış için 'Heikin Ashi Çıkışı' stopuyla kullanın.",
 }
 # NOT: "orb" (Açılış Aralığı Kırılımı) burada KASITLI olarak yok - artık
-# buy_algorithms.ALGORITHMS'te değil, kendi bağımsız modülüne taşındı (📈
+# buy_algorithms.ALGORITHMS'te değil, kendi bağımsız modülüne taşındı (
 # Açılış Aralığı Kırılımı (ORB), Algoritmik Ticaret altında) - bkz.
 # orb_core.py'nin modül üstü notu. Eski (bu değişiklikten önce) bir sembole
 # hisse bazlı "orb" algoritması atanmışsa, yukarıdaki active_algorithm
@@ -183,7 +183,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     if current_stop_algorithm not in stop_algorithm_ids:
         current_stop_algorithm = DEFAULT_STOP_ALGORITHM
 
-    with st.expander("📈 Alım Yaklaşımı Nasıl Çalışır?"):
+    with st.expander("Alım Yaklaşımı Nasıl Çalışır?"):
         st.markdown(
             "- **Normal seansta (09:30-16:00 ET):** Watchlist'teki, pozisyonu olmayan her hisse için "
             "seçili algoritma taranır; sinyal varsa fiyatından bekleyen (GTC) bir limit-buy emri "
@@ -211,7 +211,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             "uygulanır."
         )
 
-    st.subheader("🎯 Portföy Seçimi")
+    st.subheader("Portföy Seçimi")
     st.caption("Bu listedeki hisseler için premium buy point (demand zone) taranır ve fiyat oraya ulaştığında otomatik alım yapılır.")
 
     # Alım Bölgesi Tarama sayfasından "Aktar" ile gelen hisseler - tek seferlik
@@ -247,9 +247,9 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         )
         st.session_state["premium_buy_picker_token"] += 1
         st.success(
-            f"✅ {len(new_transfer)} hisse aktarıldı: {', '.join(new_transfer)} — aşağıda seçili "
+            f"{len(new_transfer)} hisse aktarıldı: {', '.join(new_transfer)} — aşağıda seçili "
             "olarak işaretlendi. **Bu henüz kaydedilmedi**: portföye eklemek için ağırlıkları/algoritmaları "
-            "gözden geçirip sayfanın altındaki 💾 Portföyü Kaydet butonuna basmanız gerekiyor."
+            "gözden geçirip sayfanın altındaki Portföyü Kaydet butonuna basmanız gerekiyor."
         )
     pending_transfer = st.session_state["premium_buy_transfer_carry"]
 
@@ -273,7 +273,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
     selected_symbols = edited_picker[edited_picker["Seçili"]]["Hisse"].tolist()
 
-    st.subheader("💰 Bütçe ve Hisse Ağırlıkları")
+    st.subheader("Bütçe ve Hisse Ağırlıkları")
     try:
         account = client.get_account()
     except Exception:
@@ -282,7 +282,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     other_total = sum(other_pcts.values())
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Diğer algoritmalarla aynı: Premium Buy Point'in bütçesi = hesap "
+        "**Nakit payı nasıl çalışır?** Diğer algoritmalarla aynı: Premium Buy Point'in bütçesi = hesap "
         "değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Portföydeki hisselerin alış maliyeti bu bütçeden "
         "düşülür; kalan tutar yeni alımlar için kullanılabilir nakittir - başka algoritmaların alımları bu "
         "bütçeyi küçültmez. Hisse ağırlıkları bu bütçenin yüzdesidir."
@@ -296,7 +296,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
     budget = module_budget(account, cash_allocation_pct) if account is not None else float(config.get("budget") or 0)
     if account is None:
-        st.caption("⚠️ Alpaca hesap bilgisi alınamadı - bütçe bu sayfada hesaplanamıyor.")
+        st.caption("Alpaca hesap bilgisi alınamadı - bütçe bu sayfada hesaplanamıyor.")
     else:
         caption = module_cash_caption(client, cash_allocation_pct, set(config.get("weights") or {}))
         if caption:
@@ -361,7 +361,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
             "istediğiniz gibi değiştirebilirsiniz."
         )
         st.caption(
-            "ℹ️ Zaten açık bir pozisyonu olan hissede ağırlığı düşürmek Alpaca'da otomatik satış/azaltma "
+            "Zaten açık bir pozisyonu olan hissede ağırlığı düşürmek Alpaca'da otomatik satış/azaltma "
             "yapmaz - sistem mevcut hisseleri satıp portföyü yeni ağırlığa küçültmez. Tek etkisi, o hisseye "
             "artık ilave alım yapılmamasıdır (yatırılan tutar zaten yeni hedefin üzerinde kaldığı sürece); "
             "pozisyon, kendi stop-loss'u (Trailing Stop modülü) tetiklenene ya da elle kapatılana kadar "
@@ -375,7 +375,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     else:
         st.info("Portföye en az bir hisse seçin.")
 
-    st.subheader("🧠 Hisse Bazlı Algoritma Seçimi")
+    st.subheader("Hisse Bazlı Algoritma Seçimi")
     st.caption(
         "Her hisse için, o hissede daha önce BackTest modülünde ya da Alım Bölgesi Tarama'da "
         "çalıştırılmış algoritma + mum periyodu + veri kaynağı kombinasyonları K/Z %'ye göre en "
@@ -440,7 +440,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
 
             symbol_settings[symbol] = settings_for_symbol
 
-    st.subheader("⚙️ Varsayılan Algoritma")
+    st.subheader("Varsayılan Algoritma")
     st.caption("BackTest sonucu olmayan hisseler için kullanılan varsayılan algoritmadır.")
     algorithm_ids = list(ALGORITHMS.keys())
     current_algorithm = config.get("algorithm", DEFAULT_ALGORITHM)
@@ -456,9 +456,9 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         index=algorithm_ids.index(current_algorithm),
         format_func=lambda k: ALGORITHMS[k][0],
     )
-    st.caption(f"ℹ️ {ALGORITHM_DESCRIPTIONS.get(selected_algorithm, '')}")
+    st.caption(f"{ALGORITHM_DESCRIPTIONS.get(selected_algorithm, '')}")
 
-    st.subheader("🛑 Risk Yönetimi")
+    st.subheader("Risk Yönetimi")
     selected_stop_algorithm = st.selectbox(
         "Stop-Loss Algoritması",
         stop_algorithm_ids,
@@ -488,7 +488,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
 
     # ---- [2026-09-28 · Öneri 1, 4, 5, 6] ----
-    st.subheader("📐 Risk Bazlı Pozisyon Büyüklüğü")
+    st.subheader("Risk Bazlı Pozisyon Büyüklüğü")
     st.caption(
         "[2026-09-28 · Öneri 5] Adet = (özsermaye × işlem başına risk %) / (giriş − stop). Böylece stop "
         "yakın da olsa uzak da olsa her kayıp yaklaşık aynı dolar tutarında olur; oynak hisse küçük, sakin "
@@ -521,7 +521,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "çekilmiş pozisyonun riski 0'dır ve yer açar.",
     )
 
-    st.subheader("⏱️ Giriş Zamanlaması ve Stop Periyodu")
+    st.subheader("Giriş Zamanlaması ve Stop Periyodu")
     entry_timing = {"pre_open_cancel_enabled": True, "entry_guard_minutes": 15, **(config.get("entry_timing") or {})}
     et1, et2, et3 = st.columns(3)
     pre_open_cancel_enabled = et1.checkbox(
@@ -548,7 +548,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     )
 
     st.info(
-        "💡 **İlave Alım (Top-up) nasıl çalışır?** Bir hissede pozisyon zaten açıkken bütçe artırılıp "
+        "**İlave Alım (Top-up) nasıl çalışır?** Bir hissede pozisyon zaten açıkken bütçe artırılıp "
         "ağırlık sabit bırakılırsa ve algoritmanın sinyal fiyatı güncel fiyata yakınsa (%0.5 içinde), "
         "sistem aradaki farkı otomatik tamamlar. Bu, **taze bir girişten farklı** işler: taze giriş "
         "bekleyen (resting) bir limit emridir, ama pozisyonu koruyan stop-sell emri zaten resting "
@@ -559,7 +559,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "korumasız kalmıyor)."
     )
     st.info(
-        "⚡ **Kırılım (Kırılım + Hacim İvmesi) sinyalinde giriş/stop nasıl çalışır?** Diğer algoritmalar "
+        "**Kırılım (Kırılım + Hacim İvmesi) sinyalinde giriş/stop nasıl çalışır?** Diğer algoritmalar "
         "(Talep Bölgesi, Trend İçi Düzeltme, Oynaklığa Duyarlı Destek, Bıçak Kanalı) \"pullback\" tarzıdır - "
         "fiyatın bir destek seviyesine geri çekilmesini beklediğinden, sinyal fiyatında bekleyen (resting) "
         "bir bracket limit emri anlamlıdır. **Kırılım** sinyali ise tam tersini işaret eder: fiyatın O AN "
@@ -572,9 +572,9 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         "kurulur; tek bir bracket emrinde değil, market emri dolar dolmaz kurulan ayrı bir stop emriyle. "
         "Market emri normalde saniyeler içinde dolduğundan bu, günlerce açık kalabilecek bir resting "
         "limitten çok daha kısa, saniyeler süren bir korumasız pencere yaratır.\n\n"
-        "📈 **Açılış Aralığı Kırılımı (ORB) arıyorsanız:** bu algoritma artık burada değil - Algoritmik "
+        "**Açılış Aralığı Kırılımı (ORB) arıyorsanız:** bu algoritma artık burada değil - Algoritmik "
         "Ticaret altındaki kendi bağımsız modülüne taşındı (kendi nakit payı, Russell 2000 varsayılı "
-        "evren taraması, piyasa açılışında otomatik puanlama/alım). Bkz. **📈 Açılış Aralığı Kırılımı "
+        "evren taraması, piyasa açılışında otomatik puanlama/alım). Bkz. **Açılış Aralığı Kırılımı "
         "(ORB)** sayfası."
     )
     top_up_stop_options = ["keep", "tighten_to_new_entry"]
@@ -594,7 +594,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "mı - hiçbir durumda mevcut korumayı gevşetmez.",
     )
 
-    st.subheader("🔁 Alım-Stop-Alım Ek Yeteneği")
+    st.subheader("Alım-Stop-Alım Ek Yeteneği")
     buy_stop_rebuy_enabled = st.checkbox(
         "Alım-Stop-Alım Ek Yeteneğini Etkinleştir",
         value=bool(config.get("buy_stop_rebuy_enabled")), key="pbp_buy_stop_rebuy_enabled",
@@ -612,7 +612,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
              "15 dakikalık barda 8 bar).",
     )
     st.info(
-        "ℹ️ **Alım-Stop-Alım Ek Yeteneği nasıl çalışır?** Bu ek yetenek etkinken, Premium Buy Point ile "
+        "**Alım-Stop-Alım Ek Yeteneği nasıl çalışır?** Bu ek yetenek etkinken, Premium Buy Point ile "
         "alım her zamanki gibi yapılır ve pozisyon açılır açılmaz stop-loss mantığı (seçili stop-loss "
         "algoritması) hemen devreye girer - bunda bir değişiklik yok. Farkı, stop tetiklenip hisse "
         "satıldıktan SONRA başlıyor: sistem o hisse için gelen mum barlarını izlemeye devam eder; fiyat, "
@@ -634,7 +634,7 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
         ]
         if ineligible:
             st.caption(
-                f"⚠️ 1 Günlük periyotta olduğu için Alım-Stop-Alım bu hisselerde uygulanmayacak: "
+                f"1 Günlük periyotta olduğu için Alım-Stop-Alım bu hisselerde uygulanmayacak: "
                 f"{', '.join(ineligible)}."
             )
 
@@ -643,13 +643,13 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     # [2026-09-28 · Öneri 6] Kural dondurma hatırlatıcısı.
     if config.get("rules_version_since"):
         st.caption(
-            f"🧊 Mevcut kural sürümü: **{config['rules_version_since'][:10]}** tarihinden beri. Algoritma, stop, "
+            f"Mevcut kural sürümü: **{config['rules_version_since'][:10]}** tarihinden beri. Algoritma, stop, "
             f"risk ya da zamanlama ayarlarını değiştirmek yeni bir kural sürümü başlatır - sonuçların "
             f"ölçülebilmesi için en az {MIN_TRADES_FOR_EVALUATION} kapanan işlem birikmeden değiştirmemeniz "
-            "önerilir (sayaç: 🧠 Algo Analiz). Bütçe ve ağırlık değişiklikleri kural sürümünü sıfırlamaz."
+            "önerilir (sayaç: Algo Analiz). Bütçe ve ağırlık değişiklikleri kural sürümünü sıfırlamaz."
         )
 
-    if st.button("💾 Portföyü Kaydet", type="primary"):
+    if st.button("Portföyü Kaydet", type="primary"):
         client.set_watchlist_symbols(watchlist["id"], selected_symbols)
         st.session_state["premium_buy_transfer_carry"] = []
         new_config = {
@@ -688,13 +688,13 @@ def render_premium_buy_portfolio(target_list: list[str], username: str):
     if not current_symbols:
         return
 
-    st.subheader("📍 Premium Buy Point Karşılaştırması")
+    st.subheader("Premium Buy Point Karşılaştırması")
     _render_buy_point_table(
         client, current_symbols, symbol_settings, selected_algorithm, selected_stop_algorithm,
         weights_map, float(budget), bool(stop_loss_enabled), float(max_loss_pct) if stop_loss_enabled else None,
     )
 
-    st.subheader("📜 Son 30 Gün Alım/Satım Emirleri")
+    st.subheader("Son 30 Gün Alım/Satım Emirleri")
     history_rows = [
         format_order_row(o) for o in client.get_recent_orders(days=30) if o["symbol"] in current_symbols
     ]

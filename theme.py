@@ -21,7 +21,7 @@ _DEFAULT_MODE = DAY
 _QUERY_KEY = "theme"
 _STATE_KEY = "app_theme"
 
-MODE_LABELS = {DAY: "☀️ Gündüz", NIGHT: "🌙 Gece"}
+MODE_LABELS = {DAY: "Gündüz", NIGHT: "Gece"}
 
 # "Gündüz": yeşil-mavi ağırlıklı, açık/ferah bir finans terminali paleti.
 # "Gece": camgöbeği/lacivert ağırlıklı, TradingView/Bloomberg tarzı koyu

@@ -63,7 +63,7 @@ def append_results(username: str, new_runs: list[dict]) -> list[dict]:
         try:
             write_json_to_github(GITHUB_REPO, token, save_file, results, f"Add backtest run(s) ({username})")
         except Exception as e:
-            st.warning(f"⚠️ Backtest sonuçları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"Backtest sonuçları GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(save_file, "w", encoding="utf-8") as f:
         json.dump(results, f, ensure_ascii=False, indent=2)

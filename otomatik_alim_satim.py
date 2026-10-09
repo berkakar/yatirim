@@ -57,7 +57,7 @@ def render_otomatik_alim_satim(username: str):
     if live_cash is not None:
         st.metric("Alpaca'daki kullanılabilir nakit", f"${live_cash:,.2f}")
     else:
-        st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
+        st.warning("Alpaca'daki güncel nakit bakiye alınamadı.")
 
     cash_allocation = st.number_input(
         "Otomatik modda kullanılacak nakit tutarı ($)",
@@ -70,9 +70,9 @@ def render_otomatik_alim_satim(username: str):
     if live_cash is not None and cash_allocation > live_cash:
         st.warning(f"Girdiğiniz tutar (${cash_allocation:,.2f}), Alpaca'daki nakit bakiyeyi (${live_cash:,.2f}) aşıyor.")
 
-    st.subheader("🌐 Tarama Evreni")
+    st.subheader("Tarama Evreni")
     st.caption(
-        "Bu tarama **NASDAQ 100**, **NYSE**, **Russell 2000** ve bu piyasalara bağlı (🗂️ Hisse "
+        "Bu tarama **NASDAQ 100**, **NYSE**, **Russell 2000** ve bu piyasalara bağlı (Hisse "
         "Gruplarını Yönet'te atanmış) kullanıcı tanımlı hisse gruplarını kapsar - Alpaca'da işlem "
         "görmeyen BIST hisseleri bu modüle dahil değildir."
     )
@@ -111,7 +111,7 @@ def render_otomatik_alim_satim(username: str):
         key="oas_custom_groups",
     )
 
-    st.subheader("🧮 Buy Point Algoritmaları")
+    st.subheader("Buy Point Algoritmaları")
     saved_algorithms = config.get("algorithms") or [DEFAULT_ALGORITHM_ID]
     selected_algo_ids = []
     algo_cols = st.columns(len(ALGORITHMS))
@@ -119,7 +119,7 @@ def render_otomatik_alim_satim(username: str):
         if col.checkbox(label, value=algo_id in saved_algorithms, key=f"oas_algo_{algo_id}"):
             selected_algo_ids.append(algo_id)
 
-    st.subheader("🕯️ Mum Periyodu")
+    st.subheader("Mum Periyodu")
     saved_timeframes = config.get("timeframes") or ["1Day"]
     selected_timeframes = []
     tf_cols = st.columns(len(TIMEFRAME_LABELS))
@@ -127,7 +127,7 @@ def render_otomatik_alim_satim(username: str):
         if col.checkbox(tf_label, value=tf_code in saved_timeframes, key=f"oas_tf_{tf_code}"):
             selected_timeframes.append(tf_code)
 
-    if st.button("🚀 Seçili Kriterlerle Tara", type="primary"):
+    if st.button("Seçili Kriterlerle Tara", type="primary"):
         if not selected_algo_ids or not selected_timeframes:
             st.error("En az bir algoritma ve bir mum periyodu seçin.")
         else:
@@ -143,7 +143,7 @@ def render_otomatik_alim_satim(username: str):
 
     scan_rows = st.session_state.get("oas_scan_rows") or []
     if scan_rows:
-        st.subheader(f"📋 Tarama Sonuçları ({len(scan_rows)})")
+        st.subheader(f"Tarama Sonuçları ({len(scan_rows)})")
         scan_fetched_at = st.session_state.get("oas_scan_fetched_at")
         if scan_fetched_at:
             freshness_caption(f"Veri güncelliği: {scan_fetched_at:%d.%m.%Y %H:%M:%S} TRT (Alpaca'dan tarama anında çekildi).")
@@ -159,7 +159,7 @@ def render_otomatik_alim_satim(username: str):
             help="RSI14/RSI21 ve EMA50/EMA200 kesişimlerinin aranacağı geriye dönük gün sayısı.",
         )
 
-        if st.button("🧭 Ek Algoritma ile Daralt (RSI14/RSI21 + EMA50/EMA200)"):
+        if st.button("Ek Algoritma ile Daralt (RSI14/RSI21 + EMA50/EMA200)"):
             with st.spinner(f"Son {int(momentum_lookback_days)} gündeki momentum teyidi kontrol ediliyor..."):
                 st.session_state["oas_candidates"] = narrow_by_momentum(
                     client, scan_rows, DEFAULT_MAX_CANDIDATES, int(momentum_lookback_days),
@@ -170,7 +170,7 @@ def render_otomatik_alim_satim(username: str):
     candidates = st.session_state.get("oas_candidates")
     if candidates is not None:
         used_lookback_days = int(st.session_state.get("oas_momentum_lookback_days", DEFAULT_MOMENTUM_LOOKBACK_DAYS))
-        st.subheader(f"🎯 Daraltılmış Adaylar ({len(candidates)}/{DEFAULT_MAX_CANDIDATES})")
+        st.subheader(f"Daraltılmış Adaylar ({len(candidates)}/{DEFAULT_MAX_CANDIDATES})")
         st.caption(
             f"Son {used_lookback_days} gün içinde RSI14'ün RSI21'i YUKARI kesmesi VE EMA50'nin EMA200'ü "
             "yukarı kesmesi (\"Golden Cross\") olaylarını BİRLİKTE gösteren hisseler - iki bağımsız "
@@ -186,7 +186,7 @@ def render_otomatik_alim_satim(username: str):
             display_cols = ["Hisse", "Tarayıcı Türü", "Mum Periyodu", "Mum Seviyesi"]
             st.dataframe(zebra_style(pd.DataFrame(candidates)[display_cols]), use_container_width=True, hide_index=True)
 
-            if st.button("🧪 Backtest Uygula", type="primary"):
+            if st.button("Backtest Uygula", type="primary"):
                 with st.spinner("Backtest çalıştırılıyor..."):
                     all_results = run_backtests(
                         client, candidates, float(cash_allocation), username,
@@ -197,7 +197,7 @@ def render_otomatik_alim_satim(username: str):
 
     backtest_rows = st.session_state.get("oas_backtest_rows")
     if backtest_rows is not None:
-        st.subheader(f"📊 Backtest Sonuçları (K/Z > %{DEFAULT_MIN_BACKTEST_PROFIT_PCT:g})")
+        st.subheader(f"Backtest Sonuçları (K/Z > %{DEFAULT_MIN_BACKTEST_PROFIT_PCT:g})")
         if not backtest_rows:
             st.info("Hiçbir aday %10'un üzerinde kârlılık göstermedi.")
         else:
@@ -231,7 +231,7 @@ def render_otomatik_alim_satim(username: str):
             )
             selected_backtest_rows = [backtest_rows[i] for i in edited.index[edited["Seçili"]]]
 
-            if st.button("➡️ Premium Buy Portföyüne Aktar", type="primary"):
+            if st.button("Premium Buy Portföyüne Aktar", type="primary"):
                 if not selected_backtest_rows:
                     st.error("Aktarmak için en az bir hisse seçin.")
                 else:
@@ -244,13 +244,13 @@ def render_otomatik_alim_satim(username: str):
                         r["symbol"]: {"algorithm": r["algorithm"], "timeframe": r["timeframe"]}
                         for r in selected_backtest_rows
                     }
-                    st.session_state["active_module_🤖 Algoritmik Ticaret"] = "🎯 Premium Buy Point Portföyü"
-                    st.session_state["nav_category"] = "🤖 Algoritmik Ticaret"
-                    st.session_state["open_category"] = "🤖 Algoritmik Ticaret"
+                    st.session_state["active_module_Algoritmik Ticaret"] = "Premium Buy Point Portföyü"
+                    st.session_state["nav_category"] = "Algoritmik Ticaret"
+                    st.session_state["open_category"] = "Algoritmik Ticaret"
                     st.rerun()
 
     st.divider()
-    st.subheader("🕐 Günlük Otomatik Çalıştırma")
+    st.subheader("Günlük Otomatik Çalıştırma")
     st.caption(
         "Etkinleştirilirse, yukarıdaki ayarlarla (nakit tutarı, evren, algoritma, mum periyodu) bu "
         "pipeline'ın tamamı (tara → RSI14/RSI21 + EMA50/EMA200 ile daralt → backtest → %10 üzeri "
@@ -274,7 +274,7 @@ def render_otomatik_alim_satim(username: str):
             f"seçilen: {', '.join(summary.get('selected_symbols') or []) or 'yok'}."
         )
 
-    if st.button("💾 Otomatik Alım/Satım Ayarlarını Kaydet", type="primary"):
+    if st.button("Otomatik Alım/Satım Ayarlarını Kaydet", type="primary"):
         new_config = dict(config)
         new_config.update({
             "enabled": automated,

@@ -67,10 +67,10 @@ def render_relative_strength(username: str):
     if live_cash is not None:
         st.metric("Alpaca'daki kullanılabilir nakit (toplam)", f"${live_cash:,.2f}")
     else:
-        st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
+        st.warning("Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
+        "**Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
@@ -85,7 +85,7 @@ def render_relative_strength(username: str):
         if caption:
             st.caption(caption)
 
-    st.subheader("🌐 Rotasyon Evreni")
+    st.subheader("Rotasyon Evreni")
     st.caption(
         "Premium Buy Point'in watchlist'indeki semboller bu evrenden HER ZAMAN hariç tutulur (bkz. "
         "relative_strength_core.rebalance) - aynı sembolde iki bağımsız sistemin çakışmaması için. "
@@ -114,7 +114,7 @@ def render_relative_strength(username: str):
              "market emriyle giren bir sistemde kayma (slippage) riskini sınırlamak için.",
     )
 
-    st.subheader("📊 Sıralama Parametreleri")
+    st.subheader("Sıralama Parametreleri")
     p1, p2, p3 = st.columns(3)
     top_n = p1.number_input(
         "Kaç hisse tutulsun (top N)", min_value=1, max_value=50,
@@ -149,7 +149,7 @@ def render_relative_strength(username: str):
              "algoritmayla yönetir.",
     )
     st.info(
-        "🎯 **Bu strateji için varsayılan neden \"Breakeven + Yapısal Trail\"?** \"Açılış Aralığı "
+        "**Bu strateji için varsayılan neden \"Breakeven + Yapısal Trail\"?** \"Açılış Aralığı "
         "(ORB) Stop\" bu modülde ANLAMSIZ kalır - o algoritma girişin yapıldığı seansın açılış barına "
         "ihtiyaç duyar, ama bu modül haftanın herhangi bir günü/saatinde alım yapabildiğinden "
         "\"açılış aralığı\" diye bir referans yok; seçilse bile sessizce sabit yüzdelik yedek stop'a "
@@ -160,7 +160,7 @@ def render_relative_strength(username: str):
         "seçildi - başka bir algoritma denemek isterseniz yukarıdan değiştirebilirsiniz."
     )
 
-    st.subheader("🕐 Haftalık Otomatik Çalıştırma")
+    st.subheader("Haftalık Otomatik Çalıştırma")
     st.caption(
         "Etkinleştirilirse, yukarıdaki ayarlarla haftada 1 kez (her Pazartesi 10:00 ET) gerçek satış/alım "
         "emirleri sunucudaki zamanlanmış iş tarafından verilir. Manuel önizleme butonu her zaman kullanılabilir "
@@ -182,15 +182,15 @@ def render_relative_strength(username: str):
             )
             # [2026-09-28 · Öneri 5] Risk bazlı adet tavanının bu koşuda kıstığı girişler.
             if summary.get("risk_notes"):
-                st.caption("📐 Risk tavanı: " + " · ".join(summary["risk_notes"]))
+                st.caption("Risk tavanı: " + " · ".join(summary["risk_notes"]))
 
     st.caption(
-        "📐 [2026-09-28] Bu modülün girişlerine, 🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
+        "[2026-09-28] Bu modülün girişlerine, Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
         "ayarları TAVAN olarak uygulanır: adet, nakit payından hesaplanan adetle (özsermaye × işlem başına "
         "risk %) / (giriş − stop) arasındaki küçük olan; toplam açık risk tavanı da tüm modüllerle ortak."
     )
 
-    if st.button("💾 Ayarları Kaydet", type="primary"):
+    if st.button("Ayarları Kaydet", type="primary"):
         new_config = dict(config)
         new_config.update({
             "enabled": automated,
@@ -210,8 +210,8 @@ def render_relative_strength(username: str):
         st.rerun()
 
     st.divider()
-    st.subheader("🔎 Önizleme (salt-okunur - gerçek emir vermez)")
-    if st.button("🔎 Şimdi Sırala ve Önizle"):
+    st.subheader("Önizleme (salt-okunur - gerçek emir vermez)")
+    if st.button("Şimdi Sırala ve Önizle"):
         with st.spinner("Evren taranıyor ve sıralanıyor..."):
             universe = build_universe(username, include_nasdaq, include_nyse, custom_groups, include_russell)
             try:
@@ -243,10 +243,10 @@ def render_relative_strength(username: str):
             st.info("Bu kriterlere uyan hiçbir hisse yok (mutlak momentum eşiği çok yüksek olabilir).")
 
         if plan.to_sell:
-            st.warning(f"🔻 Sıralamadan düşecek (SATILACAK): {', '.join(plan.to_sell)}")
+            st.warning(f"Sıralamadan düşecek (SATILACAK): {', '.join(plan.to_sell)}")
 
     st.divider()
-    st.subheader("📦 Şu Anki Pozisyonlar")
+    st.subheader("Şu Anki Pozisyonlar")
     holdings = _load_holdings(GITHUB_REPO, github_token, username)
     if not holdings:
         st.info("Bu modülün şu an elinde hiçbir pozisyon yok.")
