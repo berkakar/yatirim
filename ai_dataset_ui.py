@@ -44,6 +44,7 @@ _GLOSSARY = """
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
+| *Eğitim verisindeki değerleme sütunları* | `valuation_score`, `valuation_sector_discount_pct`, `valuation_eps_growth_pct`, `valuation_revenue_growth_pct`, `valuation_current_ratio`, `valuation_net_margin_pct`, `valuation_debt_equity`; diğer değerleme sütunları yalnızca tabloda |
 | `valuation_is_reconstructed` | *Meta.* 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
 | `valuation_is_snapshot` | *Meta.* 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |

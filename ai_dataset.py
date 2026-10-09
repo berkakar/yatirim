@@ -964,6 +964,12 @@ TRAINING_TEMPORAL_COLS = ("time_idx", "month", "day_of_month", "day_of_week", "i
 # Sektör ETF'leri ve SPY: eğitim verisinde yalnızca 1 günlük getiri (5 / 21 günlük getiriler
 # 1 günlüklerin birikimi - model sıradaki günlerden kendisi çıkarır).
 TRAINING_ETF_FEATURES = ("ret_1d",)
+# Değerleme: eğitim verisinde yalnızca bu sütunlar (2026-10-09). Diğer VALUATION_FIELDS
+# sütunları (F/K, alt sektör F/K, ROE, ROA, brüt marj, faiz karşılama, borç / varlık,
+# likidite oranı, varlık devir hızı) veritabanında ve tabloda durur.
+TRAINING_VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "valuation_eps_growth_pct",
+                           "valuation_revenue_growth_pct", "valuation_current_ratio", "valuation_net_margin_pct",
+                           "valuation_debt_equity")
 
 
 def is_training_excluded(col: str) -> bool:
@@ -972,14 +978,17 @@ def is_training_excluded(col: str) -> bool:
         return True
     if col in TEMPORAL_COLS and col not in TRAINING_TEMPORAL_COLS:
         return True
+    if col in VALUATION_FIELDS and col not in TRAINING_VALUATION_COLS:
+        return True
     prefix, _, feat = col.partition("__")
     return bool(feat) and prefix.upper() in sector_etf_symbols() and feat not in TRAINING_ETF_FEATURES
 
 
 def training_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Eğitim verisi: meta sütunlar, çıkarılan türetilmiş sütunlar, fiyat /
-    hacim seviyeleri (LEVEL_COLS; `close` hariç), fazlalık takvim sütunları ve
-    ETF'lerin 5 / 21 günlük getirileri olmadan."""
+    hacim seviyeleri (LEVEL_COLS; `close` hariç), fazlalık takvim sütunları,
+    ETF'lerin 5 / 21 günlük getirileri ve TRAINING_VALUATION_COLS dışındaki
+    değerleme sütunları olmadan."""
     return df.drop(columns=[c for c in df.columns if is_training_excluded(c)])
 
 

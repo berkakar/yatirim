@@ -352,6 +352,16 @@ class TrainingSelectionTests(unittest.TestCase):
                          + ["xlk__ret_1d", "spy__ret_1d", "nasdaq_100__momentum", "close"])
 
 
+class TrainingValuationTests(unittest.TestCase):
+    def test_only_selected_valuation_columns_in_training(self):
+        train = ad.training_frame(pd.DataFrame(columns=list(ad.VALUATION_FIELDS) + ["close"]))
+        self.assertEqual(set(train.columns), set(ad.TRAINING_VALUATION_COLS) | {"close"})
+        for col in ("valuation_pe", "valuation_sector_pe", "valuation_roe_pct", "valuation_roa_pct",
+                    "valuation_gross_margin_pct", "valuation_interest_coverage", "valuation_debt_assets_pct",
+                    "valuation_quick_ratio", "valuation_asset_turnover"):
+            self.assertTrue(ad.is_training_excluded(col), col)
+
+
 class TrainingViewTests(unittest.TestCase):
     setUp = DatasetTests.setUp
     tearDown = DatasetTests.tearDown
