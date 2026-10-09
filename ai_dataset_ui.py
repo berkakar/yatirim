@@ -17,7 +17,8 @@ TR_TZ = ZoneInfo("Europe/Istanbul")
 
 # Görünen sütunları seçmek için gruplar (sıra tablodaki sırayla aynı).
 _GROUPS = (
-    ("Fiyat & Hacim", lambda c: c in ("open", "high", "low", "close", "volume", "vwap", "ret_1d_pct")),
+    ("Fiyat & Hacim", lambda c: c in ("open", "high", "low", "close", "volume", "vwap", "ret_1d_pct")
+     or c in ad.RELATIVE_COLS),
     ("EMA", lambda c: c.startswith("ema") or c.startswith("dist_ema")),
     ("Hisse Duyarlılığı", lambda c: c.startswith("sent_") or c == "rsi14"),
     ("Direnç", lambda c: c.startswith("resistance_")),
@@ -35,6 +36,7 @@ _GLOSSARY = """
 |---|---|
 | `sub_sector` | *Meta.* Hissenin alt sektörü (iş modeli grubu; Değerleme modülündeki "İş Modeli Grubu") |
 | `ret_*` | Getiri (return), %: `ret_1d_pct` hissenin günlük getirisi; ETF'lerde `ret_1d / ret_5d / ret_21d` 1 / 5 / 21 işlem günlük getiri |
+| `gap_open_pct`, `range_pct`, `close_vs_vwap_pct`, `volume_rel20` | Göreli fiyat / hacim: açılışın önceki kapanışa göre % farkı, gün içi aralık (yüksek − düşük) / kapanış %, kapanışın VWAP'a göre % farkı, hacim / önceki 20 günün ortalama hacmi |
 | `open, high, low, close, volume` | Yahoo günlük barı (bölünme/temettü düzeltmeli) |
 | `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; *meta* `vwap_is_proxy`=1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
@@ -51,6 +53,7 @@ _GLOSSARY = """
 | `interpolated_cells` | *Meta.* O satırda interpolasyonla doldurulan hücre sayısı |
 | `source` | *Meta.* `backfill`: ilk hazırlama · `daily`: sonradan eklenen gün |
 | *Çıkarılanlar* | `sector_etf__*` (kendi ETF'sinin kopyası), `<etf>__rel_5d_vs_benchmark` (= ETF ret_5d − SPY ret_5d), `nasdaq_100__score` (5 bileşenin ortalaması), `stock_sentiment` (3 bileşenin ortalaması) - diğer sütunlardan türetilebildikleri için veri setinde yok |
+| *Eğitim verisinde olmayan seviyeler* | `open, high, low, vwap, volume`, `ema20/50/200`, direnç seviyeleri, ETF kapanışları, `nasdaq_100__index_close` - zamanla kayan ve kapanışla ~0,99 korelasyonlu fiyat seviyeleri; yerlerine yüzde / getiri karşılıkları girer. `close` kalır (hedef değişken ve fiyata geri çevirmek için) |
 | *Meta sütunlar* | Tabloda "Meta (eğitime girmez)" grubunda; eğitim verisi CSV'sine ve `ai_dataset.py export`'a girmez (`--all-columns` ile girer) |
 """
 
@@ -218,7 +221,7 @@ def _render_dataset(ticker, username):
                    if (meta.get("sector") or val.get("sector")) else ""), unsafe_allow_html=True)
     m = st.columns(5)
     m[0].metric("Gün", f"{len(df)}")
-    m[1].metric("Sütun", f"{len(df.columns) - 1}")
+    m[1].metric("Sütun", f"{len(df.columns) - 1}", help=f"Eğitim verisinde {len(ad.training_frame(df).columns)} sütun")
     last_score = df["valuation_score"].iloc[-1] if "valuation_score" in df else None
     m[2].metric("Ucuzluk Skoru", f"{last_score:.0f}" if pd.notna(last_score) else "—", help="Son günün skoru")
     m[3].metric("Sektör ETF'si", meta.get("sector_etf") or "—", help=val.get("sector"))
@@ -237,8 +240,27 @@ def _render_dataset(ticker, username):
         st.caption(f"🏭 Sektör ETF'leri veride: {', '.join(present_etfs)} - her biri için kapanış, 1 / 5 / 21 "
                    "günlük getiri (`ret_*`).")
 
-    cols = _select_columns(df)
-    view = df[cols].sort_index(ascending=False).reset_index()
+    missing_rel = ad.missing_relative_cols(df)
+    if missing_rel:
+        st.info(f"Bu veri seti göreli fiyat / hacim sütunları eklenmeden önce hazırlanmış "
+                f"({', '.join(missing_rel)} yok). Eğitim verisinde bu sütunların olması için veri setini "
+                "**Veriyi Hazırla ve Kaydet** ile yeniden hazırlayın.")
+
+    train = ad.training_frame(df)
+    mode = st.radio("Görünüm", ("Tüm veri", "Eğitim verisi"), horizontal=True, key=f"ai_view_mode_{ticker}",
+                    help="Eğitim verisi: modele verilecek tablo - meta sütunlar ve fiyat / hacim seviyeleri "
+                         "olmadan (yerlerine yüzde / getiri karşılıkları).")
+    if mode == "Eğitim verisi":
+        dropped = [c for c in df.columns if c not in train.columns and c not in ad.META_COLS]
+        st.caption(f"🎯 Eğitim verisi: **{len(train)} gün × {len(train.columns)} sütun**. Çıkarılan seviyeler "
+                   f"({len(dropped)}): " + ", ".join(f"`{c}`" for c in dropped)
+                   + f" · meta ({len([c for c in df.columns if c in ad.META_COLS])}): "
+                   + ", ".join(f"`{c}`" for c in df.columns if c in ad.META_COLS))
+        cols = list(train.columns)
+        view = train.sort_index(ascending=False).reset_index()
+    else:
+        cols = _select_columns(df)
+        view = df[cols].sort_index(ascending=False).reset_index()
     view["date"] = view["date"].dt.strftime("%Y-%m-%d")
     num_cols = [c for c in view.columns if pd.api.types.is_float_dtype(view[c])]
     view[num_cols] = view[num_cols].round(4)
@@ -260,7 +282,7 @@ def _render_dataset(ticker, username):
                     st.rerun()
     b2.download_button("⬇️ Eğitim verisi (CSV)", ad.training_frame(df).to_csv(date_format="%Y-%m-%d").encode("utf-8"),
                        file_name=f"ai_dataset_{ticker}.csv", mime="text/csv", key=f"ai_csv_{ticker}",
-                       help="Meta sütunlar (kaynak, bayraklar, doldurulan hücre sayısı, alt sektör) olmadan.")
+                       help="Görünümdeki 'Eğitim verisi' tablosu: meta sütunlar ve fiyat / hacim seviyeleri olmadan.")
     confirm = b3.checkbox("Silmeyi onayla", key=f"ai_del_ok_{ticker}")
     if b3.button("🗑️ Veri setini sil", disabled=not confirm, key=f"ai_del_{ticker}"):
         ad.delete_dataset(ticker)
@@ -268,7 +290,7 @@ def _render_dataset(ticker, username):
 
     _render_valuation_history(ticker)
 
-    _render_redundancy(df)
+    _render_redundancy(train)
 
     with st.expander("➕ Bir güne veri ekle"):
         st.caption("Seçilen güne yeni bir alan (ör. haber duyarlılığı) ekler veya günceller. Bu alanlar veri seti "
@@ -323,11 +345,9 @@ def _render_valuation_history(ticker):
 
 
 def _render_redundancy(df):
-    with st.expander("🔍 Birbirinin yerine geçebilecek sütunlar (bu veri setinde)"):
-        st.caption("Sabit sütunlar, birebir aynı sütunlar ve mutlak korelasyonu eşiğin üstünde olan çiftler. "
-                   "Fiyat seviyesi gibi zamanla birlikte yükselen sütunlar (kapanış, EMA, direnç seviyesi, ETF "
-                   "kapanışları) doğal olarak yüksek korelasyonlu çıkar; eğitimde bunların yüzde / getiri "
-                   "karşılıkları tercih edilir.")
+    with st.expander("🔍 Birbirinin yerine geçebilecek sütunlar (eğitim verisinde)"):
+        st.caption("Eğitim verisindeki sabit sütunlar, birebir aynı sütunlar ve mutlak korelasyonu eşiğin üstünde "
+                   "olan çiftler. Fiyat / hacim seviyeleri eğitim verisinde olmadığı için burada görünmez.")
         threshold = st.slider("Korelasyon eşiği", 0.80, 0.99, 0.95, 0.01, key="ai_corr_threshold")
         rep = ad.redundancy_report(df, threshold)
         c1, c2, c3 = st.columns(3)

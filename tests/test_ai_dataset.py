@@ -320,6 +320,50 @@ class TrainingFrameTests(unittest.TestCase):
         self.assertEqual(list(ad.load_dataset("OLD").columns), ["close", "source"])
 
 
+class RelativeFeatureTests(unittest.TestCase):
+    def test_relative_features(self):
+        idx = pd.bdate_range("2026-01-01", periods=25)
+        df = pd.DataFrame({"open": 101.0, "high": 104.0, "low": 98.0, "close": 100.0, "vwap": 99.0,
+                           "volume": [1000.0] * 24 + [3000.0]}, index=idx)
+        out = ad.add_relative_features(df)
+        self.assertTrue(np.isnan(out["gap_open_pct"].iloc[0]))
+        self.assertAlmostEqual(out["gap_open_pct"].iloc[1], 1.0)
+        self.assertAlmostEqual(out["range_pct"].iloc[-1], 6.0)
+        self.assertAlmostEqual(out["close_vs_vwap_pct"].iloc[-1], (100 / 99 - 1) * 100)
+        self.assertAlmostEqual(out["volume_rel20"].iloc[-1], 3.0)      # bugün ortalamaya katılmaz
+        self.assertTrue(out["volume_rel20"].iloc[:20].isna().all())
+        self.assertAlmostEqual(out["volume_rel20"].iloc[20], 1.0)
+
+    def test_level_columns(self):
+        for col in ("open", "high", "low", "vwap", "volume", "ema200", "resistance_nearest", "xlk__close",
+                    "spy__close", "nasdaq_100__index_close"):
+            self.assertTrue(ad.is_level_column(col), col)
+        for col in ("close", "dist_ema200_pct", "resistance_nearest_dist_pct", "xlk__ret_5d", "range_pct",
+                    "nasdaq_100__momentum"):
+            self.assertFalse(ad.is_level_column(col), col)
+
+
+class TrainingViewTests(unittest.TestCase):
+    setUp = DatasetTests.setUp
+    tearDown = DatasetTests.tearDown
+
+    def test_training_frame_keeps_close_and_relatives_drops_levels(self):
+        df, _ = ad.create("aapl", valuation=VALUATION, end=END, ohlcv_fetcher=fake_ohlcv(),
+                          market_loader=fake_market())
+        for col in ad.RELATIVE_COLS:
+            self.assertFalse(df[col].isna().any(), col)                  # 3 yıllık veride ısınma geride kalır
+        self.assertEqual(ad.missing_relative_cols(df), [])
+        train = ad.training_frame(df)
+        self.assertIn("close", train.columns)
+        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_nearest_dist_pct", "xlk__ret_5d"):
+            self.assertIn(col, train.columns)
+        for col in ("open", "vwap", "volume", "ema200", "resistance_1m", "spy__close", "interpolated_cells"):
+            self.assertIn(col, df.columns)                               # tabloda / veritabanında duruyor
+            self.assertNotIn(col, train.columns)
+        self.assertEqual(list(pd.read_csv(ad.export("AAPL", tempfile.mkdtemp()), index_col=0).columns),
+                         list(train.columns))
+
+
 class RedundancyTests(unittest.TestCase):
     def test_report_finds_constant_identical_and_correlated(self):
         idx = pd.bdate_range("2026-01-01", periods=50)
