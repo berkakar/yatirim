@@ -343,6 +343,15 @@ class RelativeFeatureTests(unittest.TestCase):
             self.assertFalse(ad.is_level_column(col), col)
 
 
+class TrainingSelectionTests(unittest.TestCase):
+    def test_only_embedding_calendar_and_etf_1d_returns(self):
+        cols = list(ad.TEMPORAL_COLS) + ["xlk__ret_1d", "xlk__ret_5d", "xlk__ret_21d", "xlk__close",
+                                         "spy__ret_1d", "spy__ret_21d", "nasdaq_100__momentum", "close"]
+        train = ad.training_frame(pd.DataFrame(columns=cols))
+        self.assertEqual(list(train.columns), list(ad.TRAINING_TEMPORAL_COLS)
+                         + ["xlk__ret_1d", "spy__ret_1d", "nasdaq_100__momentum", "close"])
+
+
 class TrainingViewTests(unittest.TestCase):
     setUp = DatasetTests.setUp
     tearDown = DatasetTests.tearDown
@@ -355,8 +364,11 @@ class TrainingViewTests(unittest.TestCase):
         self.assertEqual(ad.missing_relative_cols(df), [])
         train = ad.training_frame(df)
         self.assertIn("close", train.columns)
-        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_nearest_dist_pct", "xlk__ret_5d"):
+        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_nearest_dist_pct") + ad.TRAINING_TEMPORAL_COLS:
             self.assertIn(col, train.columns)
+        for col in ("xlk__ret_5d", "xlv__ret_5d", "dow_sin", "month_cos", "quarter", "year", "day_of_year"):
+            self.assertIn(col, df.columns)                               # tabloda duruyor
+            self.assertNotIn(col, train.columns)                         # eğitimde yok
         for col in ("open", "vwap", "volume", "ema200", "resistance_1m", "spy__close", "interpolated_cells"):
             self.assertIn(col, df.columns)                               # tabloda / veritabanında duruyor
             self.assertNotIn(col, train.columns)

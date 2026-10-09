@@ -47,9 +47,9 @@ _GLOSSARY = """
 | `valuation_is_reconstructed` | *Meta.* 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
 | `valuation_is_snapshot` | *Meta.* 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
 | `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
-| `<etf>__*` | 11 sektör ETF'si + SPY (sector_etf_daily): kapanış ve 1 / 5 / 21 günlük getiri |
-| `time_idx, year, month, day_of_month, day_of_week, day_of_year, week_of_year, quarter, is_month_start/end` | Temporal embedding için takvim indeksleri |
-| `*_sin, *_cos` | Haftanın günü, ayın günü, ay, yılın günü, yılın haftası için döngüsel kodlama |
+| `<etf>__*` | 11 sektör ETF'si + SPY (sector_etf_daily): kapanış ve 1 / 5 / 21 günlük getiri. Eğitim verisinde yalnızca `ret_1d` |
+| `time_idx, month, day_of_month, day_of_week, is_month_start/end` | Temporal embedding için takvim indeksleri (eğitim verisinde bunlar) |
+| `year, day_of_year, week_of_year, quarter`, `*_sin, *_cos` | Tabloda var, eğitim verisinde yok: diğer takvim sütunlarından türer / aynı bilginin döngüsel kodlaması |
 | `interpolated_cells` | *Meta.* O satırda interpolasyonla doldurulan hücre sayısı |
 | `source` | *Meta.* `backfill`: ilk hazırlama · `daily`: sonradan eklenen gün |
 | *Çıkarılanlar* | `sector_etf__*` (kendi ETF'sinin kopyası), `<etf>__rel_5d_vs_benchmark` (= ETF ret_5d − SPY ret_5d), `nasdaq_100__score` (5 bileşenin ortalaması), `stock_sentiment` (3 bileşenin ortalaması) - diğer sütunlardan türetilebildikleri için veri setinde yok |
@@ -252,7 +252,7 @@ def _render_dataset(ticker, username):
                          "olmadan (yerlerine yüzde / getiri karşılıkları).")
     if mode == "Eğitim verisi":
         dropped = [c for c in df.columns if c not in train.columns and c not in ad.META_COLS]
-        st.caption(f"🎯 Eğitim verisi: **{len(train)} gün × {len(train.columns)} sütun**. Çıkarılan seviyeler "
+        st.caption(f"🎯 Eğitim verisi: **{len(train)} gün × {len(train.columns)} sütun**. Eğitime alınmayanlar "
                    f"({len(dropped)}): " + ", ".join(f"`{c}`" for c in dropped)
                    + f" · meta ({len([c for c in df.columns if c in ad.META_COLS])}): "
                    + ", ".join(f"`{c}`" for c in df.columns if c in ad.META_COLS))
