@@ -1,7 +1,7 @@
-"""🧠 Algo Analiz sayfası (eski adıyla 📒 İşlem Günlüğü).
+"""Algo Analiz sayfası (eski adıyla İşlem Günlüğü).
 
 İki sekme:
-  - 🧠 Algo Analiz, yukarıdan aşağıya:
+  - Algo Analiz, yukarıdan aşağıya:
       1. Portföyün son durumu: ilk giriş (yatırılan sermaye), güncel değer, K/Z
          ve altında algoritmalara ayrılan nakit (pay, harcanan, kalan, K/Z)
       2. Karlılık: açık pozisyonlar şimdi satılırsa / stoplar devreye girerse
@@ -10,10 +10,10 @@
       4. Hisse hareketleri tablosu (kapalı işlemler + açık pozisyonlar)
       5. Çıkış sebebi, çıkış seans dilimi, giriş seans dilimi istatistikleri
     Hesaplar: algo_analiz.py, trade_journal.py, trade_journal_analysis.py.
-  - 📝 Değişiklik Günlüğü: sistemde yapılan değişikliklerin gerekçeleri, kod
+  - Değişiklik Günlüğü: sistemde yapılan değişikliklerin gerekçeleri, kod
     yerleri, ayarları ve takip ölçütleri (changelog.py).
 
-render_live_positions: Genel Bakış ve 🦙 Alpaca Canlı Pozisyonlar sayfalarındaki
+render_live_positions: Genel Bakış ve Alpaca Canlı Pozisyonlar sayfalarındaki
 açık pozisyonlar tablosu (Hisse Hareketleri'nin açık pozisyon hali) ve altında
 bugün ve dün gerçekleşen emirler.
 """
@@ -45,7 +45,7 @@ from trade_journal_analysis import (
 )
 from ui_style import freshness_caption, zebra_style
 
-PAGE_TITLE = "🧠 Algo Analiz"
+PAGE_TITLE = "Algo Analiz"
 GITHUB_REPO = "berkakar/yatirim"
 JOURNAL_DAYS_OPTIONS = [30, 60, 90, 180, 365, 1095]
 # Açık pozisyonun giriş emri seçili pencerede yoksa o sembolün geçmişi bu
@@ -255,7 +255,7 @@ def _table(df: pd.DataFrame, pnl_cols: list[str] | None = None, column_config: d
 # ------------------------------------------------------------------------------
 
 def _render_portfolio(snap: dict, n_positions: int):
-    st.markdown("### 💼 Portföyün Son Durumu")
+    st.markdown("### Portföyün Son Durumu")
     m = st.columns(4)
     m[0].metric("İlk Giriş (Yatırılan Sermaye)", _fmt_money(snap["initial_capital"], sign=False),
                 help=None if snap["initial_capital"] else "İlk sermaye tanımlı değil - Giriş Sayfası > Alpaca hesap "
@@ -271,7 +271,7 @@ def _render_portfolio(snap: dict, n_positions: int):
 
 
 def _render_module_cash(rows: list[dict]):
-    st.markdown("#### 🧮 Algoritmalara Ayrılan Nakit")
+    st.markdown("#### Algoritmalara Ayrılan Nakit")
     shown = [r for r in rows if r["label"] in (OTHER_ALGOS_LABEL, UNALLOCATED_LABEL, PBP_LABEL) or r["pct"] > 0 or r["spent"] > 0 or r["open"] or r["closed"]]
     df = pd.DataFrame([{
         "Algoritma": r["label"],
@@ -302,7 +302,7 @@ def _render_module_cash(rows: list[dict]):
 # ------------------------------------------------------------------------------
 
 def _render_profitability(snap: dict, all_open: list, records: list):
-    st.markdown("### 💰 Karlılık")
+    st.markdown("### Karlılık")
     t = scenario_totals(records)
     portfolio = scenario_totals(all_open)
     initial = snap["initial_capital"]
@@ -316,19 +316,19 @@ def _render_profitability(snap: dict, all_open: list, records: list):
 
     c1, c2, c3 = st.columns(3)
     with c1.container(border=True):
-        st.markdown("**📍 Şu anki fiyattan satılırsa**")
+        st.markdown("**Şu anki fiyattan satılırsa**")
         st.metric("Açık pozisyonların K/Z'si", _fmt_money(t["unrealized"]), delta=_fmt_pct(t["unrealized_pct"]),
                   help="Açık pozisyonların bugünkü fiyattan kapatılması halinde (Alpaca gerçekleşmemiş K/Z).")
         st.caption(_md(f"{t['open_count']} açık pozisyon · maliyet {t['open_cost']:,.0f}$\n\n{_vs_initial(snap['equity'])}"))
     with c2.container(border=True):
-        st.markdown("**🛡️ Stop loss'lar devreye girerse**")
+        st.markdown("**Stop loss'lar devreye girerse**")
         st.metric("Açık pozisyonların K/Z'si", _fmt_money(t["stop_unrealized"]), delta=_fmt_pct(t["stop_unrealized_pct"]),
                   help="Her pozisyonun açık stop emri tetiklenip stop seviyesinden kapanması halinde. Açılış kalkanının "
                        "geçici felaket stopu yerine geri döneceği gerçek stop kullanılır.")
         st.caption(_md(f"Şu ana göre fark: {t['stop_giveback']:+,.2f}$ (stop tetiklenirse geri verilecek)\n\n"
                        f"{_vs_initial(stop_equity)}"))
     with c3.container(border=True):
-        st.markdown("**✅ Kapanan pozisyonlar (gerçekleşen)**")
+        st.markdown("**Kapanan pozisyonlar (gerçekleşen)**")
         st.metric("Gerçekleşen K/Z", _fmt_money(t["closed_realized"] + t["partial_realized"]),
                   help="Seçili penceredeki kapanmış işlemler + açık pozisyonlardaki kısmi satışlar.")
         parts = [f"{t['closed_count']} kapalı işlem"]
@@ -342,12 +342,12 @@ def _render_profitability(snap: dict, all_open: list, records: list):
         st.caption(_md(" · ".join(parts) + partial))
 
     if t["stopless_count"]:
-        st.warning(f"⚠️ Stop emri olmayan {t['stopless_count']} açık pozisyon var ({', '.join(t['stopless_symbols'])}) - "
+        st.warning(f"Stop emri olmayan {t['stopless_count']} açık pozisyon var ({', '.join(t['stopless_symbols'])}) - "
                    "stop senaryosunda bu pozisyonlar anlık fiyattan sayıldı.")
 
     opened = [r for r in records if r.status == STATUS_OPEN]
     if opened:
-        with st.expander(f"📋 Açık pozisyonlar: şimdi satılırsa vs stop devreye girerse ({len(opened)})", expanded=True):
+        with st.expander(f"Açık pozisyonlar: şimdi satılırsa vs stop devreye girerse ({len(opened)})", expanded=True):
             rows = []
             for r in sorted(opened, key=lambda r: -r.unrealized):
                 cost = r.entry_price * r.qty
@@ -436,7 +436,7 @@ def _group_chart(rows: list[dict]) -> go.Figure:
 
 
 def _render_algo_stop(records: list, split_tf: bool, capital: float | None):
-    st.markdown("### 🧠 Algoritma ve Stop Loss Karlılığı")
+    st.markdown("### Algoritma ve Stop Loss Karlılığı")
     grouping = st.radio("Gruplama", [GROUP_ALGO_STOP, GROUP_ALGO, GROUP_STOP], horizontal=True, key="aa_grouping",
                         label_visibility="collapsed")
     if grouping == GROUP_ALGO_STOP:
@@ -494,7 +494,7 @@ def _movements_dataframe(records, split_timeframe: bool) -> pd.DataFrame:
 
 
 def _render_movements(records: list, split_tf: bool):
-    st.markdown("### 📋 Hisse Hareketleri")
+    st.markdown("### Hisse Hareketleri")
     c1, c2 = st.columns([2, 3])
     symbols = sorted({r.symbol for r in records})
     pick = c1.selectbox("Hisse", ["Tümü"] + symbols, key="aa_symbol")
@@ -525,7 +525,7 @@ def _render_movements(records: list, split_tf: bool):
 
 
 # ------------------------------------------------------------------------------
-# Canlı pozisyonlar (Genel Bakış + 🦙 Alpaca Canlı Pozisyonlar)
+# Canlı pozisyonlar (Genel Bakış + Alpaca Canlı Pozisyonlar)
 # ------------------------------------------------------------------------------
 
 # Hisse Hareketleri'nden açık pozisyonda anlamsız olan sütunlar çıkarılır.
@@ -567,7 +567,7 @@ def _recent_fills_dataframe(fills: list[dict]) -> pd.DataFrame:
 
 
 def render_live_positions(username: str, positions: list[dict] | None = None):
-    """Açık pozisyonlar tablosu (🧠 Algo Analiz > Hisse Hareketleri'nin
+    """Açık pozisyonlar tablosu (Algo Analiz > Hisse Hareketleri'nin
     sadece açık pozisyonlar hali) ve hemen altında bugün ve dün gerçekleşen
     (dolan) emirler. `positions` verilirse tekrar çekilmez."""
     key_id, secret_key, trading_url = get_user_alpaca(username)
@@ -579,12 +579,12 @@ def render_live_positions(username: str, positions: list[dict] | None = None):
         open_orders = _fetch_open_orders(key_id, secret_key, trading_url)
         orders = _fetch_orders(key_id, secret_key, trading_url, LIVE_ORDER_DAYS)
     except Exception as e:
-        st.warning(f"⚠️ Alpaca pozisyon/emir verisi alınamadı: {e}")
+        st.warning(f"Alpaca pozisyon/emir verisi alınamadı: {e}")
         return
 
-    st.markdown("### 📌 Açık Pozisyonlar")
+    st.markdown("### Açık Pozisyonlar")
     st.caption("Alpaca'daki açık pozisyonlar - giriş algoritması, stop loss algoritması, stop hareketleri ve "
-               "anlık K/Z (🧠 Algo Analiz > Hisse Hareketleri tablosunun sadece açık pozisyonlar hali).")
+               "anlık K/Z (Algo Analiz > Hisse Hareketleri tablosunun sadece açık pozisyonlar hali).")
     if not positions:
         st.info("Açık pozisyon yok.")
     else:
@@ -614,7 +614,7 @@ def render_live_positions(username: str, positions: list[dict] | None = None):
 
     today = datetime.now(TR_TZ).replace(hour=0, minute=0, second=0, microsecond=0)
     yesterday = today - timedelta(days=1)
-    st.markdown("### 🧾 Bugün ve Dün Gerçekleşen Emirler")
+    st.markdown("### Bugün ve Dün Gerçekleşen Emirler")
     st.caption(f"{yesterday:%d.%m.%Y} ve {today:%d.%m.%Y} (TRT) tarihlerinde dolan alış/satış emirleri, en yeni "
                "en üstte. Bekleyen, iptal edilen ve trail ile değiştirilen stop emirleri listelenmez.")
     fills = recent_fills(orders, yesterday)
@@ -639,7 +639,7 @@ def _count_table(counts: dict, label: str) -> pd.DataFrame:
 
 def _render_exit_stats(records: list):
     closed = [r for r in records if r.status == STATUS_CLOSED]
-    st.markdown("### 🚪 Çıkış ve Seans İstatistikleri")
+    st.markdown("### Çıkış ve Seans İstatistikleri")
     if not closed:
         st.caption("Bu kapsamda kapanmış işlem yok.")
         return
@@ -715,12 +715,12 @@ def _render_algo_analiz(username: str):
         n_rules = sum(1 for r in all_records if r.status == STATUS_CLOSED and r.entry_time and r.entry_time >= rules_since)
         if n_rules < MIN_TRADES_FOR_EVALUATION:
             st.info(
-                f"🧊 Mevcut kural sürümü ({rules_since_raw[:10]}) ile **{n_rules}** işlem kapandı. Sonuçlar "
+                f"Mevcut kural sürümü ({rules_since_raw[:10]}) ile **{n_rules}** işlem kapandı. Sonuçlar "
                 f"{MIN_TRADES_FOR_EVALUATION} işlem birikmeden istatistiksel olarak anlamlı değil - bu süre "
                 "zarfında algoritma/stop/risk ayarlarını değiştirmemeniz önerilir."
             )
         else:
-            st.success(f"🧊 Mevcut kural sürümü ile {n_rules} işlem kapandı - kurallar değerlendirilebilir.")
+            st.success(f"Mevcut kural sürümü ile {n_rules} işlem kapandı - kurallar değerlendirilebilir.")
 
     with module_cash_slot:
         try:
@@ -743,7 +743,7 @@ def _render_algo_analiz(username: str):
 
 
 def _render_changelog():
-    st.markdown(f"#### 🔎 {ANALYSIS_SUMMARY['title']} · {ANALYSIS_SUMMARY['date']}")
+    st.markdown(f"#### {ANALYSIS_SUMMARY['title']} · {ANALYSIS_SUMMARY['date']}")
     st.markdown(ANALYSIS_SUMMARY["body"])
     st.caption("Kodda ilgili yerler '[2026-09-28 · Öneri N]' yorumuyla işaretli.")
     for change in CHANGES:
@@ -756,12 +756,12 @@ def _render_changelog():
             if change.get("verification"):
                 st.markdown(f"**Doğrulama:** {change['verification']}")
     if VERIFICATION_NOTES:
-        with st.expander("🧪 Test ve doğrulama sonuçları"):
+        with st.expander("Test ve doğrulama sonuçları"):
             st.markdown(VERIFICATION_NOTES)
 
 
 def render_algo_analiz(username: str):
-    tab_analysis, tab_changes = st.tabs([PAGE_TITLE, "📝 Değişiklik Günlüğü"])
+    tab_analysis, tab_changes = st.tabs([PAGE_TITLE, "Değişiklik Günlüğü"])
     with tab_analysis:
         _render_algo_analiz(username)
     with tab_changes:

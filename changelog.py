@@ -1,4 +1,4 @@
-"""Sistem Değişiklik Günlüğü - 🧠 Algo Analiz sayfasının "📝 Değişiklik
+"""Sistem Değişiklik Günlüğü - Algo Analiz sayfasının "Değişiklik
 Günlüğü" sekmesinde gösterilir (trade_journal_page.py).
 
 Her kayıt: ne sorunu çözdüğü (verideki kanıtıyla), ne değiştiği, kodda
@@ -132,7 +132,7 @@ CHANGES = [
                  "cancel_orphan_stops, run_extended_hours_guard), alpaca_client.py (place_extended_hours_limit), "
                  "stop_tags.py (EXT_GUARD_CODE), tests/test_short_sale_protection.py",
         "settings": "Yok.",
-        "track": "Log'da '... pozisyon yeniden okundu, artık yok' satırları ve Telegram'da '🧹 ... seans dışı acil "
+        "track": "Log'da '... pozisyon yeniden okundu, artık yok' satırları ve Telegram'da '... seans dışı acil "
                  "limit emri ... iptal edildi' uyarıları; Alpaca'da negatif adetli (short) pozisyon olmamalı.",
     },
     {
@@ -203,7 +203,7 @@ CHANGES = [
             "işlem yapıldığını tek yerden yönetmenin yolu yoktu."
         ),
         "change": (
-            "- Giriş Sayfası > ⚙️ Alpaca Hesap Türü: Sanal Para / Gerçek Para. Gerçek Para'ya geçiş onay kutusu "
+            "- Giriş Sayfası > Alpaca Hesap Türü: Sanal Para / Gerçek Para. Gerçek Para'ya geçiş onay kutusu "
             "ve 'GERÇEK PARA' yazılmasını ister; Sanal Para'ya dönüş tek tıkla.\n"
             "- Arayüz ve sunucudaki tüm botlar adresi ve anahtarları bu ayardan alır (alpaca_account.py). "
             "Gerçek Para'da gerçek hesap anahtarları yoksa paper'a düşülmez: arayüz uyarı verir, işler çalışmaz.\n"
@@ -212,7 +212,7 @@ CHANGES = [
         "where": "alpaca_account.py, alpaca_account_ui.py, theme.py (LIVE_ACCENT_OVERRIDES), app.py, runner'ların "
                  "build_client'ı, arayüz modülleri, deploy/install.sh, deploy/README.md, tests/test_account_mode.py",
         "settings": (
-            "Giriş Sayfası > ⚙️ Alpaca Hesap Türü. Gerçek hesap anahtarları: secrets.toml [alpaca.<kullanıcı>] "
+            "Giriş Sayfası > Alpaca Hesap Türü. Gerçek hesap anahtarları: secrets.toml [alpaca.<kullanıcı>] "
             "live_key_id / live_secret_key, sunucuda /etc/yatirim/env APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY."
         ),
         "track": "Geçişten sonra rozetin, turuncu zeminin ve Bağlantılar'daki Alpaca durumunun doğru hesabı gösterdiği kontrol edilmeli.",
@@ -224,7 +224,7 @@ CHANGES = [
         "problem": "Arayüzde işlemlerin sanal parayla mı gerçek parayla mı yapıldığı hiçbir yerde görünmüyordu.",
         "change": (
             "- Giriş Sayfası'nda ve Algoritmik Ticaret kategorisindeki her sayfanın en üstünde hesap türü "
-            "rozeti: paper uç noktasında 🧪 Sanal Para, canlı uç noktada kırmızı 💰 Gerçek Para.\n"
+            "rozeti: paper uç noktasında Sanal Para, canlı uç noktada kırmızı Gerçek Para.\n"
             "- Tür, emirlerin gönderildiği Alpaca uç noktasından (paper-api / api) belirlenir."
         ),
         "where": "alpaca_client.py (is_paper_url, AlpacaClient.is_paper), alpaca_account_ui.py "
@@ -249,13 +249,13 @@ CHANGES = [
         "where": "backtest_engine.py (trade_stats, max_drawdown_pct, BacktestResult.buy_hold_pct/"
                  "max_drawdown_pct), backtest.py (_render_results, METRIC_NOTES), app.py (tarama backtest "
                  "kaydı), tests/test_backtest_metrics.py",
-        "settings": "Ayar yok - BackTest > 📊 Sonuçlar.",
+        "settings": "Ayar yok - BackTest > Sonuçlar.",
         "track": "Yeni backtest çalıştırmalarında stratejiyi Al-Tut Farkı ve Maks. Düşüş ile birlikte değerlendir.",
     },
     {
         "id": "15",
         "date": "2026-10-05",
-        "title": "BackTest sayfasına 📦 Backtest Veri Paketi düğmesi - algoritma doğrulaması için uzun geçmiş",
+        "title": "BackTest sayfasına Backtest Veri Paketi düğmesi - algoritma doğrulaması için uzun geçmiş",
         "problem": (
             "Akıllı Dinamik Stop doğrulaması (#14) yalnızca 6-13 aylık günlük ve ~2.5 aylık 30dk önbellekle "
             "yapılabildi: canlı önbellek en fazla 400 gün tutuyor, Claude Code oturumu dış veri kaynaklarına "
@@ -270,7 +270,7 @@ CHANGES = [
         ),
         "where": "backtest_data_pack.py, backtest.py (_render_data_pack), alpaca_client.py "
                  "(get_raw_bars_multi adjustment), scripts/backtest_adaptive_stop.py, tests/test_backtest_data_pack.py",
-        "settings": "BackTest > 📦 Backtest Veri Paketi.",
+        "settings": "BackTest > Backtest Veri Paketi.",
         "track": "Paket gönderildikten sonra doğrulama raporu reports/ altında yeniden üretilir.",
     },
     {
@@ -298,9 +298,9 @@ CHANGES = [
             "negatif, adaptif kural canlı kuraldan biraz kötü (anlamlı değil) - gün içi için önerilmez.\n"
             "- Tam rapor: reports/adaptive_stop_validation_2026-10-05.md."
         ),
-        "where": "stop_algorithms.py (adaptive_dynamic_*), stop_loss_settings.py (🧠 sekmesi), "
+        "where": "stop_algorithms.py (adaptive_dynamic_*), stop_loss_settings.py (sekmesi), "
                  "scripts/backtest_adaptive_stop.py, tests/test_adaptive_stop.py",
-        "settings": "Stop Loss Ayarları > 🧠 Akıllı Dinamik Stop; modüllerin stop algoritması seçiminden seçilebilir.",
+        "settings": "Stop Loss Ayarları > Akıllı Dinamik Stop; modüllerin stop algoritması seçiminden seçilebilir.",
         "track": "Günlük periyotlu bir modülde denenirse: ilk stopta çıkış oranı, kazanan işlemlerin ortalama "
                  "R'si ve düşüş. Daha uzun geçmişle tekrar: python scripts/backtest_adaptive_stop.py --yahoo ...",
     },
@@ -345,7 +345,7 @@ CHANGES = [
         ),
         "where": "alpaca_trailing_stop.py (cancel_orphan_stops, run_once), tests/test_orphan_stops.py",
         "settings": "Yok.",
-        "track": "Telegram'daki '🧹 ... sahipsiz stop ... iptal edildi' uyarıları - sık geliyorsa stopu iptal "
+        "track": "Telegram'daki '... sahipsiz stop ... iptal edildi' uyarıları - sık geliyorsa stopu iptal "
                  "etmeden satan bir yol var demektir, kaynağı araştırılmalı.",
     },
     {
@@ -365,7 +365,7 @@ CHANGES = [
             "giriş bilinmiyorsa %1.5; her durumda en az %0.5) o fiyatın ötesine taşınıp yeniden denenir - fiyat "
             "düşmeye devam ederse takip eder (3 deneme). 5xx ve bağlantı hataları da tekrar denenir.\n"
             "- place_protective_stop: tüm modüllerin ortak yolu - güncel fiyata göre önceden düzeltir, stop "
-            "taşındıysa '⚠️', yine de kurulamazsa '🚨 KORUMASIZ' Telegram uyarısı (günde bir); stop botu 5 "
+            "taşındıysa uyarı, yine de kurulamazsa 'KORUMASIZ' Telegram uyarısı (günde bir); stop botu 5 "
             "dakikada bir yeniden dener.\n"
             "- Bir test, stopu bu yolun dışında kuran yeni kod eklenirse kırılır."
         ),
@@ -374,7 +374,7 @@ CHANGES = [
                  "relative_strength_core.py, alpaca_buy_points.py, buy_stop_rebuy.py, "
                  "tests/test_stop_placement_guarantee.py",
         "settings": "Yok.",
-        "track": "Çalışma özetlerinde ve loglarda 'stop kurulamadı' kalmamalı; Telegram'daki '⚠️ ... stop ... "
+        "track": "Çalışma özetlerinde ve loglarda 'stop kurulamadı' kalmamalı; Telegram'daki '... stop ... "
                  "seviyesine kuruldu' uyarıları kaç kez taşıma gerektiğini gösterir.",
     },
     {
@@ -435,7 +435,7 @@ CHANGES = [
                  "get_initial_stop_price, get_management_start, notify_once_per_day, manage_position), "
                  "tests/test_position_stop_restore.py",
         "settings": "Yok.",
-        "track": "Telegram'da '🚨 ... stop yönetimi başarısız' ya da '⚠️ ... koruma seviyesi ... yanlış "
+        "track": "Telegram'da '... stop yönetimi başarısız' ya da '... koruma seviyesi ... yanlış "
                  "tarafında' uyarıları; 1R kullanan algoritmalarda (atr_volatility) breakeven/trail kararları.",
     },
     {
@@ -467,7 +467,7 @@ CHANGES = [
         ),
         "where": "heikin_ashi.py (long_entry), heikin_ashi_intraday_core.py (signal_bars_problem, scan_candidates, "
                  "run_pass), ha_intraday_config_berkakar.json, tests/test_heikin_ashi_entry.py",
-        "settings": "📊 Heikin Ashi Gün İçi > Min. ortalama dolar cirosu.",
+        "settings": "Heikin Ashi Gün İçi > Min. ortalama dolar cirosu.",
         "track": "Heikin Ashi Gün İçi işlemlerinde giriş saati 09:30-10:00 ET olan işlem kalmamalı; giriş "
                  "fiyatı ile sinyal fiyatı arasındaki fark küçülmeli.",
     },
@@ -499,7 +499,7 @@ CHANGES = [
         "where": "stop_algorithms.py (heikin_ashi_initial_stop, HEIKIN_ASHI_MIN_ATR_MULT, "
                  "HEIKIN_ASHI_EXIT_RED_CANDLES), heikin_ashi.py (long_exit_reason), heikin_ashi_intraday_core.py, "
                  "scripts/compare_heikin_ashi_stop.py",
-        "settings": "🛡️ Stop Loss Ayarları > Heikin Ashi Çıkışı > İlk Stop Oynaklık Tabanı (0 = kapalı).",
+        "settings": "Stop Loss Ayarları > Heikin Ashi Çıkışı > İlk Stop Oynaklık Tabanı (0 = kapalı).",
         "track": "Algo Analiz'de Heikin Ashi Gün İçi işlemlerinde 'Stop: İlk stop' ile kapanan işlemlerin "
                  "payı düşmeli; ortalama kayıp (R değil $) risk bazlı adetle sabit kalmalı.",
     },
@@ -527,7 +527,7 @@ CHANGES = [
         ),
         "where": "stop_algorithms.py (atr_volatility_*), alpaca_trailing_stop.py (resolve_stop_timeframe, "
                  "_stop_bars_for_timeframe, get_initial_stop_price), backtest_engine.py",
-        "settings": "🛡️ Stop Loss Ayarları > Oynaklık (ATR) Stop; 🎯 Premium Buy Point > Giriş Zamanlaması ve "
+        "settings": "Stop Loss Ayarları > Oynaklık (ATR) Stop; Premium Buy Point > Giriş Zamanlaması ve "
                     "Stop Periyodu > Stop mum periyodu; hisse bazlı stop algoritması seçimi.",
         "track": "Algo Analiz'de günlük sinyalli hisselerin (PBP: ... (1Day)) ortalama tutma süresi ve en "
                  "büyük R değerleri artmalı; 'Stop: Yapısal trail' ile kapanan kârlı işlemlerin payı yükselmeli.",
@@ -551,7 +551,7 @@ CHANGES = [
             "Etki küçük; asıl amaç normal dalgalanmada başa baş çıkışları azaltmak."
         ),
         "where": "stop_algorithms.py (_breakeven_candidate, BREAKEVEN_TRIGGER_PCT, BREAKEVEN_BUFFER_PCT)",
-        "settings": "🛡️ Stop Loss Ayarları > Breakeven Tetik %, Breakeven Tamponu %, ATR Stop'ta Breakeven Tetiği (R).",
+        "settings": "Stop Loss Ayarları > Breakeven Tetik %, Breakeven Tamponu %, ATR Stop'ta Breakeven Tetiği (R).",
         "track": "'Stop: Breakeven' ile kapanan işlemlerin sonucu artık +%0.2 civarında olmalı (eskiden −%0.4'e "
                  "kadar); işlemlerin görülen en yüksek kârı ile çıkış arasındaki fark azalmalı.",
     },
@@ -575,7 +575,7 @@ CHANGES = [
         ),
         "where": "alpaca_trailing_stop.py (EXECUTION_DEFAULTS, apply_opening_shield, restore_from_shield, "
                  "manage_position, guard_position), stop_tags.py, alpaca_dashboard.py",
-        "settings": "🛡️ Stop Loss Ayarları > Emir Yürütme: Açılış Kalkanı.",
+        "settings": "Stop Loss Ayarları > Emir Yürütme: Açılış Kalkanı.",
         "track": "Algo Analiz > 'Çıkış seans dilimi' tablosunda 'Açılış (ilk 15 dk)' payı sıfıra yakın "
                  "olmalı; 'Açılış kalkanı sonrası çıkış' satırları asıl stopun gerçekten kırıldığı günleri gösterir.",
     },
@@ -598,7 +598,7 @@ CHANGES = [
         ),
         "where": "alpaca_buy_points.py (ENTRY_TIMING_DEFAULTS, cancel_pullback_limit_buys, check_symbol "
                  "in_entry_guard, run_extended_hours_entry_scan)",
-        "settings": "🎯 Premium Buy Point > Giriş Zamanlaması ve Stop Periyodu.",
+        "settings": "Premium Buy Point > Giriş Zamanlaması ve Stop Periyodu.",
         "track": "Algo Analiz > 'Giriş seans dilimi' tablosunda 'Açılış (ilk 15 dk)' girişleri sıfır olmalı.",
     },
     {
@@ -620,11 +620,11 @@ CHANGES = [
             "- İlave alımda pozisyonun toplam riski 1 risk birimini aşamaz.\n"
             "- ORB, Relative Strength ve Heikin Ashi girişlerine aynı tavan uygulanır (modülün kendi nakit payından "
             "hesaplanan adetle risk bazlı adetin küçüğü; her modülün son koşu özetinde kısılan girişler "
-            "'📐 Risk tavanı' satırında görünür)."
+            "'Risk tavanı' satırında görünür)."
         ),
         "where": "risk_sizing.py (risk_based_qty, apply_risk_cap), alpaca_buy_points.py (build_risk_context, "
                  "load_module_risk_context, check_symbol), orb_core.py, relative_strength_core.py, heikin_ashi_intraday_core.py",
-        "settings": "🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü.",
+        "settings": "Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü.",
         "track": "Algo Analiz'de kayıpların dolar tutarı birbirine yakın olmalı (~özsermaye × %0.5); "
                  "'Toplam R' ve 'Beklenen değer (R)' sistemin gerçek performansını gösterir.",
     },
@@ -640,7 +640,7 @@ CHANGES = [
         "change": (
             "- Her stop emri etiketleniyor (`stop-<sebep>-<SEMBOL>-<zaman>`): initial, breakeven, structure, "
             "chandelier, profitlock, haexit, topup, restore.\n"
-            "- Bu sayfa (🧠 Algo Analiz): Alpaca emir geçmişinden kapanmış işlemleri, R çarpanını, çıkış "
+            "- Bu sayfa (Algo Analiz): Alpaca emir geçmişinden kapanmış işlemleri, R çarpanını, çıkış "
             "sebebini ve seans dilimini gösterir.\n"
             "- Kural sürümü: Premium Buy Point kaydedildiğinde algoritma/stop/risk/zamanlama ayarları "
             "değiştiyse yeni bir kural sürümü başlar; bu sayfa o tarihten beri kapanan işlemleri sayar ve "

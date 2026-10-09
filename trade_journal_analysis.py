@@ -10,7 +10,7 @@ Açık pozisyonun hangi algoritmayla açıldığı, emir geçmişinde pozisyonu 
 açan alım emrinin etiketinden okunur (OpenLot.entry_order).
 
 API çağrısı yapmaz (tests/test_trade_journal_analysis.py). Streamlit
-sayfası: trade_journal_page.py (🧠 Algo Analiz), stop senaryosu: algo_analiz.py.
+sayfası: trade_journal_page.py (Algo Analiz), stop senaryosu: algo_analiz.py.
 """
 
 from dataclasses import dataclass, field

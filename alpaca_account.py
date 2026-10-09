@@ -12,7 +12,7 @@ botların işlem yaptığı hesap hep aynıdır:
 - Sanal Para: https://paper-api.alpaca.markets/v2
 - Gerçek Para: https://api.alpaca.markets/v2
 
-Anahtarlar kullanıcının "👤 Hesabım" sayfasında girdiği, veritabanında şifreli
+Anahtarlar kullanıcının "Hesabım" sayfasında girdiği, veritabanında şifreli
 duran anahtarlardır (bkz. alpaca_keys.py) - arayüz de işler de bunları kullanır.
 İşler, veritabanında kayıt yoksa (ör. GitHub Actions) ortam değişkenlerine düşer:
 APCA_API_KEY_ID / APCA_API_SECRET_KEY ve APCA_LIVE_API_KEY_ID / APCA_LIVE_API_SECRET_KEY.

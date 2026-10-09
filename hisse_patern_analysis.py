@@ -4,7 +4,7 @@ Kullanıcı tarafından seçilen hisselerin günlük kapanış fiyatlarını kul
 dört farklı periyot tipinde (yıllık, 3 aylık, aylık, haftalık) tekrarlayan
 patern benzerliğini ölçer: her periyot tipi için hissenin tamamlanmış son N periyodu
 (örn. yıllık için son 3 tam takvim yılı) ikili (pairwise) olarak DTW (Dynamic
-Time Warping - bkz. dtw_analysis.py, "🔄 DTW Zaman Serisi & Benzerlik
+Time Warping - bkz. dtw_analysis.py, "DTW Zaman Serisi & Benzerlik
 Analizi" modülüyle ortak algoritma) ile karşılaştırılır; ortalamaları o
 periyot tipi için hissenin "patern benzerlik skoru" olur.
 

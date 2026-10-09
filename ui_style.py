@@ -23,8 +23,8 @@ def freshness_caption(text: str) -> None:
     önbellek zamanı mı, periyodik bir rapor tarihi mi) çağıran tarafından
     hazırlanır - kaynaklar arası "güncellik" anlamı farklı olduğundan (ör.
     Alpaca her zaman anlık, KAP sadece periyodik rapor tarihi) tek bir ayrıştırma
-    mantığına zorlamak yerine sadece görsel biçimi (🕒 ikonu) ortaklaştırır."""
-    st.caption(f"🕒 {text}")
+    mantığına zorlamak yerine sadece görsel biçimi ortaklaştırır."""
+    st.caption(text)
 
 
 def format_cell(v):

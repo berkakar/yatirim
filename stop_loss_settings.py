@@ -110,25 +110,25 @@ def _live_stop_usage(username: str) -> dict[str, list[str]]:
     return usage
 
 
-def _tab_label(algo_id: str, emoji: str, usage: dict[str, list[str]]) -> str:
-    live = "🟢 " if usage.get(algo_id) else ""
-    return f"{live}{emoji} {STOP_ALGORITHMS[algo_id].label}"
+def _tab_label(algo_id: str, usage: dict[str, list[str]]) -> str:
+    live = " (Aktif)" if usage.get(algo_id) else ""
+    return f"{STOP_ALGORITHMS[algo_id].label}{live}"
 
 
 def _live_note(algo_id: str, usage: dict[str, list[str]]) -> None:
     users = usage.get(algo_id) or []
     if users:
-        st.success("🟢 **Canlı botları etkiler** - kullanan: " + ", ".join(users) + ". Kaydedilen değişiklik "
+        st.success("**Canlı botları etkiler** - kullanan: " + ", ".join(users) + ". Kaydedilen değişiklik "
                    "bir sonraki bot çalışmasında açık pozisyonlara uygulanır.")
     else:
-        st.caption("⚪ Şu an hiçbir canlı modül bu algoritmayı kullanmıyor - değişiklik yalnızca BackTest'i "
+        st.caption("Şu an hiçbir canlı modül bu algoritmayı kullanmıyor - değişiklik yalnızca BackTest'i "
                    "ve ileride bu algoritmayı seçecek modülleri etkiler.")
 
 
 def render_stop_loss_settings(username: str):
     st.caption(
         "Altı stop-loss algoritmasının ve emir yürütme ayarlarının parametreleri. Kutular kod-varsayılanlarıyla "
-        "dolu gelir; değiştirmeden kaydetmek davranışı değiştirmez. 🟢 işaretli sekmeler şu an canlı "
+        "dolu gelir; değiştirmeden kaydetmek davranışı değiştirmez. işaretli sekmeler şu an canlı "
         "botlarda kullanılan algoritmalardır. Kaydet düğmesi tüm sekmelerdeki değerleri birlikte kaydeder."
     )
 
@@ -148,29 +148,29 @@ def render_stop_loss_settings(username: str):
 
     usage = _live_stop_usage(username)
     live_lines = [f"- **{STOP_ALGORITHMS[a].label}:** {', '.join(u)}" for a, u in usage.items() if u]
-    st.markdown("**🟢 Canlıda kullanılan stop algoritmaları**")
+    st.markdown("**Canlıda kullanılan stop algoritmaları**")
     st.markdown("\n".join(live_lines) if live_lines else "- Kaydedilmiş modül ayarı bulunamadı.")
-    st.caption("🌅 Emir Yürütme (Açılış Kalkanı) ayarları seçilen algoritmadan bağımsız olarak tüm canlı "
+    st.caption("Emir Yürütme (Açılış Kalkanı) ayarları seçilen algoritmadan bağımsız olarak tüm canlı "
                "modüllere uygulanır.")
 
-    # ATR/swing/trend ayarlarını kullanan algoritmalar - paylaşılan sekme bunlardan biri canlıysa 🟢.
+    # ATR/swing/trend ayarlarını kullanan algoritmalar - paylaşılan sekme bunlardan biri canlıysa.
     shared_users = sorted({u for a in ("breakeven_atr_structure", "wait_then_trail", "opening_range",
                                        "heikin_ashi_exit", "atr_volatility", "adaptive_dynamic") for u in usage.get(a, [])})
     (tab_algo1, tab_shared, tab_algo2, tab_algo3, tab_algo4, tab_algo5, tab_algo6, tab_exec) = st.tabs([
-        _tab_label("breakeven_atr_structure", "🎯", usage),
-        f"{'🟢 ' if shared_users else ''}🔧 Paylaşılan Trail Ayarları",
-        _tab_label("wait_then_trail", "⏳", usage),
-        _tab_label("opening_range", "🔓", usage),
-        _tab_label("heikin_ashi_exit", "🕯️", usage),
-        _tab_label("atr_volatility", "📏", usage),
-        _tab_label("adaptive_dynamic", "🧠", usage),
-        "🟢 🌅 Emir Yürütme",
+        _tab_label("breakeven_atr_structure", usage),
+        f"Paylaşılan Trail Ayarları{' (Aktif)' if shared_users else ''}",
+        _tab_label("wait_then_trail", usage),
+        _tab_label("opening_range", usage),
+        _tab_label("heikin_ashi_exit", usage),
+        _tab_label("atr_volatility", usage),
+        _tab_label("adaptive_dynamic", usage),
+        "Emir Yürütme",
     ])
 
     with tab_algo1:
         _live_note("breakeven_atr_structure", usage)
         st.caption("Sabit yüzdelik ilk stop → breakeven → ATR-tamponlu yapısal trail (ayarları "
-                   "🔧 Paylaşılan Trail Ayarları sekmesinde).")
+                   "Paylaşılan Trail Ayarları sekmesinde).")
         a1c1, a1c2 = st.columns(2)
         algo1_initial_stop_pct = a1c1.number_input(
             "İlk Stop %", min_value=0.1, max_value=50.0,
@@ -198,7 +198,7 @@ def render_stop_loss_settings(username: str):
 
     with tab_shared:
         if shared_users:
-            st.success("🟢 **Canlı botları etkiler** - bu ayarlar yapısal trail kullanan tüm algoritmalarda "
+            st.success("**Canlı botları etkiler** - bu ayarlar yapısal trail kullanan tüm algoritmalarda "
                        "geçerli (kullanan modüller: " + ", ".join(shared_users) + ").")
         st.caption("Breakeven + Yapısal Trail'in trail aşaması; Beklemeli, ORB ve Heikin Ashi stopları da aynı "
                    "yapısal trail'i, Oynaklık (ATR) Stop ise yalnızca ATR Periyodu'nu kullanır.")
@@ -464,7 +464,7 @@ def render_stop_loss_settings(username: str):
         )
 
     with tab_exec:
-        st.success("🟢 **Canlı botları etkiler** - seçilen stop algoritmasından bağımsız olarak tüm modüllerde "
+        st.success("**Canlı botları etkiler** - seçilen stop algoritmasından bağımsız olarak tüm modüllerde "
                    "(PBP, ORB, RS, HA) geçerlidir.")
         st.caption("Kalkan açıkken seans dışında stop, asıl seviyenin altındaki bir felaket stopuna çekilir; "
                    "açılıştan belirtilen dakika sonra asıl seviyeye döner (fiyat altındaysa market emriyle çıkılır).")
@@ -488,18 +488,18 @@ def render_stop_loss_settings(username: str):
                  "etkisizdir.",
         )
 
-    with st.expander("📝 Sürüm notları"):
+    with st.expander("Sürüm notları"):
         st.markdown(
             "**2026-09-28 (emir analizi önerileri 1-3):** Breakeven tetiği %1'den %1.5'e (=1R) çıkarıldı, "
             "breakeven stopu girişin %0.2 üstüne kuruluyor; seans dışında açılış kalkanı devrede (emir "
             "analizinde 17 çıkışın 7'si açılışın ilk 5 dakikasında, 3'ü seans dışında gerçekleşmişti). "
             "Oynaklık (ATR) Stop seçenek olarak eklendi. Hangi algoritmanın şu an canlıda kullanıldığı için "
-            "yukarıdaki 🟢 listeye bakın. Gerekçeler ve takip ölçütleri: **🧠 Algo Analiz > 📝 Değişiklik "
+            "yukarıdaki listeye bakın. Gerekçeler ve takip ölçütleri: **Algo Analiz > Değişiklik "
             "Günlüğü**."
         )
 
     st.divider()
-    if st.button("💾 Kaydet", type="primary", key="sls_save_btn"):
+    if st.button("Kaydet", type="primary", key="sls_save_btn"):
         new_settings = {
             "shared": {
                 "atr_period": int(atr_period),

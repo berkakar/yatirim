@@ -96,7 +96,7 @@ def load_intraday() -> dict[str, list[Bar]]:
 
 
 def load_pack(directory: str, timeframe: str, min_bars: int) -> dict[str, list[Bar]]:
-    """Uygulamadaki 📦 Backtest Veri Paketi'nin (backtest_data_pack.py) yazdığı
+    """Uygulamadaki Backtest Veri Paketi'nin (backtest_data_pack.py) yazdığı
     <directory>/<timeframe>/<HİSSE>.json dosyaları - biçim önbellekle aynı."""
     folder = os.path.join(directory, timeframe)
     result: dict[str, list[Bar]] = {}
@@ -406,7 +406,7 @@ def evaluate(name: str, data: dict[str, list[Bar]], args) -> list[str]:
         for label, _, _ in configs[3:]:
             m, lo, hi = paired_bootstrap(subset, outcomes[label], outcomes[base_label], data)
             mr, lor, hir = paired_bootstrap(subset, outcomes[label], outcomes[base_label], data, key="r")
-            verdict = "anlamlı ✅" if lo > 0 else ("anlamlı ❌" if hi < 0 else "anlamlı değil")
+            verdict = "anlamlı" if lo > 0 else ("anlamlı" if hi < 0 else "anlamlı değil")
             lines.append(f"- {label} − {base_label}: işlem başına özs. **{m:+.3f}%** (%95 GA {lo:+.3f} … {hi:+.3f}, "
                          f"{verdict}); R farkı {mr:+.2f} ({lor:+.2f} … {hir:+.2f})")
         lines.append("")

@@ -118,13 +118,13 @@ COMPONENTS = {
     "safe_haven": "Güvenli Liman Talebi",
 }
 
-# (üst sınır, etiket, ikon) - skor üst sınırın altındaysa o etiket.
+# (üst sınır, etiket) - skor üst sınırın altındaysa o etiket.
 LABELS = (
-    (25, "Aşırı Korku", "😱"),
-    (45, "Korku", "😟"),
-    (55, "Nötr", "😐"),
-    (75, "Açgözlülük", "🙂"),
-    (101, "Aşırı Açgözlülük", "🤑"),
+    (25, "Aşırı Korku"),
+    (45, "Korku"),
+    (55, "Nötr"),
+    (75, "Açgözlülük"),
+    (101, "Aşırı Açgözlülük"),
 )
 
 
@@ -134,11 +134,11 @@ def log(msg):
 
 def label_for(score):
     if score is None:
-        return "Veri yok", "❔"
-    for upper, label, icon in LABELS:
+        return "Veri yok"
+    for upper, label in LABELS:
         if score < upper:
-            return label, icon
-    return LABELS[-1][1], LABELS[-1][2]
+            return label
+    return LABELS[-1][1]
 
 
 # ------------------------------------------------------------------------------
@@ -250,7 +250,7 @@ def build_snapshot(market_cfg: dict, comp: pd.DataFrame, universe_size: int, put
     last = valid.iloc[-1]
     as_of = valid.index[-1]
     score = _round(last["score"])
-    label, icon = label_for(score)
+    label = label_for(score)
     prev = _round(valid["score"].iloc[-2]) if len(valid) > 1 else None
     week_ago = _round(valid["score"].iloc[-6]) if len(valid) > 5 else None
 
@@ -281,7 +281,6 @@ def build_snapshot(market_cfg: dict, comp: pd.DataFrame, universe_size: int, put
         "updated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "score": score,
         "label": label,
-        "icon": icon,
         "previous": prev,
         "week_ago": week_ago,
         "components": components,

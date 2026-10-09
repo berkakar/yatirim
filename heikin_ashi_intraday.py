@@ -87,7 +87,7 @@ def render_heikin_ashi_intraday(username: str):
     client = AlpacaClient(key_id, secret_key, trading_url)
     config = _load_config(GITHUB_REPO, github_token, username)
 
-    with st.expander("📖 Strateji: alım ve satış mantığı", expanded=True):
+    with st.expander("Strateji: alım ve satış mantığı", expanded=True):
         c1, c2 = st.columns(2)
         c1.markdown(BUY_LOGIC_MD)
         c2.markdown(SELL_LOGIC_MD)
@@ -99,10 +99,10 @@ def render_heikin_ashi_intraday(username: str):
     if live_cash is not None:
         st.metric("Alpaca'daki kullanılabilir nakit (toplam)", f"${live_cash:,.2f}")
     else:
-        st.warning("⚠️ Alpaca'daki güncel nakit bakiye alınamadı.")
+        st.warning("Alpaca'daki güncel nakit bakiye alınamadı.")
 
     st.info(
-        "💰 **Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
+        "**Nakit payı nasıl çalışır?** Bu modülün payı = hesap değeri (nakit + pozisyonlar) × aşağıdaki yüzde. Modülün aldığı hisselerin maliyeti bu paydan düşülür; kalan tutar modülün kullanabileceği nakittir - başka sistemlerin alımları bu payı küçültmez. Premium Buy Point, modüllerin henüz harcanmamış paylarını kendi nakdinden düşer, böylece aynı dolarlar iki kez harcanmaz. Modül devre dışıyken pay 0 kabul edilir."
     )
     cash_allocation_pct = st.number_input(
         "Bu modüle ayrılacak nakit payı (%)",
@@ -122,7 +122,7 @@ def render_heikin_ashi_intraday(username: str):
         if caption:
             st.caption(caption)
 
-    st.subheader("🌐 Tarama Evreni")
+    st.subheader("Tarama Evreni")
     st.caption(
         "Premium Buy Point'in watchlist'indeki, Relative Strength Rotasyonu'nun ve ORB'un elindeki semboller "
         "bu evrenden HER ZAMAN hariç tutulur - bağımsız sistemlerin aynı hissede çakışmaması için."
@@ -160,7 +160,7 @@ def render_heikin_ashi_intraday(username: str):
              "trailing stop botu onu kullanır; yarım saatlik HA çıkış satışı ve gün sonu kapatma yine çalışır.",
     )
 
-    st.subheader("🕐 Otomatik Çalıştırma (yarım saatte bir)")
+    st.subheader("Otomatik Çalıştırma (yarım saatte bir)")
     st.caption(
         "Etkinleştirilirse seans boyunca her 30 dakikalık bar kapanışından 2 dakika sonra (09:32-15:32 ET) "
         "sunucudaki zamanlanmış iş tarafından: çıkış sinyali veren pozisyonlar satılır, boş slotlar için "
@@ -184,17 +184,17 @@ def render_heikin_ashi_intraday(username: str):
             )
             # [2026-09-28 · Öneri 5] Risk bazlı adet tavanının bu koşuda kıstığı girişler.
             if summary.get("risk_notes"):
-                st.caption("📐 Risk tavanı: " + " · ".join(summary["risk_notes"]))
+                st.caption("Risk tavanı: " + " · ".join(summary["risk_notes"]))
             if summary.get("errors"):
                 st.caption("Hatalar: " + " · ".join(summary["errors"]))
 
     st.caption(
-        "📐 [2026-09-28] Bu modülün girişlerine, 🎯 Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
+        "[2026-09-28] Bu modülün girişlerine, Premium Buy Point > Risk Bazlı Pozisyon Büyüklüğü "
         "ayarları TAVAN olarak uygulanır: adet, nakit payından hesaplanan adetle (özsermaye × işlem başına "
         "risk %) / (giriş − stop) arasındaki küçük olan; toplam açık risk tavanı da tüm modüllerle ortak."
     )
 
-    if st.button("💾 Ayarları Kaydet", type="primary", key="hai_save"):
+    if st.button("Ayarları Kaydet", type="primary", key="hai_save"):
         new_config = dict(config)
         new_config.update({
             "enabled": automated,
@@ -212,8 +212,8 @@ def render_heikin_ashi_intraday(username: str):
         st.rerun()
 
     st.divider()
-    st.subheader("🔎 Önizleme (salt-okunur - gerçek emir vermez)")
-    if st.button("🔎 Şimdi Tara ve Önizle", key="hai_preview"):
+    st.subheader("Önizleme (salt-okunur - gerçek emir vermez)")
+    if st.button("Şimdi Tara ve Önizle", key="hai_preview"):
         with st.spinner("Evren taranıyor ve Heikin Ashi sinyalleri aranıyor..."):
             universe = build_universe(username, include_nasdaq, include_nyse, custom_groups, include_russell)
             own_holdings = _load_holdings(GITHUB_REPO, github_token, username)
@@ -248,7 +248,7 @@ def render_heikin_ashi_intraday(username: str):
                     "ve açılışın ilk yarım saatinde hepsi) veya eksik mumu olan hisseler taranmaz.")
 
     st.divider()
-    st.subheader("📦 Şu Anki Pozisyonlar")
+    st.subheader("Şu Anki Pozisyonlar")
     holdings = _load_holdings(GITHUB_REPO, github_token, username)
     if not holdings:
         st.info("Bu modülün şu an elinde hiçbir pozisyon yok.")

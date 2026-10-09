@@ -85,7 +85,7 @@ which handles the scheduling). Without --once it loops locally, sleeping
 between passes and until the market reopens. --extended-hours-guard runs the
 separate mechanism described above and exits.
 
-2026-09-28 emir analizi değişiklikleri (ayrıntı: 🧠 Algo Analiz > 📝 Değişiklik
+2026-09-28 emir analizi değişiklikleri (ayrıntı: Algo Analiz > Değişiklik
 Günlüğü, changelog.py; kodda "[2026-09-28 · Öneri N]" yorumları):
   - Öneri 1: Premium Buy Point hisselerinde stop, girişin kendi mum periyodunda
     izlenir (resolve_stop_timeframe_for_position, _stop_bars_for_timeframe);
@@ -901,7 +901,7 @@ def place_protective_stop(
     except Exception as e:
         notify_once_per_day(
             symbol, "stop_failed",
-            f"🚨 {symbol}: stop kurulamadı{f' ({context})' if context else ''}, pozisyon KORUMASIZ olabilir - "
+            f"{symbol}: stop kurulamadı{f' ({context})' if context else ''}, pozisyon KORUMASIZ olabilir - "
             f"stop botu bir sonraki geçişte yeniden deneyecek: {e}",
         )
         raise
@@ -909,7 +909,7 @@ def place_protective_stop(
     if round(placed, 2) != round(requested, 2):
         notify_once_per_day(
             symbol, "stop_moved",
-            f"⚠️ {symbol}: istenen stop {requested:.2f} güncel fiyatın yanlış tarafındaydı"
+            f"{symbol}: istenen stop {requested:.2f} güncel fiyatın yanlış tarafındaydı"
             f"{f' ({context})' if context else ''}; stop {placed:.2f} seviyesine kuruldu.",
         )
     return order
@@ -1003,7 +1003,7 @@ def manage_position(
             fallback, _ = protective_stop(naive_stop, entry_price, last_price, side)
             notify_once_per_day(
                 symbol, "stop_breached",
-                f"⚠️ {symbol}: koruma seviyesi ({initial_stop:.2f}) güncel fiyatın ({last_price:.2f}) yanlış "
+                f"{symbol}: koruma seviyesi ({initial_stop:.2f}) güncel fiyatın ({last_price:.2f}) yanlış "
                 f"tarafında kaldı (giriş {entry_price:.2f}). Stop, güncel fiyattan aynı mesafede "
                 f"{fallback:.2f} seviyesine kuruldu - pozisyonu gözden geçirin.",
             )
@@ -1273,10 +1273,10 @@ def guard_position(
             client.place_stop_order(symbol, live_qty, side, reference_price, client_order_id=tag,
                                     reference_price=entry_price)
         except Exception as e:
-            msg = (f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
+            msg = (f"{symbol}: önceki acil koruma emri dolmadan düşmüştü, stop {reference_price:.2f} "
                    f"seviyesinden yeniden kurulamadı, pozisyon şu an KORUMASIZ olabilir: {e}")
         else:
-            msg = (f"⚠️ {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
+            msg = (f"{symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
                    f"Son fiyat {last_price:.2f} son bilinen seviyeyi ({reference_price:.2f}) henüz aşmamış - "
                    f"aynı seviyeden GTC stop yeniden kuruldu (seans dışında bu guard izliyor).")
         log(msg)
@@ -1312,7 +1312,7 @@ def guard_position(
         # geçmek yerine açıkça bildiriyoruz; sıradaki guard çalışması
         # (birkaç dakika içinde) tekrar dener.
         msg = (
-            f"🚨 {symbol}: stop kırıldı ({last_price:.2f} vs {reference_price:.2f}) ama extended-hours "
+            f"{symbol}: stop kırıldı ({last_price:.2f} vs {reference_price:.2f}) ama extended-hours "
             f"limit emri gönderilirken hata alındı, pozisyon şu an KORUMASIZ olabilir: {e}"
         )
         log(msg)
@@ -1325,7 +1325,7 @@ def guard_position(
 
     if resting_order_id is not None:
         msg = (
-            f"🚨 {symbol}: extended hours'ta son fiyat {last_price:.2f}, stopu ({reference_price:.2f}) kırdı. "
+            f"{symbol}: extended hours'ta son fiyat {last_price:.2f}, stopu ({reference_price:.2f}) kırdı. "
             f"Normal stop bu seansta çalışamayacağı için iptal edildi; yerine day+extended-hours "
             f"limit emri {limit_price:.2f} seviyesinden gönderildi. Dolarsa pozisyon kapanır; "
             f"dolmadan seans biterse emir düşer ve pozisyon tekrar korumasız kalır (bir sonraki guard "
@@ -1333,7 +1333,7 @@ def guard_position(
         )
     else:
         msg = (
-            f"🚨 {symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
+            f"{symbol}: önceki acil koruma emri dolmadan düşmüştü, pozisyon KORUMASIZ kalmıştı. "
             f"Son fiyat {last_price:.2f}, son bilinen seviyeyi ({reference_price:.2f}) hâlâ aşmış "
             f"durumda - yerine day+extended-hours limit emri {limit_price:.2f} seviyesinden gönderildi."
         )
@@ -1441,7 +1441,7 @@ def cancel_orphan_stops(client: AlpacaClient, positions: list[dict], now: dateti
         kind = "stop" if is_stop else "seans dışı acil limit"
         notify_once_per_day(
             symbol, "orphan_stop",
-            f"🧹 {symbol}: pozisyon yokken açık kalmış {order.get('side')} {kind} emri ({order.get('qty')} adet @ "
+            f"{symbol}: pozisyon yokken açık kalmış {order.get('side')} {kind} emri ({order.get('qty')} adet @ "
             f"{level}) iptal edildi - tetiklenseydi istenmeyen bir pozisyon açılabilirdi.",
         )
     return canceled
@@ -1485,7 +1485,7 @@ def run_once(client: AlpacaClient) -> None:
             # ~29 saat sessizce kurulamadı. Artık günde bir Telegram uyarısı.
             notify_once_per_day(
                 pos["symbol"], "manage_failed",
-                f"🚨 {pos['symbol']}: stop yönetimi başarısız, pozisyon KORUMASIZ olabilir: {e}",
+                f"{pos['symbol']}: stop yönetimi başarısız, pozisyon KORUMASIZ olabilir: {e}",
             )
 
 

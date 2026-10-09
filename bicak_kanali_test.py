@@ -48,7 +48,7 @@ _DIP_KESISIM_COLOR = "#9d4edd"
 
 
 def render_bicak_kanali_test(target_list):
-    st.header("🔪 Bıçak Kanalı Test Modülü")
+    st.header("Bıçak Kanalı Test Modülü")
     st.caption(
         "bicak_kanali.py'deki kılavuz/bıçak/sıfır çizgisi + türetilmiş oran yöntemini "
         "seçili piyasadaki tüm hisselere uygulayıp, yeşil çizginin (alım çizgisi) "
@@ -56,7 +56,7 @@ def render_bicak_kanali_test(target_list):
         "sinyaline bağlı değildir, sadece yöntemin görsel doğrulaması amaçlıdır."
     )
 
-    with st.expander("ℹ️ Yöntem Nasıl Çalışıyor? (Kılavuz / Bıçak / Sıfır / Yeşil Çizgi)"):
+    with st.expander("Yöntem Nasıl Çalışıyor? (Kılavuz / Bıçak / Sıfır / Yeşil Çizgi)"):
         st.markdown(
             """
 1. **Düşüş bacağı**: Pivotlar (tepe/dip) taranıp maximum-drawdown mantığıyla en büyük
@@ -128,7 +128,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
     else:
         pencere = None
 
-    if st.button("🚀 Piyasayı Tara", type="primary", disabled=not selected_timeframes):
+    if st.button("Piyasayı Tara", type="primary", disabled=not selected_timeframes):
         with st.spinner("Hisseler taranıyor..."):
             signals = []
             for tf_code in selected_timeframes:
@@ -165,12 +165,12 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
         if not signals:
             st.warning("Tarama sonucunda yeşil çizginin (alım çizgisi) fiyatla kesiştiği hisse bulunamadı.")
         else:
-            st.subheader(f"🎯 Bulunan Kesişimler ({len(signals)})")
+            st.subheader(f"Bulunan Kesişimler ({len(signals)})")
             fetched_at = st.session_state.get("bicak_signals_fetched_at")
             if fetched_at:
                 freshness_caption(f"Veri güncelliği: {fetched_at:%d.%m.%Y %H:%M:%S} TRT (Yahoo Finance'ten tarama anında çekildi).")
             st.caption(
-                "💡 Tablo, Güncel Muma Uzaklık'a göre sıralı geliyor (en yakın kesişim en üstte). "
+                "Tablo, Güncel Muma Uzaklık'a göre sıralı geliyor (en yakın kesişim en üstte). "
                 "Bir satıra tıklayarak o hissenin grafiğini aşağıda açabilirsiniz. Sütun başlıklarına "
                 "tıklayarak tabloyu farklı sıralayabilirsiniz."
             )
@@ -197,7 +197,7 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
         active_t = st.session_state.bicak_selected_ticker
         active_tf = st.session_state.bicak_selected_tf
         st.write("---")
-        st.markdown(f"### 📈 Bıçak Kanalı Grafiği: **{active_t}** ({_BICAK_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
+        st.markdown(f"### Bıçak Kanalı Grafiği: **{active_t}** ({_BICAK_TIMEFRAME_LABELS.get(active_tf, active_tf)})")
 
         if active_tf == "1Day":
             active_days = daily_days
@@ -209,12 +209,12 @@ Detaylı kod referansı için `bicak_kanali.py` modül docstring'ine bakılabili
             df, _cup, _obo, _tobo = get_scanner_data(active_t, timeframe=active_tf, period_days=active_days)
 
         if df is None or df.empty:
-            st.error(f"❌ {active_t} için geçerli piyasa verisi alınamadı.")
+            st.error(f"{active_t} için geçerli piyasa verisi alınamadı.")
         else:
             bars = bars_from_df(df)
             result = find_kilavuz(bars, pencere=pencere)
             if result is None:
-                st.info("ℹ️ Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
+                st.info("Bu hisse için artık geçerli bir bıçak kanalı bulunamadı (veri güncellenmiş olabilir).")
             else:
                 render_bicak_kanali_chart(bars, active_t, active_tf, result)
                 en_tepe, son_tepe = result.kilavuz_noktalari

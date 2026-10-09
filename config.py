@@ -53,7 +53,7 @@ DEFAULT_NYSE = [
 # doğrulanamadı) - diğer DEFAULT_* listeleri gibi, elle kürasyon edilmiş,
 # sektörlere yayılmış, göreceli olarak likit küçük/orta ölçekli hisselerden
 # oluşan bir BAŞLANGIÇ seti. Russell endeksleri her yıl Haziran'da yeniden
-# dengelendiğinden, bu listeyi periyodik olarak (⚙️ Hisse Listelerini Yönet
+# dengelendiğinden, bu listeyi periyodik olarak (Hisse Listelerini Yönet
 # sayfasından) gözden geçirip güncellemeniz önerilir. Asıl likidite güvencesi
 # bu liste değil, otomatik_alim_satim_core.filter_by_liquidity'nin çalışma
 # zamanında Alpaca'dan çektiği gerçek hacim verisidir.
@@ -140,7 +140,7 @@ def _write_user_setting(name, username, value, commit_message, label):
         try:
             write_json_to_github(GITHUB_REPO, token, path, value, commit_message)
         except Exception as e:
-            st.warning(f"⚠️ {label} GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
+            st.warning(f"{label} GitHub'a kalıcı olarak kaydedilemedi (sadece bu oturumda geçerli olacak): {e}")
 
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(value, f, ensure_ascii=False, indent=4)

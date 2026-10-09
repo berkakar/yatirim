@@ -179,7 +179,7 @@ def _process_pending(
             try:
                 send_telegram_message(
                     bot_token, chat_id,
-                    f"ℹ️ {symbol}: Alım-Stop-Alım penceresi doldu, fiyat giriş seviyesine "
+                    f"{symbol}: Alım-Stop-Alım penceresi doldu, fiyat giriş seviyesine "
                     f"({entry_price:.2f}) dönmedi - yeniden alım yapılmadı.",
                 )
             except TelegramError:
@@ -238,7 +238,7 @@ def _process_pending(
 
     pending.pop(symbol, None)
     msg = (
-        f"🔁 {symbol}: Alım-Stop-Alım tetiklendi - stop sonrası fiyat giriş seviyesine "
+        f"{symbol}: Alım-Stop-Alım tetiklendi - stop sonrası fiyat giriş seviyesine "
         f"({entry_price:.2f}) döndü, {filled_qty:g} adet @ {fill_price:.2f} fiyatından yeniden alındı "
         f"(order {buy_order['id']}){stop_msg_suffix}"
     )
