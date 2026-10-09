@@ -41,12 +41,15 @@ _GLOSSARY = """
 | `vwap` / `vwap_is_proxy` | Alpaca günlük VWAP; *meta* `vwap_is_proxy`=1 ise o gün Alpaca verisi yok, tipik fiyat (Y+D+K)/3 kullanıldı |
 | `ema20/50/200`, `dist_emaN_pct` | Üssel hareketli ortalamalar ve kapanışın onlara % uzaklığı |
 | `sent_momentum`, `sent_volatility`, `rsi14` | Hisse duyarlılığı bileşenleri 0-100: 50 günlük ortalamaya göre momentumun 126 günlük yüzdelik sırası, oynaklığın ters yüzdelik sırası, RSI(14) |
+| `sent_momentum_raw` | Kapanışın 50 günlük basit ortalamaya göre % uzaklığı (`sent_momentum` bunun 126 günlük yüzdelik sırası). Tabloda var, eğitim verisinde yok: `dist_ema50_pct` ile neredeyse aynı |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
-| `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay) |
+| `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay). Tabloda var, eğitim verisinde yok: üç pencerenin uzaklığından birebir seçilir |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
+| *Eğitim verisindeki değerleme sütunları* | `valuation_score`, `valuation_sector_discount_pct`, `valuation_eps_growth_pct`, `valuation_revenue_growth_pct`, `valuation_current_ratio`, `valuation_net_margin_pct`, `valuation_debt_equity`; diğer değerleme sütunları yalnızca tabloda |
 | `valuation_is_reconstructed` | *Meta.* 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
 | `valuation_is_snapshot` | *Meta.* 1: günlük geçmiş o güne uzanmıyor, en eski bilinen skor yazıldı |
-| `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): skor, 5 bileşen ve ham değerleri, endeks kapanışı |
+| `nasdaq_100__*` | Piyasa Duyarlılığı arşivi (sentiment_daily): 5 bileşen (0-100) ve ham değerleri, endeks kapanışı |
+| *Eğitim verisinde olmayan NASDAQ sütunları* | `nasdaq_100__momentum_raw`, `safe_haven_raw`, `volatility_vs_avg` - yüzdelik sıraları (`momentum`, `safe_haven`, `volatility`) eğitimde |
 | `<etf>__*` | 11 sektör ETF'si + SPY (sector_etf_daily): kapanış ve 1 / 5 / 21 günlük getiri. Eğitim verisinde yalnızca `ret_1d` |
 | `time_idx, month, day_of_month, day_of_week, is_month_start/end` | Temporal embedding için takvim indeksleri (eğitim verisinde bunlar) |
 | `year, day_of_year, week_of_year, quarter`, `*_sin, *_cos` | Tabloda var, eğitim verisinde yok: diğer takvim sütunlarından türer / aynı bilginin döngüsel kodlaması |

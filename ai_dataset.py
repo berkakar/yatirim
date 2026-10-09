@@ -964,13 +964,32 @@ TRAINING_TEMPORAL_COLS = ("time_idx", "month", "day_of_month", "day_of_week", "i
 # Sektör ETF'leri ve SPY: eğitim verisinde yalnızca 1 günlük getiri (5 / 21 günlük getiriler
 # 1 günlüklerin birikimi - model sıradaki günlerden kendisi çıkarır).
 TRAINING_ETF_FEATURES = ("ret_1d",)
+# Değerleme: eğitim verisinde yalnızca bu sütunlar (2026-10-09). Diğer VALUATION_FIELDS
+# sütunları (F/K, alt sektör F/K, ROE, ROA, brüt marj, faiz karşılama, borç / varlık,
+# likidite oranı, varlık devir hızı) veritabanında ve tabloda durur.
+TRAINING_VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "valuation_eps_growth_pct",
+                           "valuation_revenue_growth_pct", "valuation_current_ratio", "valuation_net_margin_pct",
+                           "valuation_debt_equity")
+
+# Eğitim verisinden tek tek çıkarılan sütunlar (veritabanında ve tabloda durur):
+#   sent_momentum_raw  (kapanış / SMA50 - 1) - dist_ema50_pct ile neredeyse aynı (~0,98);
+#                      yüzdelik sırası sent_momentum eğitimde kalır (2026-10-09)
+#   resistance_nearest_dist_pct / _window  üç pencerenin uzaklığından (resistance_1m/2m/3m_dist_pct,
+#                      eğitimde) birebir seçilir - en yakını ve hangi pencere olduğu (2026-10-09)
+#   nasdaq_100__momentum_raw / safe_haven_raw / volatility_vs_avg  aynı bilginin ham hâli; yüzdelik
+#                      sıraları (momentum, safe_haven, volatility) eğitimde kalır (2026-10-09)
+TRAINING_EXCLUDED_COLS = ("sent_momentum_raw", "resistance_nearest", "resistance_nearest_dist_pct",
+                          "resistance_nearest_window", f"{MARKET_PREFIX}__momentum_raw",
+                          f"{MARKET_PREFIX}__safe_haven_raw", f"{MARKET_PREFIX}__volatility_vs_avg")
 
 
 def is_training_excluded(col: str) -> bool:
     """Veritabanında / tabloda duran ama eğitim verisine alınmayan sütun mu?"""
-    if col in META_COLS or is_removed_feature(col) or is_level_column(col):
+    if col in META_COLS or col in TRAINING_EXCLUDED_COLS or is_removed_feature(col) or is_level_column(col):
         return True
     if col in TEMPORAL_COLS and col not in TRAINING_TEMPORAL_COLS:
+        return True
+    if col in VALUATION_FIELDS and col not in TRAINING_VALUATION_COLS:
         return True
     prefix, _, feat = col.partition("__")
     return bool(feat) and prefix.upper() in sector_etf_symbols() and feat not in TRAINING_ETF_FEATURES
@@ -978,8 +997,9 @@ def is_training_excluded(col: str) -> bool:
 
 def training_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Eğitim verisi: meta sütunlar, çıkarılan türetilmiş sütunlar, fiyat /
-    hacim seviyeleri (LEVEL_COLS; `close` hariç), fazlalık takvim sütunları ve
-    ETF'lerin 5 / 21 günlük getirileri olmadan."""
+    hacim seviyeleri (LEVEL_COLS; `close` hariç), fazlalık takvim sütunları,
+    ETF'lerin 5 / 21 günlük getirileri ve TRAINING_VALUATION_COLS dışındaki
+    değerleme sütunları olmadan."""
     return df.drop(columns=[c for c in df.columns if is_training_excluded(c)])
 
 

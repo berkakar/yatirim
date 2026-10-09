@@ -352,6 +352,32 @@ class TrainingSelectionTests(unittest.TestCase):
                          + ["xlk__ret_1d", "spy__ret_1d", "nasdaq_100__momentum", "close"])
 
 
+class TrainingValuationTests(unittest.TestCase):
+    def test_raw_nasdaq_components_not_in_training(self):
+        cols = [f"nasdaq_100__{c}" for c in ("momentum", "momentum_raw", "volatility", "volatility_raw",
+                                             "volatility_vs_avg", "safe_haven", "safe_haven_raw", "breadth")]
+        self.assertEqual(list(ad.training_frame(pd.DataFrame(columns=cols)).columns),
+                         ["nasdaq_100__momentum", "nasdaq_100__volatility", "nasdaq_100__volatility_raw",
+                          "nasdaq_100__safe_haven", "nasdaq_100__breadth"])
+
+    def test_nearest_resistance_not_in_training(self):
+        cols = ["resistance_1m_dist_pct", "resistance_2m_dist_pct", "resistance_3m_dist_pct", "resistance_nearest",
+                "resistance_nearest_dist_pct", "resistance_nearest_window"]
+        self.assertEqual(list(ad.training_frame(pd.DataFrame(columns=cols)).columns), cols[:3])
+
+    def test_sent_momentum_raw_not_in_training(self):
+        train = ad.training_frame(pd.DataFrame(columns=["sent_momentum_raw", "sent_momentum", "dist_ema50_pct"]))
+        self.assertEqual(list(train.columns), ["sent_momentum", "dist_ema50_pct"])
+
+    def test_only_selected_valuation_columns_in_training(self):
+        train = ad.training_frame(pd.DataFrame(columns=list(ad.VALUATION_FIELDS) + ["close"]))
+        self.assertEqual(set(train.columns), set(ad.TRAINING_VALUATION_COLS) | {"close"})
+        for col in ("valuation_pe", "valuation_sector_pe", "valuation_roe_pct", "valuation_roa_pct",
+                    "valuation_gross_margin_pct", "valuation_interest_coverage", "valuation_debt_assets_pct",
+                    "valuation_quick_ratio", "valuation_asset_turnover"):
+            self.assertTrue(ad.is_training_excluded(col), col)
+
+
 class TrainingViewTests(unittest.TestCase):
     setUp = DatasetTests.setUp
     tearDown = DatasetTests.tearDown
@@ -364,7 +390,7 @@ class TrainingViewTests(unittest.TestCase):
         self.assertEqual(ad.missing_relative_cols(df), [])
         train = ad.training_frame(df)
         self.assertIn("close", train.columns)
-        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_nearest_dist_pct") + ad.TRAINING_TEMPORAL_COLS:
+        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_1m_dist_pct") + ad.TRAINING_TEMPORAL_COLS:
             self.assertIn(col, train.columns)
         for col in ("xlk__ret_5d", "xlv__ret_5d", "dow_sin", "month_cos", "quarter", "year", "day_of_year"):
             self.assertIn(col, df.columns)                               # tabloda duruyor
