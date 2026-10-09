@@ -177,6 +177,28 @@ sudo bash /opt/yatirim/app/deploy/enable_ai_dataset.sh disable    # timer'ı kap
 journalctl -u yatirim-job@ai-dataset --since today                 # zamanlanmış çalışmaların logu
 ```
 
+## Yapay Zeka Analiz Modülü: model eğitimi (PyTorch)
+
+"3. Model Eğitimi" bölümü (`ai_model.py`) PyTorch gerektirir. `requirements.txt`'de yok:
+PyPI'deki Linux paketi CUDA kütüphaneleriyle birkaç GB tutar ve ortak venv'e her
+`requirements.txt` değişikliğinde inerdi. Sunucuda bir kez CPU sürümü (~200 MB) kurulur:
+
+```bash
+sudo -u yatirim /opt/yatirim/venv/bin/pip install torch --index-url https://download.pytorch.org/whl/cpu
+sudo systemctl restart yatirim-streamlit     # arayüz torch'u görsün
+```
+
+Kurulu değilse bölüm bu komutu gösterir; uygulamanın geri kalanı etkilenmez. Eğitim CPU'da
+yapılır (2 yıllık veri, 64 günlük pencere: 4 çekirdekte epoch başına ~10 sn, erken durdurmayla
+birkaç dakika). Arayüz yerine komut satırından da çalıştırılabilir:
+
+```bash
+cd /opt/yatirim/app && sudo -u yatirim /opt/yatirim/venv/bin/python ai_model.py train --ticker NVDA
+sudo -u yatirim /opt/yatirim/venv/bin/python ai_model.py status --ticker NVDA
+```
+
+Modeller SQLite'taki `ai_models` tablosunda tutulur (ağırlıklar, ayarlar, test sonuçları).
+
 ## Günlük kullanım
 
 ```bash
