@@ -974,7 +974,10 @@ TRAINING_VALUATION_COLS = ("valuation_score", "valuation_sector_discount_pct", "
 # Eğitim verisinden tek tek çıkarılan sütunlar (veritabanında ve tabloda durur):
 #   sent_momentum_raw  (kapanış / SMA50 - 1) - dist_ema50_pct ile neredeyse aynı (~0,98);
 #                      yüzdelik sırası sent_momentum eğitimde kalır (2026-10-09)
-TRAINING_EXCLUDED_COLS = ("sent_momentum_raw",)
+#   resistance_nearest_dist_pct / _window  üç pencerenin uzaklığından (resistance_1m/2m/3m_dist_pct,
+#                      eğitimde) birebir seçilir - en yakını ve hangi pencere olduğu (2026-10-09)
+TRAINING_EXCLUDED_COLS = ("sent_momentum_raw", "resistance_nearest", "resistance_nearest_dist_pct",
+                          "resistance_nearest_window")
 
 
 def is_training_excluded(col: str) -> bool:

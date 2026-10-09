@@ -353,6 +353,11 @@ class TrainingSelectionTests(unittest.TestCase):
 
 
 class TrainingValuationTests(unittest.TestCase):
+    def test_nearest_resistance_not_in_training(self):
+        cols = ["resistance_1m_dist_pct", "resistance_2m_dist_pct", "resistance_3m_dist_pct", "resistance_nearest",
+                "resistance_nearest_dist_pct", "resistance_nearest_window"]
+        self.assertEqual(list(ad.training_frame(pd.DataFrame(columns=cols)).columns), cols[:3])
+
     def test_sent_momentum_raw_not_in_training(self):
         train = ad.training_frame(pd.DataFrame(columns=["sent_momentum_raw", "sent_momentum", "dist_ema50_pct"]))
         self.assertEqual(list(train.columns), ["sent_momentum", "dist_ema50_pct"])
@@ -378,7 +383,7 @@ class TrainingViewTests(unittest.TestCase):
         self.assertEqual(ad.missing_relative_cols(df), [])
         train = ad.training_frame(df)
         self.assertIn("close", train.columns)
-        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_nearest_dist_pct") + ad.TRAINING_TEMPORAL_COLS:
+        for col in ad.RELATIVE_COLS + ("dist_ema200_pct", "resistance_1m_dist_pct") + ad.TRAINING_TEMPORAL_COLS:
             self.assertIn(col, train.columns)
         for col in ("xlk__ret_5d", "xlv__ret_5d", "dow_sin", "month_cos", "quarter", "year", "day_of_year"):
             self.assertIn(col, df.columns)                               # tabloda duruyor
