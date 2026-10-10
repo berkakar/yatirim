@@ -115,7 +115,11 @@ class ReconstructTests(unittest.TestCase):
         self.env = mock.patch.dict(os.environ, {"YATIRIM_DB_PATH": os.path.join(self.tmp.name, "t.db")})
         self.env.start()
         import valuation_db
+        import ai_dataset
         self.db = valuation_db
+        earnings = mock.patch.object(ai_dataset, "default_earnings_fetcher", lambda t: [])
+        earnings.start()
+        self.addCleanup(earnings.stop)
         self._service_row("2026-10-06T21:30:00Z", 77)
 
     def tearDown(self):

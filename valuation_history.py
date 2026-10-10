@@ -93,28 +93,38 @@ def log(msg):
 # Yahoo
 # ------------------------------------------------------------------------------
 
+def fetch_earnings_dates(ticker: str, limit: int = 40, yf_ticker=None) -> list:
+    """Bilanço açıklama günleri (geçmiş + Yahoo'nun bildirdiği gelecek tarih),
+    New York günü olarak, eskiden yeniye. limit=40: ~10 yıl. Alınamazsa []."""
+    try:
+        if yf_ticker is None:
+            import yfinance as yf
+
+            yf_ticker = yf.Ticker(ticker)
+        ed = yf_ticker.get_earnings_dates(limit=limit)
+        if ed is None or ed.empty:
+            return []
+        idx = pd.DatetimeIndex(pd.to_datetime(ed.index))
+        if idx.tz is not None:
+            idx = idx.tz_convert("America/New_York")
+        return sorted(set(day_index(idx)))
+    except Exception:
+        return []
+
+
 def fetch_fundamentals(ticker: str) -> dict:
-    """Çeyreklik / yıllık gelir tablosu ve bilanço + bilanço açıklama günleri."""
+    """Çeyreklik / yıllık gelir tablosu ve bilanço + bilanço açıklama günleri
+    (açıklama günü yoksa dönem sonu + gecikme kullanılır)."""
     import yfinance as yf
 
     t = yf.Ticker(ticker)
-    out = {
+    return {
         "quarterly_income": t.quarterly_income_stmt,
         "quarterly_balance": t.quarterly_balance_sheet,
         "annual_income": t.income_stmt,
         "annual_balance": t.balance_sheet,
-        "earnings_dates": [],
+        "earnings_dates": fetch_earnings_dates(ticker, yf_ticker=t),
     }
-    try:
-        ed = t.get_earnings_dates(limit=40)
-        if ed is not None and not ed.empty:
-            idx = pd.DatetimeIndex(pd.to_datetime(ed.index))
-            if idx.tz is not None:
-                idx = idx.tz_convert("America/New_York")
-            out["earnings_dates"] = sorted(set(day_index(idx)))
-    except Exception:  # açıklama günü yoksa dönem sonu + gecikme kullanılır
-        pass
-    return out
 
 
 # ------------------------------------------------------------------------------

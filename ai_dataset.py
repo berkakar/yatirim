@@ -4,7 +4,7 @@ Yapay Zeka Analiz Modülü - NASDAQ 100'den seçilen bir hisse için transformer
 uygulama veritabanına (storage.db_path(); YATIRIM_DB_PATH) kaydeder.
 
 Adımlar (build_dataset):
-    1. Yahoo'dan en az 3 yıllık günlük açılış / yüksek / düşük / kapanış / hacim.
+    1. Yahoo'dan 6 yıllık (en az 3) günlük açılış / yüksek / düşük / kapanış / hacim.
        VWAP: Alpaca günlük barlarının `vw` alanı (kullanıcının anahtarı varsa);
        yoksa / eksik günlerde tipik fiyat (Y+D+K)/3 yaklaşığı - `vwap_is_proxy`=1.
     2. Hisse duyarlılığı (0-100): Piyasa Duyarlılığı ile aynı yöntemle hisse
@@ -18,7 +18,7 @@ Adımlar (build_dataset):
        pencerenin en yükseği. Üç seviyeden fiyata en yakını ve % uzaklığı.
        Yalnızca o güne kadar bilinen barlar kullanılır (pivot, sağında
        PIVOT_K bar oluştuktan sonra görülür) - geleceğe sızıntı yok.
-    5. 3 yıllık hesaplamadan son 2 yıl alınır (ilk yıl EMA200 / yüzdelik sıra
+    5. 6 yıllık hesaplamadan son 5 yıl alınır (ilk yıl EMA200 / yüzdelik sıra
        ısınması içindir). Değerleme & Ucuzluk Skoru ve oranları eklenir: her
        güne, o gün veya öncesindeki son günlük skor (valuation_scores_daily).
        Servisin yazmadığı geçmiş günler önce bilanço tablolarından yeniden
@@ -77,8 +77,12 @@ from valuation_history import day_index
 MARKET = "NASDAQ 100"
 MARKET_PREFIX = "nasdaq_100"
 DATASET_VERSION = 3  # 2: türetilmiş sütunlar çıkarıldı (REMOVED_FEATURES); 3: göreli fiyat / hacim sütunları
-DEFAULT_FETCH_YEARS = 3
-DEFAULT_KEEP_YEARS = 2
+# 5 yıllık eğitim verisi: 6 yıl çekilir, ilk yıl EMA200 / yüzdelik sıraların ısınması için atılır.
+DEFAULT_FETCH_YEARS = 6
+DEFAULT_KEEP_YEARS = 5
+MIN_FETCH_YEARS = 3
+# Bilanço günü bilinmeyen gelecekte (Yahoo yalnızca bir sonrakini verir) çeyreklik takvim varsayımı.
+EARNINGS_CADENCE_DAYS = 91
 UPDATE_PAUSE_S = 5  # zamanlanmış güncellemede veri setleri arası bekleme (Yahoo)
 
 SOURCE_BACKFILL = "backfill"
@@ -241,6 +245,29 @@ def add_relative_features(df: pd.DataFrame) -> pd.DataFrame:
     out["close_vs_vwap_pct"] = (close / out["vwap"] - 1) * 100
     avg = out["volume"].shift(1).rolling(RELATIVE_VOLUME_WINDOW, min_periods=RELATIVE_VOLUME_WINDOW).mean()
     out["volume_rel20"] = out["volume"] / avg.where(avg > 0)
+    return out
+
+
+def add_earnings_features(df: pd.DataFrame, earnings_dates) -> pd.DataFrame:
+    """days_to_earnings: bir sonraki bilanço açıklamasına kalan işlem günü
+    (açıklama günü 0). Bilinen tarihlerin öncesi ve sonrası çeyreklik takvimle
+    (EARNINGS_CADENCE_DAYS) uzatılır. Not: geçmiş günlerde gerçekleşen açıklama
+    günü kullanılır; şirketler takvimi genelde haftalar önce duyurur."""
+    out = df.copy()
+    dates = sorted(set(day_index(list(earnings_dates or []))))
+    if not dates or out.empty:
+        out["days_to_earnings"] = np.nan
+        return out
+    days = np.array(day_index(out.index), dtype="datetime64[D]")
+    known = list(np.array(dates, dtype="datetime64[D]"))
+    cadence = np.timedelta64(EARNINGS_CADENCE_DAYS, "D")
+    while known[0] > days.min():                  # bilinen ilk tarihten önce
+        known.insert(0, known[0] - cadence)
+    while known[-1] < days.max():                 # bilinen son tarihten sonra
+        known.append(known[-1] + cadence)
+    known = np.array(known, dtype="datetime64[D]")
+    nxt = known[np.searchsorted(known, days, side="left")]
+    out["days_to_earnings"] = np.busday_count(days, nxt).astype(float)
     return out
 
 
@@ -579,11 +606,11 @@ def load_market_frame(start: str, end: str) -> pd.DataFrame:
 
 def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int = DEFAULT_KEEP_YEARS,
                   ohlcv_fetcher=download_ohlcv, vwap_fetcher=None, valuation=None, valuation_history=None,
-                  reconstruct_valuation=None, history_loader=None,
+                  reconstruct_valuation=None, history_loader=None, earnings_fetcher=None,
                   market_loader=load_market_frame, end=None, progress=None) -> tuple[pd.DataFrame, dict]:
     """Bir hissenin eğitim tablosu. Döner: (çerçeve - indeks tarih, meta)."""
     ticker = normalize_ticker(ticker)
-    fetch_years = max(int(fetch_years), DEFAULT_FETCH_YEARS)
+    fetch_years = max(int(fetch_years), MIN_FETCH_YEARS)
     keep_years = min(max(int(keep_years), 1), fetch_years - 1)
     step = progress or (lambda msg: None)
     warnings = []
@@ -619,6 +646,12 @@ def build_dataset(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_year
     df = add_emas(df)
     df = add_stock_sentiment(df)
     df = df.join(resistance_levels(df["high"], df["close"]))
+    if earnings_fetcher is not None:
+        step(f"{ticker}: bilanço açıklama günleri çekiliyor")
+        earnings = earnings_fetcher(ticker)
+        if not earnings:
+            warnings.append("Bilanço açıklama günleri alınamadı; days_to_earnings boş.")
+        df = add_earnings_features(df, earnings)
     df = trim_years(df, keep_years)
 
     step("Değerleme & Ucuzluk Skoru ekleniyor")
@@ -846,6 +879,12 @@ def delete_dataset(ticker: str) -> int:
     return n
 
 
+def default_earnings_fetcher(ticker: str) -> list:
+    import valuation_history
+
+    return valuation_history.fetch_earnings_dates(ticker)
+
+
 def create(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int = DEFAULT_KEEP_YEARS,
            vwap_fetcher=None, fetch_valuation: bool = False, reconstruct_history: bool = False,
            **kwargs) -> tuple[pd.DataFrame, dict]:
@@ -854,6 +893,7 @@ def create(ticker: str, fetch_years: int = DEFAULT_FETCH_YEARS, keep_years: int 
     bilanço tablolarından yeniden hesaplayıp valuation_scores_daily'ye yazar
     (valuation_history.py)."""
     ticker = normalize_ticker(ticker)
+    kwargs.setdefault("earnings_fetcher", default_earnings_fetcher)
     if reconstruct_history and "reconstruct_valuation" not in kwargs:
         import valuation_history
 
@@ -876,6 +916,7 @@ def update(ticker: str, vwap_fetcher=None, **kwargs) -> tuple[int, dict]:
     if info is None:
         raise KeyError(f"{normalize_ticker(ticker)} için kayıtlı veri seti yok - önce oluşturun")
     params = info["params"]
+    kwargs.setdefault("earnings_fetcher", default_earnings_fetcher)
     valuation = kwargs.pop("valuation", None) or load_valuation(info["ticker"])
     history = kwargs.pop("valuation_history", None)
     history = load_valuation_history(info["ticker"]) if history is None else history
@@ -958,7 +999,7 @@ def is_level_column(col: str) -> bool:
 
 # Takvim: temporal embedding (Informer tarzı - her özellik için öğrenilen embedding tablosu)
 # tam sayı indekslerle yapılır; eğitim verisinde yalnızca bunlar kalır. sin/cos kodlamaları
-# aynı bilginin ikinci gösterimi, yılın günü / haftası ve çeyrek aydan türer, yıl 2 yıllık
+# aynı bilginin ikinci gösterimi, yılın günü / haftası ve çeyrek aydan türer, yıl birkaç yıllık
 # veride yalnızca trend taşır (2026-10-09).
 TRAINING_TEMPORAL_COLS = ("time_idx", "month", "day_of_month", "day_of_week", "is_month_start", "is_month_end")
 # Sektör ETF'leri ve SPY: eğitim verisinde yalnızca 1 günlük getiri (5 / 21 günlük getiriler

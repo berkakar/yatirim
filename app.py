@@ -1699,8 +1699,8 @@ elif module == "Yapay Zeka Analiz Modülü":
     st.header("Yapay Zeka Analiz Modülü")
     st.caption(
         "NASDAQ 100'den seçilen hisse için transformer eğitiminde kullanılacak günlük veri setini hazırlar: "
-        "3 yıllık açılış / VWAP / kapanış / hacim ve duyarlılık çekilir, EMA20 / EMA50 / EMA200 ile 1-2-3 aylık "
-        "direnç seviyeleri (fiyata en yakını ve % uzaklığı) gün başına hesaplanır, Ucuzluk Skoru eklenir; son 2 "
+        "6 yıllık açılış / VWAP / kapanış / hacim ve duyarlılık çekilir, EMA20 / EMA50 / EMA200 ile 1-2-3 aylık "
+        "direnç seviyeleri (fiyata en yakını ve % uzaklığı) gün başına hesaplanır, Ucuzluk Skoru eklenir; son 5 "
         "yıl NASDAQ 100 parametreleri ve sektör ETF'leriyle birleştirilip temporal embedding özellikleri eklenir, "
         "boşluklar interpolasyonla doldurulur ve veritabanına kaydedilir. Kayıtlı setlere sonradan gün eklenebilir."
     )
