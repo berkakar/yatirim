@@ -74,30 +74,49 @@ def _render_data_check(prep: dict):
                              hide_index=True, use_container_width=True)
 
 
+def _pct(v):
+    return f"{v:.1f}%" if v is not None else "-"
+
+
 def _render_run(run: dict):
     m = run["metrics"]
     cfg = run["config"]
     h1 = m["close"][0]
     gain = (1 - m["norm_mse"] / m["naive_norm_mse"]) * 100 if m["naive_norm_mse"] else None
+    base = h1.get("up_baseline")
     c = st.columns(4)
-    c[0].metric("Test penceresi", m["test_windows"])
-    c[1].metric("Normalize MSE (tüm kanallar)", f"{m['norm_mse']:.3f}",
-                delta=f"{gain:+.1f}% naive'e göre" if gain is not None else None,
-                help=f"Naive (son değer değişmez): {m['naive_norm_mse']:.3f}. Pozitif = model daha iyi.")
+    c[0].metric("Yön isabeti (1. gün)", _pct(h1.get("direction_acc")),
+                delta=f"{h1['direction_acc'] - base:+.1f} puan 'her zaman yükseliş'e göre"
+                if base is not None and h1.get("direction_acc") is not None else None,
+                help="Yön çıkışının (yükseliş olasılığı > %50) isabeti. Karşılaştırma: test döneminde her gün "
+                     f"'yükselir' demenin isabeti ({_pct(base)}). Pozitif = model daha iyi.")
+    c[1].metric("Emin olunan tahminlerde isabet", _pct(h1.get("confident_acc")),
+                help=f"Yalnızca yükseliş olasılığı >= %{am.CONFIDENT_PROB * 100:.0f} ya da "
+                     f"<= %{(1 - am.CONFIDENT_PROB) * 100:.0f} olan günler - tahminlerin "
+                     f"{_pct(h1.get('confident_share'))}'i.")
     c[2].metric("Kapanış MAE (1. gün)", f"{h1['mae']:.2f}",
                 delta=f"{h1['mae'] - h1['naive_mae']:+.2f} naive'e göre", delta_color="inverse",
-                help=f"Naive MAE: {h1['naive_mae']:.2f}. Negatif = model daha iyi.")
-    c[3].metric("Yön isabeti (1. gün)", f"{h1['direction_acc']:.1f}%" if h1["direction_acc"] is not None else "-",
-                help="Tahmin edilen değişimin yönü (son kapanışa göre) gerçekleşenle aynı mı. %50 yazı-tura.")
-    st.caption(f"Eğitim: {_fmt_time(run['created_at'])} · pencere {cfg['lookback']} gün, ufuk {cfg['horizon']} gün, "
-               f"d_model {cfg['d_model']}, {cfg['n_layers']} katman, blok {cfg['block_size']} · "
+                help=f"Naive (son fiyat değişmez) MAE: {h1['naive_mae']:.2f}. Negatif = model daha iyi.")
+    c[3].metric("Normalize MSE (tüm kanallar)", f"{m['norm_mse']:.3f}",
+                delta=f"{gain:+.1f}% naive'e göre" if gain is not None else None,
+                help=f"Yardımcı görev. Naive: {m['naive_norm_mse']:.3f}. Pozitif = model daha iyi.")
+    st.caption(f"Eğitim: {_fmt_time(run['created_at'])} · {m['test_windows']} test penceresi · pencere "
+               f"{cfg['lookback']} gün, ufuk {cfg['horizon']} gün, d_model {cfg['d_model']}, {cfg['n_layers']} "
+               f"katman, blok {cfg['block_size']} · kayıp ağırlıkları kanallar / getiri / yön: "
+               f"{cfg.get('w_channels', 1):g} / {cfg.get('w_return', '-')} / {cfg.get('w_direction', '-')} · "
                f"en iyi epoch {run['best_epoch']} / {len(run['history'])} · {run['params']:,} parametre")
+    if m["test_windows"] < 200:
+        st.caption(f"{m['test_windows']} test penceresinde isabet oranı tek başına ±"
+                   f"{100 * 1.96 * (0.25 / m['test_windows']) ** 0.5:.0f} puan oynayabilir (%95 güven); "
+                   "küçük farkları yorumlarken dikkat.")
 
     st.markdown("**Kapanış - ufuk bazında test sonuçları**")
     st.dataframe(pd.DataFrame([{
-        "Gün": h["horizon"], "MAE": h["mae"], "Naive MAE": h["naive_mae"],
-        "MAPE %": h["mape"], "Naive MAPE %": h["naive_mape"], "Yön isabeti %": h["direction_acc"],
-    } for h in m["close"]]).round(3), hide_index=True, use_container_width=True)
+        "Gün": h["horizon"], "Yön isabeti %": h.get("direction_acc"),
+        "Her zaman yükseliş %": h.get("up_baseline"), "Emin olunanlarda %": h.get("confident_acc"),
+        "Emin olunan pay %": h.get("confident_share"), "MAE": h["mae"], "Naive MAE": h["naive_mae"],
+        "MAPE %": h["mape"], "Naive MAPE %": h["naive_mape"],
+    } for h in m["close"]]).round(2), hide_index=True, use_container_width=True)
 
     tp = run["test_predictions"]
     st.markdown("**Test dönemi - kapanış ve 1 gün sonrası tahmini**")
@@ -105,19 +124,23 @@ def _render_run(run: dict):
                                 "Kapanış $"), use_container_width=True, config={"displayModeBar": False},
                     key=f"ai_model_pred_{run['id']}")
     hist = pd.DataFrame(run["history"])
-    st.markdown("**Kayıp (normalize MSE)**")
-    st.plotly_chart(_line_chart(hist["epoch"], {"Eğitim": hist["train"], "Doğrulama": hist["val"]}, "MSE",
+    st.markdown("**Kayıp (eğitim / doğrulama)**")
+    st.plotly_chart(_line_chart(hist["epoch"], {"Eğitim": hist["train"], "Doğrulama": hist["val"]}, "Kayıp",
                                 height=220), use_container_width=True, config={"displayModeBar": False},
                     key=f"ai_model_loss_{run['id']}")
 
     fc = run["forecast"]
     st.markdown(f"**Sonraki {len(fc['dates'])} işlem günü tahmini** (son kapanış {fc['last_date']}: "
                 f"{fc['last_close']:,.2f})")
-    st.dataframe(pd.DataFrame({"Tarih": fc["dates"], "Kapanış tahmini": fc["close"],
-                               "Son kapanışa göre %": [(v / fc["last_close"] - 1) * 100 for v in fc["close"]]})
-                 .round(2), hide_index=True, use_container_width=True)
+    table = {"Tarih": fc["dates"], "Kapanış tahmini": fc["close"],
+             "Getiri % (son kapanışa göre)": fc.get("return_pct") or
+             [(v / fc["last_close"] - 1) * 100 for v in fc["close"]]}
+    if fc.get("up_prob"):
+        table["Yükseliş olasılığı %"] = [p * 100 for p in fc["up_prob"]]
+    st.dataframe(pd.DataFrame(table).round(2), hide_index=True, use_container_width=True)
     st.caption("Tarihler hafta içi günlerdir; borsa tatilleri dikkate alınmaz. Model yalnızca geçmiş veriden "
-               "öğrenir - yatırım tavsiyesi değildir. Naive'i geçemeyen bir model kullanılmamalıdır.")
+               "öğrenir - yatırım tavsiyesi değildir. 'Her zaman yükseliş'i ve naive'i geçemeyen bir model "
+               "kullanılmamalıdır.")
 
 
 def render_model_section(ticker: str, df: pd.DataFrame):
@@ -126,7 +149,8 @@ def render_model_section(ticker: str, df: pd.DataFrame):
                "ağırlıklar), RevIN (pencere başına ortalama / varyans normalize edilip tahminde geri çevrilir), "
                "temporal embedding (ay, ayın günü, haftanın günü, ay başı / sonu), d_model 128. Factorized "
                "self-attention: her gün önce kendi bloğundaki günlere, sonra diğer blokların aynı sıradaki "
-               "günlerine bakar. Veri kronolojik bölünür: ilk %80 eğitim, son %20 test.")
+               "günlerine bakar. Kapanış için getiri ve yön (yükseliş olasılığı) ayrı çıkışlardan tahmin "
+               "edilir; kayıpta bunlar daha ağırdır. Veri kronolojik bölünür: ilk %80 eğitim, son %20 test.")
     if not am.torch_available():
         st.warning(am.INSTALL_HINT)
         return

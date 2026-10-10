@@ -22,7 +22,7 @@ _GROUPS = (
     ("EMA", lambda c: c.startswith("ema") or c.startswith("dist_ema")),
     ("Hisse Duyarlılığı", lambda c: c.startswith("sent_") or c == "rsi14"),
     ("Direnç", lambda c: c.startswith("resistance_")),
-    ("Değerleme", lambda c: c.startswith("valuation_") and c not in ad.META_COLS),
+    ("Değerleme", lambda c: (c.startswith("valuation_") and c not in ad.META_COLS) or c == "days_to_earnings"),
     ("NASDAQ 100 Parametreleri", lambda c: c.startswith(f"{ad.MARKET_PREFIX}__")),
     ("Tüm Sektör ETF'leri", lambda c: c.partition("__")[0].upper() in ad.sector_etf_symbols()),
     ("Zaman (Temporal Embedding)", lambda c: c in ad.TEMPORAL_COLS),
@@ -44,6 +44,7 @@ _GLOSSARY = """
 | `sent_momentum_raw` | Kapanışın 50 günlük basit ortalamaya göre % uzaklığı (`sent_momentum` bunun 126 günlük yüzdelik sırası). Tabloda var, eğitim verisinde yok: `dist_ema50_pct` ile neredeyse aynı |
 | `resistance_Nm`, `resistance_Nm_dist_pct` | N = 1/2/3 ay (21/42/63 işlem günü) geriye bakışta, kapanışın üstündeki en yakın tepe (yoksa pencerenin zirvesi) ve kapanışa % uzaklığı |
 | `resistance_nearest*` | Üç seviyeden fiyata en yakını, % uzaklığı ve hangi pencereden geldiği (ay). Tabloda var, eğitim verisinde yok: üç pencerenin uzaklığından birebir seçilir |
+| `days_to_earnings` | Bir sonraki bilanço açıklamasına kalan işlem günü (açıklama günü 0). Bilinen son tarihten sonrası 91 günlük çeyreklik takvimle tahmin edilir |
 | `valuation_*` | Ucuzluk Skoru (Nihai Skor) ve bileşenleri: alt sektör F/K iskontosu, F/K, büyüme, kârlılık (ROE, ROA, net/brüt marj), faiz karşılama, borçluluk, cari/likidite oranı, varlık devir hızı - o gün veya öncesindeki son günlük kayıt (`valuation_scores_daily`) |
 | *Eğitim verisindeki değerleme sütunları* | `valuation_score`, `valuation_sector_discount_pct`, `valuation_eps_growth_pct`, `valuation_revenue_growth_pct`, `valuation_current_ratio`, `valuation_net_margin_pct`, `valuation_debt_equity`; diğer değerleme sütunları yalnızca tabloda |
 | `valuation_is_reconstructed` | *Meta.* 1: skor servisten değil, geçmiş bilanço tablolarından yeniden hesaplandı. Kârlılık çeyreklik tablolardan (açıklama gününden itibaren, basamak); diğer oranlar bilanço noktaları ile bugünkü değer arasında interpolasyonlu; F/K günlük fiyat / son 12 ay EPS; alt sektör ortalama F/K her gün aynı alt sektördeki hisselerin geçmiş F/K'larının medyanı. PEG skora ve veri setine katılmaz |
@@ -142,7 +143,7 @@ def _render_create(username, nasdaq_tickers):
         if options else None
     typed = c2.text_input("veya sembol yazın", key="ai_ticker_typed", placeholder="örn. AAPL").strip()
     fetch_years = c3.number_input("Çekilecek yıl", min_value=3, max_value=10, value=ad.DEFAULT_FETCH_YEARS,
-                                  key="ai_fetch_years", help="En az 3 yıl: ilk yıl EMA200 ve göstergelerin ısınması için.")
+                                  key="ai_fetch_years", help="En az 3 yıl; ilk yıl EMA200 ve göstergelerin ısınması için atılır (6 çekilir, 5 saklanır).")
     keep_years = c4.number_input("Saklanacak yıl", min_value=1, max_value=int(fetch_years) - 1,
                                  value=min(ad.DEFAULT_KEEP_YEARS, int(fetch_years) - 1), key="ai_keep_years")
     ticker = ad.normalize_ticker(typed or picked)

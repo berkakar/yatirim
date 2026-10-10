@@ -137,13 +137,21 @@ class CalculationTests(unittest.TestCase):
         self.assertFalse([c for c in out if c.startswith("sector_etf__")])
 
 
+EARNINGS = pd.to_datetime(["2024-07-30", "2024-10-29", "2025-01-28", "2025-04-29", "2025-07-29",
+                           "2025-10-28", "2026-01-27", "2026-04-28", "2026-07-28", "2026-10-27"])
+
+
 class DatasetTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.env = mock.patch.dict(os.environ, {"YATIRIM_DB_PATH": os.path.join(self.tmp.name, "t.db")})
         self.env.start()
+        # Yahoo'ya gitmesin: bilanço günleri sabit.
+        self.earnings = mock.patch.object(ad, "default_earnings_fetcher", lambda t: list(EARNINGS))
+        self.earnings.start()
 
     def tearDown(self):
+        self.earnings.stop()
         self.env.stop()
         self.tmp.cleanup()
 
@@ -155,10 +163,12 @@ class DatasetTests(unittest.TestCase):
     def test_build_keeps_two_years_and_fills_everything(self):
         df, meta = self._create()
         self.assertEqual(meta["ticker"], "AAPL")
-        self.assertGreater(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2))
-        self.assertLess(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=2) + pd.Timedelta(days=5))
+        keep = ad.DEFAULT_KEEP_YEARS                                      # 5 yıl
+        self.assertGreater(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=keep))
+        self.assertLess(pd.Timestamp(meta["start"]), pd.Timestamp(END) - pd.DateOffset(years=keep) + pd.Timedelta(days=5))
         self.assertGreater(len(df), 500)
         for col in ("open", "vwap", "close", "volume", "ema20", "ema50", "ema200", "sent_momentum", "rsi14",
+                    "days_to_earnings",
                     "resistance_1m", "resistance_2m", "resistance_3m", "resistance_nearest_dist_pct",
                     "valuation_score", "nasdaq_100__momentum", "xlk__ret_5d", "month_sin"):
             self.assertIn(col, df.columns)
@@ -318,6 +328,28 @@ class TrainingFrameTests(unittest.TestCase):
         meta = {"ticker": "OLD", "start": "2026-10-07", "end": "2026-10-07", "columns": list(df.columns)}
         ad.save_dataset(df, meta, {})
         self.assertEqual(list(ad.load_dataset("OLD").columns), ["close", "source"])
+
+
+class EarningsFeatureTests(unittest.TestCase):
+    def test_days_to_earnings(self):
+        idx = pd.bdate_range("2026-01-20", "2026-02-03")
+        out = ad.add_earnings_features(pd.DataFrame({"close": 1.0}, index=idx), ["2026-01-27", "2026-04-28"])
+        d = out["days_to_earnings"]
+        self.assertEqual(d.loc["2026-01-20"], 5)                       # 20 Oca Salı -> 27 Oca Salı: 5 iş günü
+        self.assertEqual(d.loc["2026-01-27"], 0)                       # açıklama günü
+        self.assertEqual(d.loc["2026-01-28"], np.busday_count("2026-01-28", "2026-04-28"))
+
+    def test_extrapolates_quarterly_before_and_after_known(self):
+        idx = pd.bdate_range("2025-06-02", "2027-01-29")
+        out = ad.add_earnings_features(pd.DataFrame({"close": 1.0}, index=idx), ["2026-01-27"])
+        d = out["days_to_earnings"]
+        self.assertLessEqual(d.max(), 70)                               # hiçbir gün bir çeyrekten uzak değil
+        self.assertEqual(d.loc["2026-04-28"], 0)                        # 27 Oca + 91 gün
+        self.assertFalse(d.isna().any())
+
+    def test_no_dates_gives_nan(self):
+        out = ad.add_earnings_features(pd.DataFrame({"close": [1.0]}, index=pd.to_datetime(["2026-01-02"])), [])
+        self.assertTrue(out["days_to_earnings"].isna().all())
 
 
 class RelativeFeatureTests(unittest.TestCase):

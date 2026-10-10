@@ -33,12 +33,17 @@ Model (FactorizedTransformer):
       L x L dikkat yerine iki adım - (1) yerel: B günlük bloklar içinde, (2) adımlı
       (strided): blokların aynı sıradaki günleri arasında. İki adım sonunda her gün
       dolaylı olarak tüm pencereyi görür; maliyet O(L^2) yerine O(L·(B + L/B)).
-    - Çıkış: düzleştirilmiş token'lardan ortak doğrusal katmanla H günlük tahmin.
+    - Çıkışlar: (1) her kanalın H günlük gelecek değeri (ortak doğrusal katman,
+      yardımcı görev); kapanış kanalının temsilinden (2) h = 1..H günlük getiri
+      ve (3) yön - yükseliş olasılığı (sigmoid). Fiyat tahmini getiriden
+      üretilir: son kapanış × (1 + getiri).
 
-Eğitim: kanallar eğitim döneminin ortalama / sapmasıyla standartlaştırılır, kayıp
-bu ölçekte MSE (kanalların ağırlığı eşitlenir; RevIN pencere bazında bunun üzerine). Erken durdurma için eğitim pencerelerinin son %10'u doğrulama
-olarak ayrılır (test verisine bakılmaz). Değerlendirme test döneminde; `close`
-için model, "son fiyat değişmez" (naive) tahminiyle karşılaştırılır.
+Eğitim: kanallar eğitim döneminin ortalama / sapmasıyla standartlaştırılır.
+Kayıp = w_channels · MSE(kanallar) + w_return · MSE(standartlaştırılmış getiri)
++ w_direction · BCE(yön); kapanış görevleri daha ağır (varsayılan 1 / 3 / 1). Erken durdurma için eğitim pencerelerinin son %10'u doğrulama
+olarak ayrılır (test verisine bakılmaz). Değerlendirme test döneminde: fiyat hatası
+"son fiyat değişmez" (naive), yön isabeti "her zaman yükseliş" ile karşılaştırılır;
+yalnızca emin olunan tahminlerdeki (olasılık >= 0,6 veya <= 0,4) isabet ayrıca verilir.
 
 Ağırlıklar ve sonuçlar veritabanında `ai_models` tablosunda tutulur.
 """
@@ -89,6 +94,11 @@ DEFAULTS = {
     "patience": 5,
     "batch_size": 32,
     "channels_per_batch": 12,   # eğitimde adım başına rastgele kanal sayısı (close her zaman dahil)
+    # Kayıp ağırlıkları: kanalların gelecek değerleri (yardımcı görev) + kapanışın h günlük
+    # getirisi + yön (yükselir / düşer olasılığı). Kapanış görevleri daha ağır.
+    "w_channels": 1.0,
+    "w_return": 3.0,
+    "w_direction": 1.0,
     "lr": 1e-3,
     "weight_decay": 1e-4,
     "seed": 42,
@@ -304,8 +314,9 @@ def _build_model_classes():
 
     class FactorizedTransformer(nn.Module):
         def __init__(self, n_channels, lookback, horizon, d_model, n_heads, n_layers, d_ff, dropout,
-                     block_size, **_):
+                     block_size, target_idx=0, **_):
             super().__init__()
+            self.target_idx = target_idx
             if lookback % block_size:
                 raise ValueError("lookback, block_size'ın katı olmalı")
             self.revin = RevIN(n_channels)
@@ -317,11 +328,17 @@ def _build_model_classes():
                                         for _ in range(n_layers))
             self.norm = nn.LayerNorm(d_model)
             self.head = nn.Sequential(nn.Flatten(1), nn.Dropout(dropout), nn.Linear(lookback * d_model, horizon))
+            # Kapanış kanalının temsilinden: h = 1..H günlük getiri (standartlaştırılmış) ve
+            # yükseliş olasılığı (logit). Kanal bağımsız omurga ortak; bu başlıklar yalnız kapanışta.
+            self.return_head = nn.Sequential(nn.Flatten(1), nn.Dropout(dropout), nn.Linear(lookback * d_model, horizon))
+            self.direction_head = nn.Sequential(nn.Flatten(1), nn.Dropout(dropout),
+                                                nn.Linear(lookback * d_model, horizon))
 
         def forward(self, x, cal, ch_idx=None):
-            """x: [B, L, C], cal: [B, L, 5] -> (tahmin [B, H, C], ortalama, std).
-            ch_idx: x yalnızca bu kanalları içeriyorsa indeksleri (RevIN'in kanal
-            başına ölçeği için) - eğitimde kanal alt kümesi."""
+            """x: [B, L, C], cal: [B, L, 5] -> (kanal tahmini [B, H, C], getiri [B, H],
+            yön logiti [B, H]). ch_idx: x yalnızca bu kanalları içeriyorsa indeksleri
+            (RevIN'in kanal başına ölçeği ve kapanışın yeri için) - eğitimde kanal alt
+            kümesi; kapanış her zaman içinde olmalı."""
             bsz, length, ch = x.shape
             mean, std = self.revin.stats(x)
             z = self.revin.norm(x, mean, std, ch_idx)
@@ -330,14 +347,29 @@ def _build_model_classes():
             h = self.value(z) + self.position + t
             for block in self.blocks:
                 h = block(h)
-            out = self.head(self.norm(h)).reshape(bsz, ch, -1).permute(0, 2, 1)   # [B, H, C]
-            return self.revin.denorm(out, mean, std, ch_idx), mean, std
+            h = self.norm(h)
+            out = self.head(h).reshape(bsz, ch, -1).permute(0, 2, 1)   # [B, H, C]
+            if ch_idx is None:
+                tpos = self.target_idx
+            else:
+                tpos = int((ch_idx == self.target_idx).nonzero()[0, 0])
+            ht = h.reshape(bsz, ch, length, -1)[:, tpos]                # kapanış kanalı [B, L, d]
+            return self.revin.denorm(out, mean, std, ch_idx), self.return_head(ht), self.direction_head(ht)
 
     return FactorizedTransformer
 
 
-def build_model(n_channels: int, config: dict):
-    return _build_model_classes()(n_channels, **config)
+def build_model(n_channels: int, config: dict, target_idx: int = 0):
+    return _build_model_classes()(n_channels, target_idx=target_idx, **config)
+
+
+def close_returns(raw_close: np.ndarray, starts, horizon: int) -> np.ndarray:
+    """Pencere başına kapanışın h = 1..H günlük getirisi (%): son girdi gününün
+    (t-1) kapanışına göre. [N, H]."""
+    starts = np.asarray(starts)
+    base = raw_close[starts - 1][:, None]
+    fut = np.stack([raw_close[starts + h] for h in range(horizon)], axis=1)
+    return (fut / base - 1) * 100
 
 
 def _batches(data, cal, starts, lookback, horizon, batch_size, shuffle, rng):
@@ -367,7 +399,10 @@ def _mse(pred, y):
 def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> dict:
     """Modeli eğitir ve test döneminde değerlendirir. Döner: sonuç sözlüğü
     (config, prep raporu, metrikler, kayıp geçmişi, test tahminleri, sonraki
-    günlerin tahmini) ve 'model' (torch modülü)."""
+    günlerin tahmini) ve 'model' (torch modülü).
+
+    Kayıp = w_channels · MSE(kanalların gelecek değerleri) + w_return · MSE(kapanışın
+    h günlük getirisi, standartlaştırılmış) + w_direction · BCE(yükseldi mi)."""
     import torch
 
     cfg = {**DEFAULTS, **(config or {})}
@@ -383,6 +418,7 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
     n, n_ch = data.shape
     L, H = cfg["lookback"], cfg["horizon"]
     target_i = prep["channels"].index(TARGET)
+    raw_close = prep["raw"][:, target_i]
     k = min(int(cfg["channels_per_batch"] or n_ch), n_ch)
     others = np.array([i for i in range(n_ch) if i != target_i])
     win = make_windows(n, prep["n_train"], L, H, cfg["val_ratio"])
@@ -390,31 +426,47 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
         raise ValueError(f"Yetersiz veri: {n} gün, pencere {L} + ufuk {H} ile {len(win['train'])} eğitim, "
                          f"{len(win['test'])} test penceresi")
 
-    model = build_model(n_ch, cfg)
+    # Getiri hedefinin ölçeği: eğitim pencerelerinden, ufuk başına.
+    train_ret = close_returns(raw_close, win["train"], H)
+    ret_mean, ret_std = train_ret.mean(axis=0), train_ret.std(axis=0)
+    ret_std = np.where(ret_std > 1e-9, ret_std, 1.0)
+    prep["ret_mean"], prep["ret_std"] = ret_mean, ret_std
+    rm, rs = torch.tensor(ret_mean, dtype=torch.float32), torch.tensor(ret_std, dtype=torch.float32)
+
+    model = build_model(n_ch, cfg, target_i)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
+    bce = torch.nn.BCEWithLogitsLoss()
     history, best, best_state, bad = [], float("inf"), None, 0
+
+    def losses(pred, ret, logit, y, ts, ch=None):
+        r = torch.tensor(close_returns(raw_close, ts, H), dtype=torch.float32)
+        l_ch = _mse(pred, y)
+        l_ret = _mse(ret, (r - rm) / rs)
+        l_dir = bce(logit, (r > 0).float())
+        total = cfg["w_channels"] * l_ch + cfg["w_return"] * l_ret + cfg["w_direction"] * l_dir
+        return total, (l_ch.item(), l_ret.item(), l_dir.item())
 
     def evaluate(starts):
         model.eval()
-        total, count = 0.0, 0
+        total, parts, count = 0.0, np.zeros(3), 0
         with torch.no_grad():
-            for x, c, y, _ in _batches(data, cal, starts, L, H, 256, False, rng):
-                pred, _, _ = model(x, c)
-                total += _mse(pred, y).item() * len(x)
+            for x, c, y, ts in _batches(data, cal, starts, L, H, 256, False, rng):
+                loss, p = losses(*model(x, c), y, ts)
+                total += loss.item() * len(x)
+                parts += np.array(p) * len(x)
                 count += len(x)
-        return total / max(count, 1)
+        return total / max(count, 1), parts / max(count, 1)
 
     for epoch in range(1, cfg["epochs"] + 1):
         model.train()
         total, count = 0.0, 0
-        for x, c, y, _ in _batches(data, cal, win["train"], L, H, cfg["batch_size"], True, rng):
+        for x, c, y, ts in _batches(data, cal, win["train"], L, H, cfg["batch_size"], True, rng):
             # Kanal bağımsız: adım başına kanalların rastgele bir alt kümesi (ağırlıklar ortak).
             ch = np.sort(np.append(rng.choice(others, k - 1, replace=False), target_i)) if k < n_ch else None
             if ch is not None:
                 ch = torch.from_numpy(ch)
                 x, y = x[..., ch], y[..., ch]
-            pred, _, _ = model(x, c, ch)
-            loss = _mse(pred, y)
+            loss, _ = losses(*model(x, c, ch), y, ts)
             opt.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -422,8 +474,10 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
             total += loss.item() * len(x)
             count += len(x)
         train_loss = total / count
-        val_loss = evaluate(win["val"]) if win["val"] else train_loss
-        history.append({"epoch": epoch, "train": train_loss, "val": val_loss})
+        val_loss, val_parts = evaluate(win["val"]) if win["val"] else (train_loss, np.full(3, np.nan))
+        history.append({"epoch": epoch, "train": train_loss, "val": val_loss,
+                        "val_channels": float(val_parts[0]), "val_return": float(val_parts[1]),
+                        "val_direction": float(val_parts[2])})
         step(epoch, cfg["epochs"], train_loss, val_loss)
         if val_loss < best - 1e-6:
             best, bad = val_loss, 0
@@ -445,52 +499,66 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
         "windows": {k: len(v) for k, v in win.items()},
         "forecast": forecast_next(model, prep, cfg),
         "params": int(sum(p.numel() for p in model.parameters())),
-        "scale": {"mean": prep["mean"].tolist(), "std": prep["std"].tolist()},
+        "scale": {"mean": prep["mean"].tolist(), "std": prep["std"].tolist(),
+                  "ret_mean": ret_mean.tolist(), "ret_std": ret_std.tolist()},
     })
     result["model"] = model
     return result
 
 
+CONFIDENT_PROB = 0.6   # "emin olunan" tahmin: yükseliş olasılığı >= 0,6 ya da <= 0,4
+
+
 def evaluate_test(model, prep: dict, test_starts: list, cfg: dict) -> dict:
-    """Test dönemi metrikleri: tüm kanallarda standartlaştırılmış ölçekte MSE
-    (model ve naive) ve `close` için (dolar ölçeğinde) ufuk bazında MAE / MAPE /
-    yön isabeti, naive ile karşılaştırma."""
+    """Test dönemi metrikleri: tüm kanallarda standartlaştırılmış MSE (model ve
+    naive) ve kapanış için ufuk bazında: getiri başlığından fiyat MAE / MAPE,
+    yön başlığından isabet, "her zaman yükseliş" karşılaştırması ve yalnızca emin
+    olunan tahminlerdeki isabet."""
     import torch
 
     data, cal, dates = prep["values"], prep["calendar"], prep["dates"]
     L, H = cfg["lookback"], cfg["horizon"]
     ti = prep["channels"].index(TARGET)
-    preds, ys, lasts, mses, naive_mses, starts = [], [], [], [], [], []
+    raw_close = prep["raw"][:, ti]
+    rets, probs, mses, naive_mses, starts = [], [], [], [], []
     model.eval()
     with torch.no_grad():
         for x, c, y, ts in _batches(data, cal, test_starts, L, H, 256, False, np.random.default_rng(0)):
-            pred, _, _ = model(x, c)
+            pred, ret, logit = model(x, c)
             naive = x[:, -1:, :].expand_as(y)
             mses.append((pred - y).pow(2).mean(dim=(1, 2)).numpy())
             naive_mses.append((naive - y).pow(2).mean(dim=(1, 2)).numpy())
-            preds.append(pred[..., ti].numpy())
-            ys.append(y[..., ti].numpy())
-            lasts.append(x[:, -1, ti].numpy())
+            rets.append(ret.numpy())
+            probs.append(torch.sigmoid(logit).numpy())
             starts += list(ts)
-    mu, sd = prep["mean"][ti], prep["std"][ti]          # dolar ölçeğine geri
-    pred, actual, last = (np.concatenate(a).astype(np.float64) * sd + mu for a in (preds, ys, lasts))
+    starts = np.array(starts)
+    pred_ret = np.concatenate(rets).astype(np.float64) * prep["ret_std"] + prep["ret_mean"]   # %
+    up_prob = np.concatenate(probs).astype(np.float64)
+    actual_ret = close_returns(raw_close, starts, H)
+    last = raw_close[starts - 1]
+    actual = last[:, None] * (1 + actual_ret / 100)
+    pred = last[:, None] * (1 + pred_ret / 100)
     per_h = []
     for h in range(H):
         err = np.abs(pred[:, h] - actual[:, h])
         naive_err = np.abs(last - actual[:, h])
-        move = actual[:, h] - last
-        hit = np.sign(pred[:, h] - last) == np.sign(move)
+        up = actual_ret[:, h] > 0
+        hit = (up_prob[:, h] > 0.5) == up
+        sure = (up_prob[:, h] >= CONFIDENT_PROB) | (up_prob[:, h] <= 1 - CONFIDENT_PROB)
         per_h.append({
             "horizon": h + 1,
             "mae": float(err.mean()), "naive_mae": float(naive_err.mean()),
             "mape": float((err / np.abs(actual[:, h])).mean() * 100),
             "naive_mape": float((naive_err / np.abs(actual[:, h])).mean() * 100),
-            "direction_acc": float(hit[move != 0].mean() * 100) if (move != 0).any() else None,
+            "direction_acc": float(hit.mean() * 100),
+            "return_sign_acc": float(((pred_ret[:, h] > 0) == up).mean() * 100),
+            "up_baseline": float(up.mean() * 100),          # "her zaman yükseliş" isabeti
+            "confident_acc": float(hit[sure].mean() * 100) if sure.any() else None,
+            "confident_share": float(sure.mean() * 100),
         })
-    starts = np.array(starts)
     test_pred = pd.DataFrame({
         "date": dates[starts].strftime("%Y-%m-%d"),
-        "actual": actual[:, 0], "pred_h1": pred[:, 0],
+        "actual": actual[:, 0], "pred_h1": pred[:, 0], "up_prob_h1": up_prob[:, 0],
         f"actual_h{H}": actual[:, -1], f"pred_h{H}": pred[:, -1],
         "date_h_last": dates[starts + H - 1].strftime("%Y-%m-%d"),
     })
@@ -506,7 +574,8 @@ def evaluate_test(model, prep: dict, test_starts: list, cfg: dict) -> dict:
 
 
 def forecast_next(model, prep: dict, cfg: dict) -> dict:
-    """Son `lookback` günle sonraki `horizon` işlem günü için `close` tahmini."""
+    """Son `lookback` günle sonraki `horizon` işlem günü için kapanış tahmini
+    (getiri başlığından) ve yükseliş olasılığı."""
     import torch
 
     L, H = cfg["lookback"], cfg["horizon"]
@@ -514,13 +583,16 @@ def forecast_next(model, prep: dict, cfg: dict) -> dict:
     ti = prep["channels"].index(TARGET)
     model.eval()
     with torch.no_grad():
-        pred, _, _ = model(torch.from_numpy(data[-L:][None]), torch.from_numpy(cal[-L:][None]))
+        _, ret, logit = model(torch.from_numpy(data[-L:][None]), torch.from_numpy(cal[-L:][None]))
+    ret = ret[0].numpy().astype(np.float64) * prep["ret_std"] + prep["ret_mean"]
+    last_close = float(prep["raw"][-1, ti])
     last_date = prep["dates"][-1]
     days = pd.bdate_range(last_date + pd.Timedelta(days=1), periods=H)
-    mu, sd = prep["mean"][ti], prep["std"][ti]
-    return {"last_date": last_date.strftime("%Y-%m-%d"), "last_close": float(prep["raw"][-1, ti]),
+    return {"last_date": last_date.strftime("%Y-%m-%d"), "last_close": last_close,
             "dates": [d.strftime("%Y-%m-%d") for d in days],
-            "close": [float(v * sd + mu) for v in pred[0, :, ti].numpy()]}
+            "return_pct": [float(r) for r in ret],
+            "close": [float(last_close * (1 + r / 100)) for r in ret],
+            "up_prob": [float(p) for p in torch.sigmoid(logit[0]).numpy()]}
 
 
 # ------------------------------------------------------------------------------
@@ -569,7 +641,7 @@ def load_model(run_id: int):
     if row is None:
         raise KeyError(f"model {run_id} yok")
     cfg, res = json.loads(row[0]), json.loads(row[1])
-    model = build_model(len(res["channels"]), cfg)
+    model = build_model(len(res["channels"]), cfg, res["channels"].index(TARGET))
     model.load_state_dict(torch.load(io.BytesIO(row[2]), weights_only=True))
     model.eval()
     return model, res["channels"], cfg

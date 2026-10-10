@@ -92,6 +92,13 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(max(w["test"]), 197)
 
 
+class TargetTests(unittest.TestCase):
+    def test_close_returns_relative_to_last_input_day(self):
+        close = np.array([100.0, 110.0, 99.0, 121.0, 100.0])
+        r = am.close_returns(close, [2], 3)                     # girdi son günü 1 (110), hedef günler 2,3,4
+        self.assertTrue(np.allclose(r[0], [-10.0, 10.0, (100 / 110 - 1) * 100]))
+
+
 @unittest.skipIf(torch is None, "PyTorch kurulu değil")
 class ModelTests(unittest.TestCase):
     def setUp(self):
@@ -141,12 +148,22 @@ class ModelTests(unittest.TestCase):
         self.assertEqual(len(res["forecast"]["close"]), 3)
         self.assertGreater(min(res["forecast"]["close"]), 0)                       # dolar ölçeğinde
         self.assertEqual(len(res["test_predictions"]["date"]), 38)
+        h1 = m["close"][0]
+        for key in ("direction_acc", "return_sign_acc", "up_baseline", "confident_share"):
+            self.assertTrue(0 <= h1[key] <= 100, key)
+        probs = res["forecast"]["up_prob"]
+        self.assertEqual(len(probs), 3)
+        self.assertTrue(all(0 < p < 1 for p in probs))
+        fc = res["forecast"]                                                        # fiyat = son kapanış × (1 + getiri)
+        self.assertAlmostEqual(fc["close"][0], fc["last_close"] * (1 + fc["return_pct"][0] / 100))
+        self.assertIn("val_direction", res["history"][0])
         run_id = am.save_run("TEST", res)
         runs = am.list_runs("TEST")
         self.assertEqual(runs[0]["id"], run_id)
         self.assertEqual(runs[0]["metrics"], json_roundtrip(m))
         model, channels, cfg = am.load_model(run_id)
         self.assertEqual(channels, res["channels"])
+        self.assertEqual(model.target_idx, channels.index("close"))
         am.delete_run(run_id)
         self.assertEqual(am.list_runs("TEST"), [])
 
