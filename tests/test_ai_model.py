@@ -92,6 +92,21 @@ class PrepareTests(unittest.TestCase):
         self.assertEqual(max(w["test"]), 197)
 
 
+class MemoryProfileTests(unittest.TestCase):
+    def test_low_memory_profile_applies_below_threshold(self):
+        low = am.effective_config(memory_mb=1000)
+        self.assertTrue(low["low_memory"])
+        for k, v in am.LOW_MEMORY_PROFILE.items():
+            self.assertEqual(low[k], v)
+        big = am.effective_config(memory_mb=16000)
+        self.assertFalse(big["low_memory"])
+        self.assertEqual(big["batch_size"], am.DEFAULTS["batch_size"])
+        self.assertEqual(am.effective_config({"batch_size": 4}, memory_mb=1000)["batch_size"], 4)   # açık ayar önce
+
+    def test_eval_batch_is_small(self):
+        self.assertLessEqual(am.DEFAULTS["eval_batch_size"], 16)                  # 256'da ~5 GB tepe bellek
+
+
 class TargetTests(unittest.TestCase):
     def test_close_returns_relative_to_last_input_day(self):
         close = np.array([100.0, 110.0, 99.0, 121.0, 100.0])

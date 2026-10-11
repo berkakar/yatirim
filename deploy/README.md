@@ -188,14 +188,45 @@ sudo -u yatirim /opt/yatirim/venv/bin/pip install torch --index-url https://down
 sudo systemctl restart yatirim-streamlit     # arayüz torch'u görsün
 ```
 
-Kurulu değilse bölüm bu komutu gösterir; uygulamanın geri kalanı etkilenmez. Eğitim CPU'da
-yapılır (2 yıllık veri, 64 günlük pencere: 4 çekirdekte epoch başına ~10 sn, erken durdurmayla
-birkaç dakika). Arayüz yerine komut satırından da çalıştırılabilir:
+Kurulu değilse bölüm bu komutu gösterir; uygulamanın geri kalanı etkilenmez.
+
+### Eğitimi sunucuda çalıştırma
+
+Eğitim CPU'da yapılır ve uzun sürebilir (5 yıllık veri: 1 çekirdekte tur başına birkaç dakika).
+`deploy/ai_train.sh` eğitimi ayrı, düşük öncelikli bir systemd birimi olarak başlatır - SSH
+bağlantısı koparsa durmaz, uygulamayla aynı ortamı (`/etc/yatirim/env` - veritabanı yolu) ve
+venv'i kullanır:
 
 ```bash
-cd /opt/yatirim/app && sudo -u yatirim /opt/yatirim/venv/bin/python ai_model.py train --ticker NVDA
-sudo -u yatirim /opt/yatirim/venv/bin/python ai_model.py status --ticker NVDA
+sudo bash /opt/yatirim/app/deploy/ai_train.sh start NVDA        # başlat (ek ayar: --lookback 32 --epochs 20 ...)
+sudo bash /opt/yatirim/app/deploy/ai_train.sh log NVDA          # ilerlemeyi izle (Ctrl+C yalnızca izlemeyi kapatır)
+sudo bash /opt/yatirim/app/deploy/ai_train.sh status NVDA       # çalışıyor mu + kayıtlı modeller
+sudo bash /opt/yatirim/app/deploy/ai_train.sh stop NVDA
 ```
+
+Elle çalıştırırken ortam dosyası yüklenmelidir; yüklenmezse `YATIRIM_DB_PATH` tanımsız kalır ve
+komut uygulamanın veritabanını değil repodaki boş dosyayı görür ("kayıtlı veri seti yok"):
+
+```bash
+sudo -u yatirim bash -c 'set -a; . /etc/yatirim/env; set +a; cd /opt/yatirim/app && /opt/yatirim/venv/bin/python ai_model.py train --ticker NVDA'
+```
+
+### Bellek (1 GB sunucu)
+
+Streamlit ~0,7 GB kullanır; eğitim ayrıca ~0,5-1 GB ister. Toplam RAM 3 GB'ın altındaysa eğitim
+otomatik olarak küçük adımlarla yapılır (16 pencere × 8 kanal; `--batch-size` /
+`--channels-per-batch` ile değiştirilebilir); 2 GB'ın altındaysa arayüzdeki "Modeli eğit" düğmesi
+kapanır ve yukarıdaki betiğin komutu gösterilir (eğitim web uygulamasının içinde çalışırken bellek
+dolunca Linux siteyi öldürüyordu). Bellek yine yetmezse Linux önce eğitimi durdurur
+(`OOMScoreAdjust=900`). 1 GB sunucuda 2 GB swap eklenmesi önerilir (bir kez):
+
+```bash
+sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -m      # Swap satırında 2047 görünmeli
+```
+
+Swap eğitimi yavaşlatır; daha rahat çalışma için sunucuyu 2 GB RAM'e büyütmek gerekir.
 
 Modeller SQLite'taki `ai_models` tablosunda tutulur (ağırlıklar, ayarlar, test sonuçları).
 

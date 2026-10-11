@@ -93,6 +93,9 @@ DEFAULTS = {
     "epochs": 30,
     "patience": 5,
     "batch_size": 32,
+    # Doğrulama / test pencere sayısı (tüm kanallarla). Ara tensörler pencere × kanal × gün ×
+    # d_model büyür: 256'da tepe bellek ~5 GB'tı (1 GB sunucuda OOM). 8'de ~0,7 GB.
+    "eval_batch_size": 8,
     "channels_per_batch": 12,   # eğitimde adım başına rastgele kanal sayısı (close her zaman dahil)
     # Kayıp ağırlıkları: kanalların gelecek değerleri (yardımcı görev) + kapanışın h günlük
     # getirisi + yön (yükselir / düşer olasılığı). Kapanış görevleri daha ağır.
@@ -127,6 +130,30 @@ def torch_available() -> bool:
         return True
     except ImportError:
         return False
+
+
+# Düşük bellekli sunucu (ör. 1 GB droplet): Streamlit ~0,7 GB kullanırken eğitim ayrıca ~0,5-1 GB
+# ister. Toplam RAM LOW_MEMORY_MB altındaysa (ve ayar açıkça verilmemişse) küçük adımlarla eğitilir;
+# UI_MIN_MEMORY_MB altındaysa arayüzden eğitim kapatılır - Linux bellek dolunca siteyi öldürüyordu.
+LOW_MEMORY_MB = 3000
+UI_MIN_MEMORY_MB = 2000
+LOW_MEMORY_PROFILE = {"batch_size": 16, "channels_per_batch": 8, "eval_batch_size": 4}
+
+
+def total_memory_mb() -> float | None:
+    try:
+        return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES") / 2**20
+    except (ValueError, OSError, AttributeError):
+        return None
+
+
+def effective_config(config: dict | None = None, memory_mb: float | None = None) -> dict:
+    """Varsayılanlar + düşük bellek profili (gerekirse) + verilen ayarlar."""
+    memory_mb = total_memory_mb() if memory_mb is None else memory_mb
+    low = memory_mb is not None and memory_mb < LOW_MEMORY_MB
+    cfg = {**DEFAULTS, **(LOW_MEMORY_PROFILE if low else {}), **(config or {})}
+    cfg["low_memory"] = low
+    return cfg
 
 
 INSTALL_HINT = ("PyTorch kurulu değil. Sunucuda (CPU sürümü, ~200 MB): "
@@ -405,7 +432,7 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
     h günlük getirisi, standartlaştırılmış) + w_direction · BCE(yükseldi mi)."""
     import torch
 
-    cfg = {**DEFAULTS, **(config or {})}
+    cfg = effective_config(config)
     if cfg["lookback"] % cfg["block_size"]:
         raise ValueError(f"Pencere ({cfg['lookback']}), blok boyunun ({cfg['block_size']}) katı olmalı")
     step = progress or (lambda *a, **k: None)
@@ -450,7 +477,7 @@ def train(train_df: pd.DataFrame, config: dict | None = None, progress=None) -> 
         model.eval()
         total, parts, count = 0.0, np.zeros(3), 0
         with torch.no_grad():
-            for x, c, y, ts in _batches(data, cal, starts, L, H, 256, False, rng):
+            for x, c, y, ts in _batches(data, cal, starts, L, H, cfg["eval_batch_size"], False, rng):
                 loss, p = losses(*model(x, c), y, ts)
                 total += loss.item() * len(x)
                 parts += np.array(p) * len(x)
@@ -523,7 +550,7 @@ def evaluate_test(model, prep: dict, test_starts: list, cfg: dict) -> dict:
     rets, probs, mses, naive_mses, starts = [], [], [], [], []
     model.eval()
     with torch.no_grad():
-        for x, c, y, ts in _batches(data, cal, test_starts, L, H, 256, False, np.random.default_rng(0)):
+        for x, c, y, ts in _batches(data, cal, test_starts, L, H, cfg["eval_batch_size"], False, np.random.default_rng(0)):
             pred, ret, logit = model(x, c)
             naive = x[:, -1:, :].expand_as(y)
             mses.append((pred - y).pow(2).mean(dim=(1, 2)).numpy())
@@ -669,6 +696,8 @@ def main(argv=None):
     for key in ("lookback", "horizon", "epochs"):
         t.add_argument(f"--{key}", type=int, default=DEFAULTS[key])
     t.add_argument("--iqr-k", type=float, default=DEFAULTS["iqr_k"])
+    t.add_argument("--batch-size", type=int, help="adım başına pencere (bellek yetmezse küçültün)")
+    t.add_argument("--channels-per-batch", type=int, help="adım başına kanal (bellek yetmezse küçültün)")
     s = sub.add_parser("status", help="kayıtlı modeller")
     s.add_argument("--ticker", required=True)
     args = parser.parse_args(argv)
@@ -682,8 +711,15 @@ def main(argv=None):
         if df.empty:
             print(f"{ticker} için kayıtlı veri seti yok", file=sys.stderr)
             return 1
-        res = train(ai_dataset.training_frame(df),
-                    {"lookback": args.lookback, "horizon": args.horizon, "epochs": args.epochs, "iqr_k": args.iqr_k},
+        cfg = {"lookback": args.lookback, "horizon": args.horizon, "epochs": args.epochs, "iqr_k": args.iqr_k}
+        if args.batch_size:
+            cfg["batch_size"] = args.batch_size
+        if args.channels_per_batch:
+            cfg["channels_per_batch"] = args.channels_per_batch
+        eff = effective_config(cfg)
+        ai_dataset.log(f"{ticker}: eğitim başlıyor - {len(df)} gün, adım {eff['batch_size']} pencere × "
+                       f"{eff['channels_per_batch']} kanal" + (" (düşük bellek profili)" if eff["low_memory"] else ""))
+        res = train(ai_dataset.training_frame(df), cfg,
                     progress=lambda e, n, tr, va: ai_dataset.log(f"epoch {e}/{n} eğitim {tr:.4f} doğrulama {va:.4f}"))
         run_id = save_run(ticker, res)
         m = res["metrics"]

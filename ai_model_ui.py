@@ -173,8 +173,21 @@ def render_model_section(ticker: str, df: pd.DataFrame):
         return
     _render_data_check(prep)
 
-    if st.button("Modeli eğit", type="primary", key=f"ai_m_train_{ticker}",
-                 help="Sunucu CPU'sunda birkaç dakika sürebilir; sayfayı kapatmayın."):
+    memory_mb = am.total_memory_mb()
+    if memory_mb is not None and memory_mb < am.UI_MIN_MEMORY_MB:
+        # Eğitim Streamlit sürecinde çalışır; küçük sunucuda bellek dolunca Linux siteyi öldürüyordu.
+        st.warning(f"Bu sunucuda {memory_mb:,.0f} MB RAM var - eğitim web uygulamasının içinde çalışırsa bellek "
+                   "dolar ve site kapanır. Eğitimi sunucuda ayrı bir işlem olarak başlatın (bağlantı kopsa da "
+                   "sürer; bitince model burada görünür):")
+        st.code(f"sudo bash /opt/yatirim/app/deploy/ai_train.sh start {ticker} --lookback {lookback} "
+                f"--horizon {horizon} --epochs {epochs} --iqr-k {iqr_k:g}\n"
+                f"sudo bash /opt/yatirim/app/deploy/ai_train.sh log {ticker}      # ilerleme", language="bash")
+        st.caption("RAM 2 GB'tan azsa sunucuya swap eklenmesi önerilir (deploy/README.md).")
+        train_clicked = False
+    else:
+        train_clicked = st.button("Modeli eğit", type="primary", key=f"ai_m_train_{ticker}",
+                                  help="Sunucu CPU'sunda birkaç dakika sürebilir; sayfayı kapatmayın.")
+    if train_clicked:
         bar = st.progress(0.0, text="Eğitim başlıyor...")
 
         def on_epoch(epoch, total, train_loss, val_loss):
